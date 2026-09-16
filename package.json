@@ -1,7 +1,10 @@
 {
   "name": "nexalink",
+  "description": "NexaLink — Centralized Alumni Data Management & Engagement Platform",
+  "author": "Vidyalankar Institute of Technology",
+  "keywords": ["alumni", "engagement", "platform", "react", "supabase"],
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
