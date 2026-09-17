@@ -286,23 +286,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         if (authData.user) {
-          // Insert into public.users
-          const { error: insertError } = await supabase.from('users').insert({
-            id: authData.user.id,
-            name: userData.name,
-            email: targetEmail,
-            role: role,
-            department: userData.department || 'CMPN',
-            avatar_url: userData.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80',
-            is_verified: false,
-            verification_status: 'Pending Verification',
-            enrollment_no: userData.enrollmentNo || userData.prn || '22101A0099',
-            employee_id: userData.employeeId,
-            phone: userData.phone,
-            bio: userData.bio,
-            personal_email: userData.personalEmail,
-            proof_document_name: userData.proofDocumentName,
-            verification_document_url: userData.verificationDocumentUrl
+          // Call the secure RPC function to bypass RLS and create the profile
+          const { error: insertError } = await supabase.rpc('create_user_profile', {
+            p_id: authData.user.id,
+            p_name: userData.name,
+            p_email: targetEmail,
+            p_role: role,
+            p_department: userData.department || 'CMPN',
+            p_avatar_url: userData.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80',
+            p_enrollment_no: userData.enrollmentNo || userData.prn || '22101A0099',
+            p_employee_id: userData.employeeId || null,
+            p_phone: userData.phone || null,
+            p_bio: userData.bio || null,
+            p_personal_email: userData.personalEmail || null,
+            p_proof_document_name: userData.proofDocumentName || null,
+            p_verification_document_url: userData.verificationDocumentUrl || null
           });
 
           if (insertError) {
