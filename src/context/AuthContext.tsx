@@ -308,7 +308,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (finalUser) {
           // Call the secure RPC function to bypass RLS and create the profile
-          const { error: insertError } = await supabase.rpc('create_user_profile', {
+          const { error: insertError } = await (supabase.rpc as any)('create_user_profile', {
             p_id: finalUser.id,
             p_name: userData.name,
             p_email: targetEmail,
