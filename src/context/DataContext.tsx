@@ -273,10 +273,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           });
 
-          if (loadedStudents.length > 0) setStudentList(loadedStudents);
-          if (loadedAlumni.length > 0) setAlumniList(loadedAlumni);
-          if (loadedFaculty.length > 0) setFacultyList(loadedFaculty);
-          if (loadedAdmins.length > 0) setAdminList(loadedAdmins);
+          setStudentList(loadedStudents);
+          setAlumniList(loadedAlumni);
+          setFacultyList(loadedFaculty);
+          setAdminList(loadedAdmins);
         }
 
         // 2. Fetch Jobs

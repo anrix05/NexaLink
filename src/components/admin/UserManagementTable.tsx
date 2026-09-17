@@ -235,11 +235,17 @@ export const UserManagementTable: React.FC = () => {
                       <motion.tr layout key={user.id} className="hover:bg-[#FAFAFA] transition">
                         <td className="p-3.5">
                           <div className="flex items-center gap-3">
-                            <img
-                              src={user.avatar}
-                              alt={user.name}
-                              className="w-8 h-8 rounded-full object-cover border border-[#E5E7EB]"
-                            />
+                            {user.avatar ? (
+                              <img
+                                src={user.avatar}
+                                alt={user.name}
+                                className="w-8 h-8 rounded-full object-cover border border-[#E5E7EB]"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-[#0A0A0A] text-white flex items-center justify-center border border-[#E5E7EB] text-xs font-bold font-mono tracking-wider shrink-0">
+                                {user.name ? user.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
+                              </div>
+                            )}
                             <div>
                               <p className="font-bold text-[#0A0A0A] text-sm tracking-tight">{user.name}</p>
                               <p className="text-[11px] text-[#6B7280] font-mono">
@@ -364,7 +370,13 @@ export const UserManagementTable: React.FC = () => {
             <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 max-w-lg w-full shadow-2xl space-y-4 font-sans text-xs">
               <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
                 <div className="flex items-center gap-3">
-                  <img src={selectedUserDetail.avatar} alt="" className="w-10 h-10 rounded-full border border-[#E5E7EB] object-cover" />
+                  {selectedUserDetail.avatar ? (
+                    <img src={selectedUserDetail.avatar} alt="" className="w-10 h-10 rounded-full border border-[#E5E7EB] object-cover" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-[#0A0A0A] text-white flex items-center justify-center border border-[#E5E7EB] text-sm font-bold font-mono tracking-wider shrink-0">
+                      {selectedUserDetail.name ? selectedUserDetail.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
+                    </div>
+                  )}
                   <div>
                     <h3 className="font-extrabold text-sm text-[#0A0A0A]">{selectedUserDetail.name}</h3>
                     <p className="text-[11px] text-[#6B7280] font-mono">{selectedUserDetail.email}</p>

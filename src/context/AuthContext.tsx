@@ -98,21 +98,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .from('student_profiles')
           .select('*')
           .eq('user_id', userId)
-          .single();
+          .maybeSingle();
         if (studentData) enrichedUser = { ...enrichedUser, ...studentData };
       } else if (userData.role === 'alumni') {
         const { data: alumniData } = await supabase
           .from('alumni_profiles')
           .select('*')
           .eq('user_id', userId)
-          .single();
+          .maybeSingle();
         if (alumniData) enrichedUser = { ...enrichedUser, ...alumniData };
       } else if (userData.role === 'faculty' || userData.role === 'teacher') {
         const { data: facultyData } = await supabase
           .from('faculty_profiles')
           .select('*')
           .eq('user_id', userId)
-          .single();
+          .maybeSingle();
         if (facultyData) enrichedUser = { ...enrichedUser, ...facultyData };
       }
 
@@ -281,19 +281,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         });
 
-        if (authError) {
+        let finalUser = authData?.user;
+
+        if (authError && authError.message.includes('already registered')) {
+          // Self-healing: if the auth user exists but the profile was orphaned due to previous errors,
+          // try to authenticate them with the provided password to repair the profile.
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: targetEmail,
+            password: userData.password
+          });
+
+          if (!signInError && signInData.user) {
+            // Check if public profile exists
+            const { data: existingProfile } = await supabase.from('users').select('id').eq('id', signInData.user.id).single();
+            if (existingProfile) {
+              return { success: false, message: 'This email is already registered. Please sign in instead.' };
+            }
+            // No profile found, meaning it's an orphaned account. Proceed to create the profile.
+            finalUser = signInData.user;
+          } else {
+            return { success: false, message: authError.message };
+          }
+        } else if (authError) {
           return { success: false, message: authError.message };
         }
 
-        if (authData.user) {
+        if (finalUser) {
           // Call the secure RPC function to bypass RLS and create the profile
           const { error: insertError } = await supabase.rpc('create_user_profile', {
-            p_id: authData.user.id,
+            p_id: finalUser.id,
             p_name: userData.name,
             p_email: targetEmail,
             p_role: role,
             p_department: userData.department || 'CMPN',
-            p_avatar_url: userData.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80',
+            p_avatar_url: userData.avatar || null,
             p_enrollment_no: userData.enrollmentNo || userData.prn || '22101A0099',
             p_employee_id: userData.employeeId || null,
             p_phone: userData.phone || null,
@@ -304,6 +325,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
 
           if (insertError) {
+            if (insertError.message.includes('users_email_key') || insertError.message.includes('users_pkey') || insertError.message.includes('duplicate key value')) {
+              return { success: false, message: 'This email address is already registered. Please sign in instead.' };
+            }
             // Delete the auth user if profile creation failed to prevent orphaned accounts
             // Note: Admin service role is needed to cleanly delete, but we at least surface the error
             return { success: false, message: `Database Error: ${insertError.message}. (Did you update the Supabase RLS policies and email triggers?)` };

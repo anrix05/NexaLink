@@ -117,11 +117,17 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
             {/* Minimal Unverified User Profile & Sign Out */}
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
-                <img
-                  src={currentUser.avatar}
-                  alt={currentUser.name}
-                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-[#E5E7EB] shrink-0"
-                />
+                {currentUser.avatar ? (
+                  <img
+                    src={currentUser.avatar}
+                    alt={currentUser.name}
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-[#E5E7EB] shrink-0"
+                  />
+                ) : (
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#0A0A0A] text-white flex items-center justify-center shrink-0 border border-[#E5E7EB] text-[10px] sm:text-[11px] font-bold font-mono tracking-wider">
+                    {currentUser.name ? currentUser.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
+                  </div>
+                )}
                 <span className="text-xs font-bold text-[#0A0A0A] hidden sm:inline">
                   {currentUser.name}
                 </span>
@@ -328,11 +334,17 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                     className="flex items-center gap-2 cursor-pointer hover:bg-[#FAFAFA] transition rounded-lg p-1 sm:p-1.5 sm:pr-2.5 border border-[#E5E7EB] bg-white touch-target-44"
                     title="User Profile & Settings"
                   >
-                    <img
-                      src={currentUser.avatar}
-                      alt={currentUser.name}
-                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-[#E5E7EB] shrink-0"
-                    />
+                    {currentUser.avatar ? (
+                      <img
+                        src={currentUser.avatar}
+                        alt={currentUser.name}
+                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-[#E5E7EB] shrink-0"
+                      />
+                    ) : (
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#0A0A0A] text-white flex items-center justify-center shrink-0 border border-[#E5E7EB] text-[10px] sm:text-[11px] font-bold font-mono tracking-wider">
+                        {currentUser.name ? currentUser.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
+                      </div>
+                    )}
                     <div className="hidden sm:block text-left min-w-0">
                       <p className="text-xs font-bold text-[#0A0A0A] truncate leading-none">
                         {currentUser.name.split(' ')[0]}
@@ -350,11 +362,17 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                       {/* User Masthead */}
                       <div className="p-2 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg">
                         <div className="flex items-center gap-2.5">
-                          <img
-                            src={currentUser.avatar}
-                            alt={currentUser.name}
-                            className="w-9 h-9 rounded-full object-cover border border-[#E5E7EB]"
-                          />
+                          {currentUser.avatar ? (
+                            <img
+                              src={currentUser.avatar}
+                              alt={currentUser.name}
+                              className="w-9 h-9 rounded-full object-cover border border-[#E5E7EB]"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-[#0A0A0A] text-white flex items-center justify-center border border-[#E5E7EB] text-xs font-bold font-mono tracking-wider shrink-0">
+                              {currentUser.name ? currentUser.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
+                            </div>
+                          )}
                           <div className="min-w-0">
                             <p className="font-bold text-xs text-[#0A0A0A] truncate">
                               {currentUser.name}

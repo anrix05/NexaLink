@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { uploadAvatar } from '../lib/storage';
 import { useData } from '../context/DataContext';
 import type { StudentProfile, AlumniProfile, FacultyProfile, PrivacyLevel, UserPrivacySettings } from '../types';
 import {
@@ -45,10 +46,34 @@ export const SettingsPage: React.FC = () => {
   // Base Profile State
   const [name, setName] = useState(currentUser.name || '');
   const [email, setEmail] = useState(currentUser.email || '');
-  const [phone, setPhone] = useState(currentUser.phone || '+91 98200 12345');
+  const [phone, setPhone] = useState(currentUser.phone || '');
   const [department, setDepartment] = useState(currentUser.department || 'CMPN');
-  const [bio, setBio] = useState(currentUser.bio || 'Passionate about technology and institutional development.');
+  const [bio, setBio] = useState(currentUser.bio || '');
   const [avatar, setAvatar] = useState(currentUser.avatar || '');
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setIsUploadingAvatar(true);
+      try {
+        const res = await uploadAvatar(file, currentUser.id);
+        if (!res.error) {
+          setAvatar(res.url);
+          updateCurrentUserState({ ...currentUser, avatar: res.url });
+          updateUserProfile(currentUser.id, { avatar: res.url });
+          showToast('Profile photo uploaded and saved successfully!');
+        } else {
+          showToast(`Upload failed: ${res.error}`);
+        }
+      } catch (err: any) {
+        showToast('Failed to upload profile photo.');
+      } finally {
+        setIsUploadingAvatar(false);
+      }
+    }
+  };
 
   // Role-Specific Profile States
   const studentUser = currentUser as StudentProfile;
@@ -56,24 +81,24 @@ export const SettingsPage: React.FC = () => {
   const facultyUser = currentUser as FacultyProfile;
 
   // Student specific fields
-  const [semester, setSemester] = useState(studentUser.semester || 'Semester 7');
-  const [skills, setSkills] = useState<string[]>(studentUser.skills || ['React', 'Python', 'Machine Learning']);
+  const [semester, setSemester] = useState(studentUser.semester || '');
+  const [skills, setSkills] = useState<string[]>(studentUser.skills || []);
   const [newSkill, setNewSkill] = useState('');
-  const [areasOfInterest, setAreasOfInterest] = useState<string[]>(studentUser.areasOfInterest || ['Cloud Systems', 'Full-Stack']);
-  const [careerGoal, setCareerGoal] = useState(studentUser.careerGoal || 'Software Engineer at Tier-1 Tech Firm');
-  const [preferredIndustry, setPreferredIndustry] = useState(studentUser.preferredIndustry || 'Cloud Computing & FinTech');
-  const [preferredHigherStudies, setPreferredHigherStudies] = useState(studentUser.preferredHigherStudies || 'M.S. in Computer Science (USA)');
-  const [certifications] = useState<string[]>(studentUser.certifications || ['AWS Certified Cloud Practitioner']);
-  const [resumeUrl, setResumeUrl] = useState(studentUser.resumeUrl || 'https://vit.edu.in/resumes/aanya_patel_vit.pdf');
+  const [areasOfInterest, setAreasOfInterest] = useState<string[]>(studentUser.areasOfInterest || []);
+  const [careerGoal, setCareerGoal] = useState(studentUser.careerGoal || '');
+  const [preferredIndustry, setPreferredIndustry] = useState(studentUser.preferredIndustry || '');
+  const [preferredHigherStudies, setPreferredHigherStudies] = useState(studentUser.preferredHigherStudies || '');
+  const [certifications] = useState<string[]>(studentUser.certifications || []);
+  const [resumeUrl, setResumeUrl] = useState(studentUser.resumeUrl || '');
 
   // Alumni specific fields
-  const [graduationYear, setGraduationYear] = useState(alumniUser.graduationYear || 2018);
-  const [company, setCompany] = useState(alumniUser.company || 'Google');
-  const [designation, setDesignation] = useState(alumniUser.designation || 'Senior Software Engineer');
-  const [higherEducationInstitute, setHigherEducationInstitute] = useState(alumniUser.higherEducationInstitute || 'Carnegie Mellon University');
-  const [location, setLocation] = useState(alumniUser.location || 'Sunnyvale, CA');
-  const [country, setCountry] = useState(alumniUser.country || 'USA');
-  const [achievements] = useState<string[]>(alumniUser.professionalAchievements || ['IEEE Tech Paper Author']);
+  const [graduationYear, setGraduationYear] = useState(alumniUser.graduationYear || new Date().getFullYear());
+  const [company, setCompany] = useState(alumniUser.company || '');
+  const [designation, setDesignation] = useState(alumniUser.designation || '');
+  const [higherEducationInstitute, setHigherEducationInstitute] = useState(alumniUser.higherEducationInstitute || '');
+  const [location, setLocation] = useState(alumniUser.location || '');
+  const [country, setCountry] = useState(alumniUser.country || '');
+  const [achievements] = useState<string[]>(alumniUser.professionalAchievements || []);
 
   // Mentor Capacity
   const [maxMentees, setMaxMentees] = useState<number>(alumniUser.maxMentees || 3);
@@ -97,10 +122,10 @@ export const SettingsPage: React.FC = () => {
   const [digestFreq, setDigestFreq] = useState<'Instant' | 'Daily Digest' | 'Weekly Digest'>('Instant');
 
   // Faculty specific fields
-  const [employeeId, setEmployeeId] = useState(facultyUser.employeeId || 'EMP-FAC-014');
-  const [facDesignation, setFacDesignation] = useState(facultyUser.designation || 'Head of Department (HOD) & Professor');
-  const [researchAreas, setResearchAreas] = useState<string[]>(facultyUser.researchAreas || ['Cloud Infrastructure', 'Cyber Security']);
-  const [ongoingResearch, setOngoingResearch] = useState(facultyUser.ongoingResearch || 'Autonomous Micro-datacenter Scheduling');
+  const [employeeId, setEmployeeId] = useState(facultyUser.employeeId || '');
+  const [facDesignation, setFacDesignation] = useState(facultyUser.designation || '');
+  const [researchAreas, setResearchAreas] = useState<string[]>(facultyUser.researchAreas || []);
+  const [ongoingResearch, setOngoingResearch] = useState(facultyUser.ongoingResearch || '');
 
   // Security & Password
   const [currentPassword, setCurrentPassword] = useState('');
@@ -258,20 +283,25 @@ export const SettingsPage: React.FC = () => {
 
           {/* Avatar Upload Block — Flat on mobile, bordered on desktop */}
           <div className="flex items-center gap-3.5 sm:gap-5 pb-3 sm:p-5 sm:bg-[#FAFAFA] border-b sm:border border-[#E5E7EB] sm:rounded-xl">
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleAvatarUpload} 
+              accept="image/*" 
+              className="hidden" 
+            />
             <div className="relative group shrink-0">
               <img
-                src={avatar}
+                src={avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0A0A0A&color=fff`}
                 alt={name}
-                className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border border-[#E5E7EB]"
+                className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border border-[#E5E7EB] ${isUploadingAvatar ? 'opacity-50' : ''}`}
               />
               <button
                 type="button"
-                onClick={() => {
-                  const newPic = prompt('Enter image URL for new avatar profile photo:', avatar);
-                  if (newPic) setAvatar(newPic);
-                }}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingAvatar}
                 title="Upload Profile Photo"
-                className="absolute inset-0 bg-[#0A0A0A]/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white cursor-pointer"
+                className="absolute inset-0 bg-[#0A0A0A]/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
@@ -281,13 +311,11 @@ export const SettingsPage: React.FC = () => {
               <p className="text-xs text-[#6B7280] font-medium truncate">{email}</p>
               <button
                 type="button"
-                onClick={() => {
-                  const newPic = prompt('Enter image URL for new avatar profile photo:', avatar);
-                  if (newPic) setAvatar(newPic);
-                }}
-                className="text-xs font-bold text-[#0A0A0A] hover:underline mt-0.5 block cursor-pointer"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingAvatar}
+                className="text-xs font-bold text-[#0A0A0A] hover:underline mt-0.5 block cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Change Avatar Photo
+                {isUploadingAvatar ? 'Uploading...' : 'Change Avatar Photo'}
               </button>
             </div>
           </div>

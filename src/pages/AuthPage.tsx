@@ -87,7 +87,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setActiveTab }) => {
     if (demoRole === 'admin') demoEmail = 'admin@vit.edu.in';
 
     switchRole(demoRole);
-    login(demoEmail);
+    // Pass the standard seeded password so it actually logs into Supabase
+    login(demoEmail, undefined, 'password123');
     setActiveTab('dashboard');
   };
 
