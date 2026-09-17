@@ -39,6 +39,8 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
    - **Personal Email Authentication for Alumni:** College emails `@student.vit.edu.in` deactivate post-graduation. Alumni authenticate against `personalEmail` (e.g. Gmail/Outlook), while Student & Faculty authenticate against active `@vit.edu.in` domains.
    - **Proof-Document Upload Flow:** File upload inputs (`accept="image/*,.pdf"`) store `verificationDocumentUrl` and `verificationDocumentName` via `URL.createObjectURL(file)` session previews.
    - **Auth Page Layout & Smooth Transitions:** Top-aligned grid layout (`items-start`), dynamic card height animation (`layout` + `<AnimatePresence mode="wait">`), sliding pills (`layoutId="authModePill"`, `layoutId="authRolePill"`), and staggered field groups.
+   - **Self-Healing Registration Flow:** Detects orphaned accounts (where Supabase Auth succeeded but `public.users` profile insertion failed due to database constraints) and silently repairs them by logging the user in to seamlessly complete profile creation.
+   - **Defensive Profile Fetching:** Uses `.maybeSingle()` for loading extended role datasets (`student_profiles`, etc.) to prevent fatal sign-in crashes when optional data is missing.
    - Rate-limiting lockout (5 failed attempts) and OTP password reset.
 
 2. **Session Security & View-Derived Navbar Isolation (`AuthContext.tsx`, `Navbar.tsx`, `App.tsx`)**
@@ -66,7 +68,12 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
    - **2×2 Stat Grid:** Interactive metric cards (Active Requests, Smart Matches, Job Openings, Campus Events) with deep links to target sections.
    - **Alumni by Organization:** Single-row horizontally scrollable company chips (logo, name, grad count) with reverse lookup shortcut.
 
-6. **Defensive Recommendation Engine & Component Null Guards (`recommendationEngine.ts`, Shell Components)**
+6. **Profile Settings & Storage Persistence (`SettingsPage.tsx`, `storage.ts`)**
+   - **Native File Pickers:** Direct `<input type="file">` integrations for uploading resumes, proof documents, and avatars replacing crude browser prompts.
+   - **Instant Persistence Architecture:** Avatar uploads are executed via `uploadAvatar` (Supabase Storage) and instantly written to the user's database profile and local session state (`updateCurrentUserState`), ensuring permanence against page reloads without requiring a manual form submission.
+   - **Clean Default State:** Blank states for unpopulated arrays/strings rather than mock dummy autofill data.
+
+7. **Defensive Recommendation Engine & Component Null Guards (`recommendationEngine.ts`, Shell Components)**
    - Added defensive `if (!student || !target) return ...` null checks in `calculateAlumniMatch`, `calculateFacultyMatch`, and `calculateOpportunityMatch`.
    - Early `if (!currentUser) return null;` guards in `StudentDashboard.tsx`, `AlumniDashboard.tsx`, `FacultyDashboard.tsx`, `SidebarNav.tsx`, and `BottomNav.tsx` preventing runtime errors during session unmounting.
 
@@ -100,12 +107,12 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
     - **Registrar Source-of-Truth Disclaimer:** Non-authoritative list notice banner clarifying that candidate lists are derived from stored `graduationYear ≤ 2024` records.
     - **Consolidated Audit Logging:** Consolidates batch operations into **ONE** audit log entry (`BULK_GRADUATION_PROVISIONAL`) containing structured metadata. Rendered with expandable rows in Audit Logs.
 
-13. **NexaChats (Messaging Workspace)**
+14. **NexaChats (Messaging Workspace)**
     - Topic-focused peer-to-peer messaging for accepted mentees and alumni peers.
     - Dynamic viewport height (`100dvh`) and touch-accessible message actions.
     - Admin privacy guard preventing unauthorized access to private P2P threads.
 
-14. **Role-Scoped Command Palette (`CommandPalette.tsx`)**
+15. **Role-Scoped Command Palette (`CommandPalette.tsx`)**
     - `Ctrl+K` / `Cmd+K` global spotlight interface providing instant navigation, quick actions, and directory search strictly scoped to the active user's permissions. Fullscreen native presentation on mobile.
 
 ---
