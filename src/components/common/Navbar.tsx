@@ -172,28 +172,28 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                 onClick={() => scrollToSection('hero-section')}
                 className="text-[#6B7280] hover:text-[#0A0A0A] transition cursor-pointer"
               >
-                Platform Overview
+                Overview
               </button>
 
               <button
                 onClick={() => scrollToSection('framework-section')}
                 className="text-[#6B7280] hover:text-[#0A0A0A] transition cursor-pointer"
               >
-                Workflow
+                How it Works
+              </button>
+
+              <button
+                onClick={() => scrollToSection('benefits-section')}
+                className="text-[#6B7280] hover:text-[#0A0A0A] transition cursor-pointer"
+              >
+                Platform Benefits
               </button>
 
               <button
                 onClick={() => scrollToSection('programs-section')}
                 className="text-[#6B7280] hover:text-[#0A0A0A] transition cursor-pointer"
               >
-                Impact & Pillars
-              </button>
-
-              <button
-                onClick={() => scrollToSection('stats-section')}
-                className="text-[#6B7280] hover:text-[#0A0A0A] transition cursor-pointer"
-              >
-                Accreditation
+                Academic Programs
               </button>
             </nav>
           ) : (
@@ -469,25 +469,25 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                 onClick={() => { scrollToSection('hero-section'); setMobileMenuOpen(false); }}
                 className="block w-full text-left py-2 text-[#6B7280] hover:text-[#0A0A0A]"
               >
-                Platform Overview
+                Overview
               </button>
               <button
                 onClick={() => { scrollToSection('framework-section'); setMobileMenuOpen(false); }}
                 className="block w-full text-left py-2 text-[#6B7280] hover:text-[#0A0A0A]"
               >
-                Workflow
+                How it Works
+              </button>
+              <button
+                onClick={() => { scrollToSection('benefits-section'); setMobileMenuOpen(false); }}
+                className="block w-full text-left py-2 text-[#6B7280] hover:text-[#0A0A0A]"
+              >
+                Platform Benefits
               </button>
               <button
                 onClick={() => { scrollToSection('programs-section'); setMobileMenuOpen(false); }}
                 className="block w-full text-left py-2 text-[#6B7280] hover:text-[#0A0A0A]"
               >
-                Impact & Pillars
-              </button>
-              <button
-                onClick={() => { scrollToSection('stats-section'); setMobileMenuOpen(false); }}
-                className="block w-full text-left py-2 text-[#6B7280] hover:text-[#0A0A0A]"
-              >
-                Accreditation
+                Academic Programs
               </button>
             </div>
           ) : (

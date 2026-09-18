@@ -207,7 +207,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ setActiveTab }) => {
               </span>
             </h1>
             <p className={`text-sm sm:text-lg lg:text-xl text-[#6B7280] font-sans font-medium leading-relaxed max-w-3xl transition-all duration-500 delay-450 break-words ${heroMounted || prefersReducedMotion ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}>
-              A centralized alumni data management and peer-to-peer engagement platform bridging academic rigor with verified industry mentorship, corporate referrals, and accreditation analytics.
+              An exclusive platform connecting Vidyalankar students with verified alumni for real-world mentorship, career referrals, and seamless collaboration.
             </p>
           </div>
 
@@ -381,7 +381,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ setActiveTab }) => {
       </section>
 
       {/* 3. Quick Registration & Value Proposition */}
-      <section ref={benefitsReveal.ref} className="bg-[#FAFAFA] py-16 border-y border-[#E5E7EB]">
+      <section ref={benefitsReveal.ref} id="benefits-section" className="bg-[#FAFAFA] py-16 border-y border-[#E5E7EB]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             
