@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800;900&display=swap" rel="stylesheet">
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 1920px; height: 1080px;
+        overflow: hidden;
+        background: #0A0A0A;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        color: #FFFFFF;
+      }
+      #root {
+        width: 100%; height: 100%;
+        position: relative;
+      }
+      
+      .scene {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex; align-items: center; justify-content: center; flex-direction: column;
+      }
+
+      /* Scene 1: Hook */
+      #scene-1 { background: #0A0A0A; }
+      .hook-text {
+        font-size: 100px;
+        font-weight: 900;
+        letter-spacing: -0.04em;
+        position: absolute;
+      }
+      
+      /* Scene 2: Hero */
+      #scene-2 { background: #FFFFFF; color: #0A0A0A; text-align: center; }
+      .hero-title { font-size: 110px; font-weight: 900; line-height: 1; letter-spacing: -0.05em; margin-bottom: 30px; max-width: 1400px; }
+      .hero-cta { background: #0A0A0A; color: #FFFFFF; padding: 24px 48px; border-radius: 16px; font-size: 28px; font-weight: 700; display: inline-flex; align-items: center; gap: 16px; margin-top: 40px; }
+
+      /* Scene 3: Flow */
+      #scene-3 { background: #FAFAFA; color: #0A0A0A; padding: 100px; justify-content: flex-start; align-items: flex-start; }
+      .filter-bar { width: 100%; background: #FFFFFF; border: 2px solid #E5E7EB; border-radius: 24px; padding: 32px; display: flex; gap: 32px; margin-bottom: 60px; box-shadow: 0 20px 40px rgba(0,0,0,0.05); }
+      .filter-input { flex: 1; border: 2px solid #E5E7EB; background: #FAFAFA; border-radius: 12px; padding: 20px 24px; font-size: 24px; font-weight: 700; color: #0A0A0A; display: flex; align-items: center; }
+      .filter-input.typing::after { content: '|'; animation: blink 1s infinite; margin-left: 4px; }
+      
+      .grid-container { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
+      .profile-card { background: #FFFFFF; border: 2px solid #E5E7EB; border-radius: 24px; padding: 40px; display: flex; flex-direction: column; gap: 24px; }
+      .profile-header { display: flex; gap: 24px; align-items: center; }
+      .avatar { width: 100px; height: 100px; border-radius: 50%; background: #E5E7EB; border: 2px solid #E5E7EB; }
+      .profile-name { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; }
+      .profile-role { font-size: 20px; font-weight: 700; color: #6B7280; }
+      .profile-company { font-size: 24px; font-weight: 800; color: #0A0A0A; margin-top: 10px; }
+
+      /* Scene 4: Connection */
+      #scene-4 { background: #FAFAFA; align-items: center; justify-content: center; }
+      .focus-card { transform: scale(1.5); background: #FFFFFF; border: 4px solid #0A0A0A; box-shadow: 0 40px 80px rgba(0,0,0,0.1); border-radius: 24px; padding: 40px; width: 600px; }
+      .req-btn { margin-top: 30px; width: 100%; background: #0A0A0A; color: #FFFFFF; padding: 20px; border-radius: 12px; font-size: 24px; font-weight: 700; text-align: center; }
+      
+      .success-modal { position: absolute; background: #0A0A0A; color: #FFFFFF; padding: 60px 80px; border-radius: 32px; text-align: center; box-shadow: 0 40px 100px rgba(0,0,0,0.3); opacity: 0; transform: scale(0.9); }
+      .success-icon { width: 80px; height: 80px; background: #10B981; border-radius: 50%; margin: 0 auto 30px; display: flex; align-items: center; justify-content: center; }
+      .success-icon svg { width: 40px; height: 40px; stroke: white; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+      .success-title { font-size: 40px; font-weight: 800; margin-bottom: 16px; }
+
+      /* Scene 5: Outro */
+      #scene-5 { background: #0A0A0A; color: #FFFFFF; }
+      .outro-logo { width: 120px; height: 120px; margin-bottom: 40px; display: flex; align-items: center; justify-content: center; }
+      .outro-logo svg { width: 100%; height: 100%; }
+      .outro-title { font-size: 80px; font-weight: 900; letter-spacing: -0.04em; margin-bottom: 20px; }
+      .outro-subtitle { font-size: 32px; font-weight: 700; color: #F59E0B; }
+
+      @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="18" data-width="1920" data-height="1080">
+      
+      <audio id="audio-bed" data-start="0" data-track-index="1" data-volume="1" src="assets/music/happy-beats-business-moves-vol-1-by-ende-dot-app.mp3"></audio>
+      
+      <!-- Scene 1: Hook -->
+      <div id="scene-1" class="scene clip" data-start="0" data-duration="3" data-track-index="0">
+        <div class="hook-text" id="hook-1">Your network.</div>
+        <div class="hook-text" id="hook-2">Your unfair advantage.</div>
+      </div>
+
+      <!-- Scene 2: Hero -->
+      <div id="scene-2" class="scene clip" data-start="3" data-duration="3" data-track-index="0">
+        <div class="hero-title" id="hero-title-1">Connecting Vidyalankar</div>
+        <div class="hero-title" id="hero-title-2">Engineers With Global</div>
+        <div class="hero-title" id="hero-title-3">Alumni.</div>
+        <div class="hero-cta" id="hero-cta">Access Member Portal ➔</div>
+      </div>
+
+      <!-- Scene 3: Flow -->
+      <div id="scene-3" class="scene clip" data-start="6" data-duration="5" data-track-index="0">
+        <div class="filter-bar" id="filter-bar">
+          <div class="filter-input" style="flex:0.5; color: #6B7280;">All Departments</div>
+          <div class="filter-input typing" id="search-input">G</div>
+          <div class="filter-input" style="flex:0.5; color: #6B7280;">Technical Skills</div>
+          <div style="background: #0A0A0A; color: #FFF; padding: 20px 40px; border-radius: 12px; font-size: 24px; font-weight: 700; display:flex; align-items:center;">Filter</div>
+        </div>
+        
+        <div class="grid-container">
+          <div class="profile-card p-card">
+            <div class="profile-header">
+              <div class="avatar" style="background: #FDE68A;"></div>
+              <div>
+                <div class="profile-name">Rushabh Sanghavi</div>
+                <div class="profile-role">Senior Software Engineer</div>
+              </div>
+            </div>
+            <div class="profile-company">Google</div>
+          </div>
+          <div class="profile-card p-card">
+            <div class="profile-header">
+              <div class="avatar" style="background: #BFDBFE;"></div>
+              <div>
+                <div class="profile-name">Aanya Sharma</div>
+                <div class="profile-role">Product Manager</div>
+              </div>
+            </div>
+            <div class="profile-company">Microsoft</div>
+          </div>
+          <div class="profile-card p-card">
+            <div class="profile-header">
+              <div class="avatar" style="background: #FECACA;"></div>
+              <div>
+                <div class="profile-name">Rahul Verma</div>
+                <div class="profile-role">Quant Researcher</div>
+              </div>
+            </div>
+            <div class="profile-company">Morgan Stanley</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 4: Connection -->
+      <div id="scene-4" class="scene clip" data-start="11" data-duration="4" data-track-index="0">
+        <div class="focus-card" id="focus-card">
+          <div class="profile-header">
+            <div class="avatar" style="background: #FDE68A;"></div>
+            <div>
+              <div class="profile-name">Rushabh Sanghavi</div>
+              <div class="profile-role">Google</div>
+            </div>
+          </div>
+          <div class="req-btn" id="req-btn">Request Collaboration</div>
+        </div>
+        
+        <div class="success-modal" id="success-modal">
+          <div class="success-icon"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+          <div class="success-title">Request Sent</div>
+          <div style="font-size: 24px; color: #9CA3AF;">Rushabh will be notified.</div>
+        </div>
+      </div>
+
+      <!-- Scene 5: Outro -->
+      <div id="scene-5" class="scene clip" data-start="15" data-duration="3" data-track-index="0">
+        <div class="outro-logo" id="outro-logo">
+          <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20 80 V 20 L 50 60 L 50 80 Z" fill="#FFFFFF"/>
+            <path d="M80 20 V 80 L 50 40 L 50 20 Z" fill="#FFFFFF"/>
+            <circle cx="50" cy="50" r="12" fill="#F59E0B"/>
+          </svg>
+        </div>
+        <div class="outro-title" id="outro-title">NexaLink.</div>
+        <div class="outro-subtitle" id="outro-subtitle">Build the bridge.</div>
+      </div>
+
+    </div>
+    
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines["main"] = tl;
+
+      // Initial States (gsap.set outside timeline)
+      gsap.set('#hook-1, #hook-2', { autoAlpha: 0, scale: 0.9 });
+      gsap.set('#hero-title-1, #hero-title-2, #hero-title-3, #hero-cta', { y: 40, autoAlpha: 0 });
+      gsap.set('#filter-bar', { y: -40, autoAlpha: 0 });
+      gsap.set('.p-card', { y: 40, autoAlpha: 0 });
+      gsap.set('#focus-card', { scale: 1, autoAlpha: 0 });
+      gsap.set('#req-btn', { backgroundColor: '#0A0A0A', color: '#FFF' });
+      gsap.set('#success-modal', { scale: 0.9, autoAlpha: 0 });
+      gsap.set('#outro-logo', { scale: 0.8, autoAlpha: 0 });
+      gsap.set('#outro-title, #outro-subtitle', { y: 20, autoAlpha: 0 });
+
+      // Scene 1: Hook (0-3s)
+      tl.to('#hook-1', { autoAlpha: 1, scale: 1, duration: 0.1, ease: 'power4.out' }, 0.5)
+        .to('#hook-1', { autoAlpha: 0, duration: 0.1 }, 1.5)
+        .to('#hook-2', { autoAlpha: 1, scale: 1, duration: 0.1, ease: 'power4.out' }, 1.6);
+
+      // Scene 2: Hero (3-6s)
+      tl.to('#hero-title-1', { y: 0, autoAlpha: 1, duration: 0.6, ease: 'power3.out' }, 3.1)
+        .to('#hero-title-2', { y: 0, autoAlpha: 1, duration: 0.6, ease: 'power3.out' }, 3.2)
+        .to('#hero-title-3', { y: 0, autoAlpha: 1, duration: 0.6, ease: 'power3.out' }, 3.3)
+        .to('#hero-cta', { y: 0, autoAlpha: 1, duration: 0.6, ease: 'power3.out' }, 3.5);
+
+      // Scene 3: Flow (6-11s)
+      tl.to('#filter-bar', { y: 0, autoAlpha: 1, duration: 0.5, ease: 'power3.out' }, 6.1)
+        
+        // Typing simulation
+        .to('#search-input', { innerText: 'Go', duration: 0 }, 7.0)
+        .to('#search-input', { innerText: 'Goo', duration: 0 }, 7.2)
+        .to('#search-input', { innerText: 'Goog', duration: 0 }, 7.4)
+        .to('#search-input', { innerText: 'Google', duration: 0 }, 7.6)
+        
+        // Cards appear
+        .to('.p-card', { y: 0, autoAlpha: 1, duration: 0.5, stagger: 0.1, ease: 'back.out(1.2)' }, 7.8);
+
+      // Scene 4: Connection (11-15s)
+      tl.to('#focus-card', { scale: 1.5, autoAlpha: 1, duration: 0.6, ease: 'expo.out' }, 11.2)
+        
+        // Button click
+        .to('#req-btn', { scale: 0.95, duration: 0.1 }, 12.5)
+        .to('#req-btn', { scale: 1, backgroundColor: '#374151', duration: 0.1 }, 12.6)
+        
+        // Modal popup
+        .to('#focus-card', { autoAlpha: 0, scale: 1.2, duration: 0.3 }, 12.8)
+        .to('#success-modal', { scale: 1, autoAlpha: 1, duration: 0.5, ease: 'back.out(1.5)' }, 12.9);
+
+      // Scene 5: Outro (15-18s)
+      tl.to('#outro-logo', { scale: 1, autoAlpha: 1, duration: 0.8, ease: 'power3.out' }, 15.2)
+        .to('#outro-title', { y: 0, autoAlpha: 1, duration: 0.6, ease: 'power3.out' }, 15.4)
+        .to('#outro-subtitle', { y: 0, autoAlpha: 1, duration: 0.6, ease: 'power3.out' }, 15.6)
+        
+        // Audio fade
+        .to('#audio-bed', { volume: 0, duration: 2 }, 16);
+
+      tl.seek(0);
+    </script>
+  </body>
+</html>

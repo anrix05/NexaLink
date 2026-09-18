@@ -208,7 +208,7 @@ export const UserManagementTable: React.FC = () => {
         <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-none">
           <div className="overflow-x-auto">
             <table className="w-full text-left font-sans text-xs">
-              <thead className="bg-[#FAFAFA] border-b border-[#E5E7EB] text-[10px] uppercase font-bold tracking-wider text-[#0A0A0A]">
+              <thead className="bg-[#FAFAFA] border-b border-[#E5E7EB] text-[10px] uppercase font-bold tracking-wider text-[#0A0A0A] whitespace-nowrap">
                 <tr>
                   <th className="p-3.5">User Member</th>
                   <th className="p-3.5">Role</th>
@@ -232,7 +232,7 @@ export const UserManagementTable: React.FC = () => {
                     const isRejected = status === 'Rejected';
 
                     return (
-                      <motion.tr layout key={user.id} className="hover:bg-[#FAFAFA] transition">
+                      <motion.tr layout key={user.id} className="hover:bg-[#FAFAFA] transition whitespace-nowrap">
                         <td className="p-3.5">
                           <div className="flex items-center gap-3">
                             {user.avatar ? (
@@ -371,7 +371,7 @@ export const UserManagementTable: React.FC = () => {
               <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
                 <div className="flex items-center gap-3">
                   {selectedUserDetail.avatar ? (
-                    <img src={selectedUserDetail.avatar} alt="" className="w-10 h-10 rounded-full border border-[#E5E7EB] object-cover" />
+                    <img src={selectedUserDetail.avatar} alt={selectedUserDetail.name} className="w-10 h-10 rounded-full border border-[#E5E7EB] object-cover" />
                   ) : (
                     <div className="w-10 h-10 rounded-full bg-[#0A0A0A] text-white flex items-center justify-center border border-[#E5E7EB] text-sm font-bold font-mono tracking-wider shrink-0">
                       {selectedUserDetail.name ? selectedUserDetail.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}

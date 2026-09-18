@@ -310,16 +310,22 @@ export type NotificationType =
   | 'Internship Posting'
   | 'Event Announcement'
   | 'Profile Recommendation'
-  | 'Administrator Announcement';
+  | 'Administrator Announcement'
+  | 'Chat Message'
+  | 'System Alert'
+  | 'Mentorship Status'
+  | 'Admin Action';
 
 export interface NotificationItem {
   id: string;
+  user_id: string;
   title: string;
-  message: string;
-  date: string;
+  body: string;
+  created_at: string;
   type: NotificationType;
-  isRead: boolean;
-  linkTab?: string;
+  is_read: boolean;
+  link?: string;
+  related_entity_id?: string;
 }
 
 export interface AuditLogEntry {

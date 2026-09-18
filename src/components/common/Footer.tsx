@@ -55,13 +55,13 @@ const CompactPortalFooter: React.FC<{ setActiveTab: (tab: string) => void }> = (
           <span onClick={() => setActiveTab('landing')} className="hover:text-[#0A0A0A] cursor-pointer transition-colors">
             ABOUT VIT
           </span>
-          <span onClick={() => setActiveTab('reports')} className="hover:text-[#0A0A0A] cursor-pointer transition-colors">
-            ACCREDITATION
-          </span>
-          <span className="hover:text-[#0A0A0A] cursor-pointer transition-colors">
+          <span onClick={() => setActiveTab('data-governance')} className="hover:text-[#0A0A0A] cursor-pointer transition-colors">
             DATA GOVERNANCE
           </span>
-          <span className="hover:text-[#0A0A0A] cursor-pointer transition-colors">
+          <span onClick={() => setActiveTab('terms')} className="hover:text-[#0A0A0A] cursor-pointer transition-colors">
+            TERMS OF SERVICE
+          </span>
+          <span onClick={() => setActiveTab('privacy')} className="hover:text-[#0A0A0A] cursor-pointer transition-colors">
             PRIVACY POLICY
           </span>
         </div>
@@ -192,7 +192,7 @@ const FullPublicFooter: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
               <p className="font-bold text-[#0A0A0A]">Vidyalankar Educational Campus</p>
               <p>Vidyalankar College Rd, Wadala (East), Mumbai - 400037, Maharashtra</p>
               <p className="font-mono text-[11px] text-[#0A0A0A]">Phone: +91 22 2416 1126</p>
-              <p className="font-mono text-[11px] text-[#0A0A0A]">Email: principal@vit.edu.in | alumni@vit.edu.in</p>
+              <p className="font-mono text-[11px] text-[#0A0A0A]">Email: principal@vit.edu.in | alumni@vit.edu.in | support@vit.edu.in</p>
             </div>
           </div>
 
@@ -202,9 +202,9 @@ const FullPublicFooter: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
         <div className="pt-8 border-t border-[#E5E7EB] flex flex-col md:flex-row items-center justify-between gap-4 text-[10px] font-display font-bold uppercase tracking-widest text-[#9CA3AF]">
           <p>© 2026 NexaLink</p>
           <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3 sm:gap-6">
-            <span className="hover:text-[#0A0A0A] cursor-pointer transition-colors">TERMS OF SERVICE</span>
-            <span className="hover:text-[#0A0A0A] cursor-pointer transition-colors">DATA GOVERNANCE</span>
-            <span className="hover:text-[#0A0A0A] cursor-pointer transition-colors">PRIVACY POLICY</span>
+            <span onClick={() => setActiveTab('terms')} className="hover:text-[#0A0A0A] cursor-pointer transition-colors">TERMS OF SERVICE</span>
+            <span onClick={() => setActiveTab('data-governance')} className="hover:text-[#0A0A0A] cursor-pointer transition-colors">DATA GOVERNANCE</span>
+            <span onClick={() => setActiveTab('privacy')} className="hover:text-[#0A0A0A] cursor-pointer transition-colors">PRIVACY POLICY</span>
           </div>
         </div>
 

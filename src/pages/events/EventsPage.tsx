@@ -22,7 +22,7 @@ import { RoleGate } from '../../components/common/RoleGate';
 import { Badge, Button, SegmentedTabs, Modal, ToastNotice } from '../../components/common/UIComponents';
 
 export const EventsPage: React.FC = () => {
-  const { eventsList, rsvpEvent, addEvent, submitEventFeedback } = useData();
+  const { eventsList, rsvpEvent, addEvent, submitEventFeedback, isDataLoading } = useData();
   const { currentRole, currentUser } = useAuth();
 
   const [activeCategory, setActiveCategory] = useState<string>('All');
@@ -196,8 +196,14 @@ export const EventsPage: React.FC = () => {
       </div>
 
       {/* Events Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredEvents.map((evt, index) => {
+      {isDataLoading ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#171717]"></div>
+          <p className="text-[#6B7280] font-mono text-xs font-bold uppercase tracking-wider">Loading Events...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredEvents.map((evt, index) => {
           const isRegistered = evt.registeredUserIds.includes(currentUser.id);
           const isWaitlisted = (evt.waitlistUserIds || []).includes(currentUser.id);
           const isCompleted = evt.status === 'Completed';
@@ -325,6 +331,7 @@ export const EventsPage: React.FC = () => {
           );
         })}
       </div>
+      )}
 
       {/* Organize Event Modal */}
       <Modal

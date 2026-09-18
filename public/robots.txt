@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /$
+Allow: /?*
+Disallow: /dashboard
+Disallow: /directory
+Disallow: /mentorship
+Disallow: /messaging
+Disallow: /opportunities
+Disallow: /settings
+Disallow: /reports
+Disallow: /admin-console
+Disallow: /feedback

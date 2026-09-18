@@ -46,6 +46,7 @@ export const SettingsPage: React.FC = () => {
   // Base Profile State
   const [name, setName] = useState(currentUser.name || '');
   const [email, setEmail] = useState(currentUser.email || '');
+  const [institutionalEmail, setInstitutionalEmail] = useState(currentUser.institutionalEmail || '');
   const [phone, setPhone] = useState(currentUser.phone || '');
   const [department, setDepartment] = useState(currentUser.department || 'CMPN');
   const [bio, setBio] = useState(currentUser.bio || '');
@@ -133,6 +134,7 @@ export const SettingsPage: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const [notice, setNotice] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setNotice(msg);
@@ -141,6 +143,22 @@ export const SettingsPage: React.FC = () => {
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
+
+    if (!name || name.trim() === '') {
+      setFormError('Full Name is required.');
+      return;
+    }
+    if (!email || email.trim() === '') {
+      setFormError('Email address is required.');
+      return;
+    }
+
+    // Validate Institutional Email if provided
+    if (institutionalEmail && !institutionalEmail.trim().toLowerCase().endsWith('@vit.edu.in')) {
+      setFormError('Institutional Email must end with @vit.edu.in');
+      return;
+    }
 
     const emailChanged = email !== currentUser.email;
 
@@ -164,6 +182,7 @@ export const SettingsPage: React.FC = () => {
     const updatedProfilePayload: any = {
       name,
       email,
+      institutionalEmail: institutionalEmail.trim().toLowerCase() || null,
       phone,
       department: currentRole === 'admin' ? (currentUser.department || 'CMPN') : department,
       bio,
@@ -268,7 +287,7 @@ export const SettingsPage: React.FC = () => {
 
       {/* TAB 1: PROFILE DETAILS */}
       {activeTab === 'profile' && (
-        <form onSubmit={handleSaveProfile} className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-6 shadow-none space-y-5 sm:space-y-6">
+        <form noValidate onSubmit={handleSaveProfile} className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-6 shadow-none space-y-5 sm:space-y-6">
           <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3 sm:pb-4">
             <h2 className="font-display font-bold text-[11px] sm:text-xs uppercase tracking-wider text-[#0A0A0A] flex items-center gap-2">
               <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0A0A0A]" />
@@ -320,6 +339,18 @@ export const SettingsPage: React.FC = () => {
             </div>
           </div>
 
+          {formError && (
+            <div className="p-3.5 bg-rose-50 border border-rose-200/80 rounded-xl text-rose-950 text-xs flex items-start gap-2">
+              <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold text-[11px] block text-rose-900 uppercase font-display tracking-wider mb-0.5">
+                  Validation Error
+                </span>
+                {formError}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-5 text-xs">
             <div>
               <label className="app-label text-[#0A0A0A] font-bold">Full Name</label>
@@ -333,11 +364,7 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="app-label text-[#0A0A0A] font-bold">
-                {currentRole === 'admin'
-                  ? 'Institutional Email (Changing this requires your current password)'
-                  : 'Institutional Email (Triggers Re-Verification if modified)'}
-              </label>
+              <label className="app-label text-[#0A0A0A] font-bold">Personal Email (Login)</label>
               <input
                 type="email"
                 required
@@ -345,6 +372,20 @@ export const SettingsPage: React.FC = () => {
                 onChange={e => setEmail(e.target.value)}
                 className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
               />
+            </div>
+
+            <div>
+              <label className="app-label text-[#0A0A0A] font-bold">
+                Institutional Email (Optional)
+              </label>
+              <input
+                type="email"
+                value={institutionalEmail}
+                onChange={e => setInstitutionalEmail(e.target.value)}
+                placeholder="e.g. name@vit.edu.in"
+                className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
+              />
+              <p className="text-[10px] text-[#6B7280] mt-1">Must end in @vit.edu.in to save.</p>
             </div>
 
             <div>

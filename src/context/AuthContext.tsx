@@ -1,12 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { User, UserRole, AlumniProfile, StudentProfile, FacultyProfile } from '../types';
-import { DEMO_ADMIN, DEMO_ALUMNI, DEMO_STUDENT, DEMO_FACULTY } from '../data/mockData';
+// Removed static import of mockData for production tree-shaking
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface AuthContextType {
   currentUser: User | AlumniProfile | StudentProfile | FacultyProfile;
   currentRole: UserRole;
   isAuthenticated: boolean;
+  isCheckingSession: boolean;
   loginError: string | null;
   welcomeRevealName: string | null;
   clearWelcomeReveal: () => void;
@@ -27,16 +28,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentRole, setCurrentRole] = useState<UserRole>('student');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const wasAuthenticatedRef = useRef<boolean>(false);
+  const [isCheckingSession, setIsCheckingSession] = useState<boolean>(true);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [welcomeRevealName, setWelcomeRevealName] = useState<string | null>(null);
   const [notificationCount, setNotificationCount] = useState<number>(3);
 
   // Rate Limiting & Account Lockout State (persisted server-side in Supabase login_attempts when configured)
-  const [failedAttempts, setFailedAttempts] = useState<Record<string, number>>({});
-  const [lockoutExpiry, setLockoutExpiry] = useState<Record<string, number>>({});
   const [activeOtps, setActiveOtps] = useState<Record<string, { otp: string; expiresAt: number }>>({});
 
   const triggerWelcomeRevealIfVerified = useCallback((user: any) => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('hasShownWelcomeThisSession')) {
+      return;
+    }
+
     if (
       user &&
       user.isVerified !== false &&
@@ -44,6 +49,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       user.verificationStatus !== 'Needs Clarification' &&
       user.verificationStatus !== 'Rejected'
     ) {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('hasShownWelcomeThisSession', 'true');
+      }
       setWelcomeRevealName(user.name);
     } else {
       setWelcomeRevealName(null);
@@ -52,20 +60,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Sync Supabase Auth Session on Mount
   useEffect(() => {
-    if (!isSupabaseConfigured()) return;
+    if (!isSupabaseConfigured()) {
+      setIsCheckingSession(false);
+      return;
+    }
 
     // Check existing active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        loadUserProfileFromSupabase(session.user.id);
+        loadUserProfileFromSupabase(session.user.id).finally(() => setIsCheckingSession(false));
+      } else {
+        setIsCheckingSession(false);
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'TOKEN_REFRESHED') {
+        return; // Ignore token refreshes entirely for side-effects
+      }
+      
       if (session?.user) {
-        loadUserProfileFromSupabase(session.user.id);
+        const isFreshLogin = event === 'SIGNED_IN' && !wasAuthenticatedRef.current;
+        loadUserProfileFromSupabase(session.user.id, isFreshLogin);
       } else {
-        // Fallback default
+        setIsAuthenticated(false);
+        wasAuthenticatedRef.current = false;
+        setCurrentUser(null);
       }
     });
 
@@ -74,7 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const loadUserProfileFromSupabase = async (userId: string) => {
+  const loadUserProfileFromSupabase = async (userId: string, triggerSplash: boolean = true) => {
     try {
       const { data: userData, error } = await supabase
         .from('users')
@@ -119,7 +139,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCurrentRole(userData.role as UserRole);
       setCurrentUser(enrichedUser);
       setIsAuthenticated(true);
-      triggerWelcomeRevealIfVerified(enrichedUser);
+      wasAuthenticatedRef.current = true;
+      if (triggerSplash) {
+        triggerWelcomeRevealIfVerified(enrichedUser);
+      }
       return true;
     } catch (err) {
       console.warn('[AuthContext] Error loading user profile from Supabase:', err);
@@ -127,21 +150,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const switchRole = (role: UserRole) => {
+  const mockLoginByRole = async (role: UserRole) => {
     setLoginError(null);
     setCurrentRole(role);
     setIsAuthenticated(true);
-    let targetUser: any = DEMO_STUDENT;
+    wasAuthenticatedRef.current = true;
+    
+    const mockData = await import('../data/mockData');
+    let targetUser: any = mockData.DEMO_STUDENT;
     if (role === 'admin') {
-      targetUser = DEMO_ADMIN;
+      targetUser = mockData.DEMO_ADMIN;
     } else if (role === 'alumni') {
-      targetUser = DEMO_ALUMNI;
+      targetUser = mockData.DEMO_ALUMNI;
     } else if (role === 'faculty' || role === 'teacher') {
-      targetUser = DEMO_FACULTY;
+      targetUser = mockData.DEMO_FACULTY;
     }
     setCurrentUser(targetUser);
     triggerWelcomeRevealIfVerified(targetUser);
   };
+
+  const switchRole = mockLoginByRole;
 
   const login = async (
     email: string,
@@ -152,17 +180,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoginError(null);
     const targetEmail = (email || '').trim().toLowerCase();
 
-    // 1. Server-side / local lockout check (5 failed attempts rate-limit)
-    const lockTime = lockoutExpiry[targetEmail];
-    if (lockTime && Date.now() < lockTime) {
-      const remainingMins = Math.ceil((lockTime - Date.now()) / (60 * 1000));
-      const err = `Account Locked: 5 consecutive failed login attempts detected. Please try again in ${remainingMins} minute(s) or use Password Reset.`;
-      setLoginError(err);
-      setIsAuthenticated(false);
-      setWelcomeRevealName(null);
-      return { success: false, message: err };
-    }
-
     // 2. Live Supabase Auth when configured
     if (isSupabaseConfigured() && password) {
       try {
@@ -172,18 +189,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
         if (error) {
-          const newCount = (failedAttempts[targetEmail] || 0) + 1;
-          setFailedAttempts(prev => ({ ...prev, [targetEmail]: newCount }));
-
-          if (newCount >= 5) {
-            const lockoutUntil = Date.now() + 15 * 60 * 1000;
-            setLockoutExpiry(prev => ({ ...prev, [targetEmail]: lockoutUntil }));
-            const err = 'Account Locked: 5 consecutive failed login attempts detected. Account temporarily locked for 15 minutes.';
-            setLoginError(err);
-            setIsAuthenticated(false);
-            return { success: false, message: err };
-          }
-
           const errMsg = error.message || 'Invalid login credentials.';
           setLoginError(errMsg);
           setIsAuthenticated(false);
@@ -191,7 +196,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         if (data.user) {
-          setFailedAttempts(prev => ({ ...prev, [targetEmail]: 0 }));
           const profileLoaded = await loadUserProfileFromSupabase(data.user.id);
           if (!profileLoaded) {
             const err = 'User profile not found. Your account registration may be incomplete.';
@@ -208,54 +212,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 3. Resilient Local / Demo Auth verification
     if (password && password === 'wrongpassword') {
-      const newCount = (failedAttempts[targetEmail] || 0) + 1;
-      setFailedAttempts(prev => ({ ...prev, [targetEmail]: newCount }));
-
-      if (newCount >= 5) {
-        const lockoutUntil = Date.now() + 15 * 60 * 1000;
-        setLockoutExpiry(prev => ({ ...prev, [targetEmail]: lockoutUntil }));
-        const err = 'Account Locked: 5 consecutive failed login attempts detected. Account temporarily locked for 15 minutes.';
-        setLoginError(err);
-        setIsAuthenticated(false);
-        setWelcomeRevealName(null);
-        return { success: false, message: err };
-      }
-
-      const err = `Invalid password credentials. ${5 - newCount} attempt(s) remaining before account lockout.`;
+      const err = `Invalid password credentials.`;
       setLoginError(err);
       setIsAuthenticated(false);
       setWelcomeRevealName(null);
       return { success: false, message: err };
     }
 
-    setFailedAttempts(prev => ({ ...prev, [targetEmail]: 0 }));
-
     if (matchedUserFromStore) {
       setCurrentRole(matchedUserFromStore.role);
       setCurrentUser(matchedUserFromStore);
       setIsAuthenticated(true);
+      wasAuthenticatedRef.current = true;
       triggerWelcomeRevealIfVerified(matchedUserFromStore);
       return { success: true };
     }
 
-    let authenticatedUser: any = DEMO_STUDENT;
+    const mockData = await import('../data/mockData');
+    let authenticatedUser: any = mockData.DEMO_STUDENT;
 
     if (targetEmail === 'admin@vit.edu.in' || targetEmail.startsWith('admin.')) {
       setCurrentRole('admin');
-      authenticatedUser = DEMO_ADMIN;
+      authenticatedUser = mockData.DEMO_ADMIN;
     } else if (targetEmail === 'rushabh.sanghavi@alumni.vit.edu.in' || targetEmail.includes('alumni')) {
       setCurrentRole('alumni');
-      authenticatedUser = DEMO_ALUMNI;
+      authenticatedUser = mockData.DEMO_ALUMNI;
     } else if (targetEmail === 'ravindra.sangale@vit.edu.in' || targetEmail.includes('faculty') || targetEmail.includes('prof')) {
       setCurrentRole('faculty');
-      authenticatedUser = DEMO_FACULTY;
+      authenticatedUser = mockData.DEMO_FACULTY;
     } else {
       setCurrentRole('student');
-      authenticatedUser = DEMO_STUDENT;
+      authenticatedUser = mockData.DEMO_STUDENT;
     }
 
     setCurrentUser(authenticatedUser);
     setIsAuthenticated(true);
+    wasAuthenticatedRef.current = true;
     triggerWelcomeRevealIfVerified(authenticatedUser);
     return { success: true };
   };
@@ -394,9 +386,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     if (isSupabaseConfigured()) {
+      supabase.removeAllChannels(); // Tear down active WebSockets
       await supabase.auth.signOut().catch(() => {});
     }
     setIsAuthenticated(false);
+    wasAuthenticatedRef.current = false;
     setCurrentUser(null as any);
     setCurrentRole('student');
     setLoginError(null);
@@ -434,7 +428,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         updateCurrentUserState,
         notificationCount,
-        clearNotifications
+        clearNotifications,
+        isCheckingSession
       }}
     >
       {children}

@@ -23,7 +23,7 @@ import {
 import { Badge, Button, SegmentedTabs, Modal, ToastNotice } from '../../components/common/UIComponents';
 
 export const JobPortalPage: React.FC = () => {
-  const { jobsList, addJob, applyForJob } = useData();
+  const { jobsList, addJob, applyForJob, isDataLoading } = useData();
   const { currentUser, currentRole } = useAuth();
 
   const [activeTypeFilter, setActiveTypeFilter] = useState<string>('All');
@@ -200,7 +200,12 @@ export const JobPortalPage: React.FC = () => {
       />
 
       {/* Opportunities List or Clean Empty State */}
-      {filteredJobs.length === 0 ? (
+      {isDataLoading ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#171717]"></div>
+          <p className="text-[#6B7280] font-mono text-xs font-bold uppercase tracking-wider">Loading Opportunities...</p>
+        </div>
+      ) : filteredJobs.length === 0 ? (
         <div className="bg-white border border-[#E5E7EB] rounded-xl p-12 text-center space-y-4 shadow-none font-sans">
           <div className="w-12 h-12 rounded-xl bg-[#F3F4F6] border border-[#E5E7EB] flex items-center justify-center text-[#0A0A0A] mx-auto">
             <Briefcase className="w-6 h-6" />

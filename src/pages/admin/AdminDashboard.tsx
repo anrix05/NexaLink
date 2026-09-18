@@ -82,7 +82,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
     dismissMessageReport,
     actionMessageReport,
     bulkGraduateStudents,
-    backfillLegacyEmails
+    backfillLegacyEmails,
+    isDataLoading
   } = useData();
 
   const [currentView, setCurrentView] = useState<'dashboard' | 'console'>(initialView);
@@ -711,6 +712,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
                                     {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                   </button>
                                   <span>{u.name}</span>
+                                  {u.institutionalEmail && (
+                                    <Badge variant="indigo" title={`Institutional Email: ${u.institutionalEmail}`}>@vit</Badge>
+                                  )}
                                 </div>
                               </td>
                               <td className="p-3">
@@ -775,66 +779,80 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
                             {isExpanded && (
                               <tr className="bg-[#FAFAFA] border-b border-[#E5E7EB]">
                                 <td colSpan={8} className="p-0">
-                                  <AnimatePresence initial={false}>
-                                    <motion.div
-                                      initial={{ height: 0, opacity: 0 }}
-                                      animate={{ height: 'auto', opacity: 1 }}
-                                      exit={{ height: 0, opacity: 0 }}
-                                      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                                      className="overflow-hidden p-4 space-y-3"
-                                    >
-                                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                        <div className="p-3 bg-white border border-[#E5E7EB] rounded-lg">
-                                          <span className="app-label text-[#0A0A0A] font-bold">Application Bio & Goals</span>
-                                          <p className="text-xs text-[#374151] mt-1 font-medium leading-relaxed">
-                                            "{u.bio || 'Applicant awaiting official departmental verification at Vidyalankar.'}"
-                                          </p>
-                                        </div>
-                                        <div className="p-3 bg-white border border-[#E5E7EB] rounded-lg">
-                                          <span className="app-label text-[#0A0A0A] font-bold">Skills / Research Areas</span>
-                                          <div className="flex flex-wrap gap-1 mt-1">
-                                            {u.skills?.map(s => (
-                                              <span key={s} className="px-2 py-0.5 bg-[#FAFAFA] text-[#374151] border border-[#E5E7EB] rounded text-[10px] font-mono">
-                                                {s}
-                                              </span>
-                                            )) || <span className="text-xs text-[#9CA3AF]">None Listed</span>}
+                                  <AnimatePresence mode="wait">
+                                    {isDataLoading ? (
+                                      <motion.div
+                                        key="loading"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        className="flex flex-col items-center justify-center py-12 text-center space-y-3"
+                                      >
+                                        <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-[#171717]"></div>
+                                        <p className="text-[#6B7280] font-mono text-[11px] font-bold uppercase tracking-wider">Loading System Data...</p>
+                                      </motion.div>
+                                    ) : (
+                                      <motion.div
+                                        key="content"
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                                        className="overflow-hidden p-4 space-y-3"
+                                      >
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                          <div className="p-3 bg-white border border-[#E5E7EB] rounded-lg">
+                                            <span className="app-label text-[#0A0A0A] font-bold">Application Bio & Goals</span>
+                                            <p className="text-xs text-[#374151] mt-1 font-medium leading-relaxed">
+                                              "{u.bio || 'Applicant awaiting official departmental verification at Vidyalankar.'}"
+                                            </p>
+                                          </div>
+                                          <div className="p-3 bg-white border border-[#E5E7EB] rounded-lg">
+                                            <span className="app-label text-[#0A0A0A] font-bold">Skills / Research Areas</span>
+                                            <div className="flex flex-wrap gap-1 mt-1">
+                                              {u.skills?.map(s => (
+                                                <span key={s} className="px-2 py-0.5 bg-[#FAFAFA] text-[#374151] border border-[#E5E7EB] rounded text-[10px] font-mono">
+                                                  {s}
+                                                </span>
+                                              )) || <span className="text-xs text-[#9CA3AF]">None Listed</span>}
+                                            </div>
+                                          </div>
+                                          <div className="p-3 bg-white border border-[#E5E7EB] rounded-lg">
+                                            <span className="app-label text-[#0A0A0A] font-bold">Institutional Match Confidence</span>
+                                            {u.role === 'alumni' ? (
+                                              <>
+                                                <p className="text-xs font-bold text-[#065F46] mt-1">
+                                                  ✓ Historical Academic Enrollment Record Match
+                                                </p>
+                                                <p className="text-[10px] text-[#6B7280] mt-0.5 leading-relaxed">
+                                                  {(() => {
+                                                    const prnVal = u.enrollmentNo || (u as any).prn;
+                                                    const deptVal = u.department || 'CMPN';
+                                                    const yrVal = u.graduationYear || 2024;
+                                                    const hasDoc = !!((u as any).verificationDocumentUrl || u.proofDocumentName);
+                                                    const docNote = hasDoc ? 'Proof document attached.' : 'No proof document attached.';
+                                                    return `PRN "${prnVal || 'N/A'}" checked against ${deptVal} (${yrVal} batch record). ${docNote}`;
+                                                  })()}
+                                                </p>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <p className={`text-xs font-bold mt-1 ${u.email.includes('vit.edu.in') ? 'text-[#065F46]' : 'text-[#B45309]'}`}>
+                                                  {u.email.includes('vit.edu.in') ? '✓ Active Institutional Domain Validated' : '⚠ Non-Institutional Email Domain'}
+                                                </p>
+                                                <p className="text-[10px] text-[#6B7280] mt-0.5 leading-relaxed">
+                                                  {(() => {
+                                                    const idVal = u.enrollmentNo || (u as any).prn || (u as any).employeeId;
+                                                    const deptVal = u.department || 'CMPN';
+                                                    return `ID/Enrollment "${idVal || 'N/A'}" format checked for ${deptVal} active roster.`;
+                                                  })()}
+                                                </p>
+                                              </>
+                                            )}
                                           </div>
                                         </div>
-                                        <div className="p-3 bg-white border border-[#E5E7EB] rounded-lg">
-                                          <span className="app-label text-[#0A0A0A] font-bold">Institutional Match Confidence</span>
-                                          {u.role === 'alumni' ? (
-                                            <>
-                                              <p className="text-xs font-bold text-[#065F46] mt-1">
-                                                ✓ Historical Academic Enrollment Record Match
-                                              </p>
-                                              <p className="text-[10px] text-[#6B7280] mt-0.5 leading-relaxed">
-                                                {(() => {
-                                                  const prnVal = u.enrollmentNo || (u as any).prn;
-                                                  const deptVal = u.department || 'CMPN';
-                                                  const yrVal = u.graduationYear || 2024;
-                                                  const hasDoc = !!((u as any).verificationDocumentUrl || u.proofDocumentName);
-                                                  const docNote = hasDoc ? 'Proof document attached.' : 'No proof document attached.';
-                                                  return `PRN "${prnVal || 'N/A'}" checked against ${deptVal} (${yrVal} batch record). ${docNote}`;
-                                                })()}
-                                              </p>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <p className={`text-xs font-bold mt-1 ${u.email.includes('vit.edu.in') ? 'text-[#065F46]' : 'text-[#B45309]'}`}>
-                                                {u.email.includes('vit.edu.in') ? '✓ Active Institutional Domain Validated' : '⚠ Non-Institutional Email Domain'}
-                                              </p>
-                                              <p className="text-[10px] text-[#6B7280] mt-0.5 leading-relaxed">
-                                                {(() => {
-                                                  const idVal = u.enrollmentNo || (u as any).prn || (u as any).employeeId;
-                                                  const deptVal = u.department || 'CMPN';
-                                                  return `ID/Enrollment "${idVal || 'N/A'}" format checked for ${deptVal} active roster.`;
-                                                })()}
-                                              </p>
-                                            </>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </motion.div>
+                                      </motion.div>
+                                    )}
                                   </AnimatePresence>
                                 </td>
                               </tr>

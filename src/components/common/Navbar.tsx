@@ -33,7 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
     clearNotifications
   } = useAuth();
 
-  const { notifications, markNotificationRead } = useData();
+  const { notifications, markNotificationRead, markAllNotificationsRead } = useData();
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -79,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadCount = notifications.filter(n => !n.is_read).length;
   const isUnverified = isAuthenticated && currentUser && (currentUser.isVerified === false || currentUser.verificationStatus === 'Pending Verification' || currentUser.verificationStatus === 'Needs Clarification');
   const isPublicView = activeTab === 'landing' || activeTab === 'auth' || !isAuthenticated || !currentUser;
 
@@ -287,36 +287,60 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
 
                       <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
                         {notifications.length === 0 ? (
-                          <p className="text-center text-[#9CA3AF] py-6 font-medium">
-                            No notifications right now.
-                          </p>
+                          <div className="flex flex-col items-center justify-center py-8 text-center px-4">
+                            <Bell className="w-8 h-8 text-[#E5E7EB] mb-3" strokeWidth={1} />
+                            <p className="text-[#6B7280] text-sm font-medium">All caught up</p>
+                            <p className="text-[#9CA3AF] text-xs mt-1">Check back later for updates</p>
+                          </div>
                         ) : (
-                          notifications.map(n => (
-                            <div
-                              key={n.id}
-                              onClick={() => {
-                                markNotificationRead(n.id);
-                                if (n.linkTab) setActiveTab(n.linkTab);
-                                setShowNotifications(false);
-                              }}
-                              className={`p-3 rounded-lg border cursor-pointer transition ${
-                                n.isRead
-                                  ? 'bg-[#FAFAFA] border-[#E5E7EB] opacity-75'
-                                  : 'bg-white border-[#0A0A0A] text-[#0A0A0A] font-medium'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between font-display font-bold text-[10px] uppercase text-[#0A0A0A] mb-1">
-                                <span>{n.title}</span>
-                                <span className="text-[#9CA3AF] font-mono text-[9px]">{n.type}</span>
+                          <>
+                            {unreadCount > 0 && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  markAllNotificationsRead();
+                                }}
+                                className="w-full text-right text-[10px] uppercase font-bold tracking-wider text-[#0A0A0A] hover:text-[#4B5563] mb-1"
+                              >
+                                Mark all as read
+                              </button>
+                            )}
+                            {notifications.map(n => (
+                              <div
+                                key={n.id}
+                                onClick={() => {
+                                  markNotificationRead(n.id);
+                                  if (n.link) {
+                                    if (n.link.startsWith('messaging?contact=')) {
+                                      setActiveTab('messaging');
+                                      // The MessagingPage will need to handle setting the activeContactId via URL/State if we were navigating,
+                                      // but currently NexaLink doesn't parse URL query params for contactId in MessagingPage.
+                                      // It relies on global state or clicking the user.
+                                    } else {
+                                      setActiveTab(n.link);
+                                    }
+                                  }
+                                  setShowNotifications(false);
+                                }}
+                                className={`p-3 rounded-lg border cursor-pointer transition ${
+                                  n.is_read
+                                    ? 'bg-[#FAFAFA] border-[#E5E7EB] opacity-75'
+                                    : 'bg-white border-[#0A0A0A] text-[#0A0A0A] font-medium'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between font-display font-bold text-[10px] uppercase text-[#0A0A0A] mb-1">
+                                  <span>{n.title}</span>
+                                  <span className="text-[#9CA3AF] font-mono text-[9px]">{n.type}</span>
+                                </div>
+                                <p className="text-[#374151] text-[11px] leading-snug font-medium">
+                                  {n.body}
+                                </p>
+                                <span className="block text-[9px] font-mono text-[#9CA3AF] mt-1">
+                                  {n.created_at}
+                                </span>
                               </div>
-                              <p className="text-[#374151] text-[11px] leading-snug font-medium">
-                                {n.message}
-                              </p>
-                              <span className="block text-[9px] font-mono text-[#9CA3AF] mt-1">
-                                {n.date}
-                              </span>
-                            </div>
-                          ))
+                            ))}
+                          </>
                         )}
                       </div>
                     </div>

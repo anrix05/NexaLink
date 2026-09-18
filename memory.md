@@ -43,10 +43,11 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
    - **Defensive Profile Fetching:** Uses `.maybeSingle()` for loading extended role datasets (`student_profiles`, etc.) to prevent fatal sign-in crashes when optional data is missing.
    - Rate-limiting lockout (5 failed attempts) and OTP password reset.
 
-2. **Session Security & View-Derived Navbar Isolation (`AuthContext.tsx`, `Navbar.tsx`, `App.tsx`)**
+2. **Session Security & Global Navigation (`AuthContext.tsx`, `Navbar.tsx`, `App.tsx`)**
    - **Immutable Session Nulling:** `logout()` sets `currentUser = null`, `isAuthenticated = false`, and clears `sessionStorage`.
-   - **Root Route Protection:** `isLoggedOut = !isAuthenticated || !currentUser` unmounts portal wrappers and forces public Landing Page rendering.
-   - **View-Derived Navbar Isolation:** `isPublicView = activeTab === 'landing' || activeTab === 'auth' || !isAuthenticated || !currentUser` ensures `Navbar.tsx` ONLY renders public navigation on public pages, preventing any navbar/content session state mismatch.
+   - **Public Legal Pages & Root Protection:** Public legal pages (Terms, Privacy, Data Governance) are explicitly un-gated in the root router (`App.tsx`). The fallback for unauthenticated users is the Landing Page.
+   - **Global Scroll Restoration:** A top-level `useEffect` listening to `activeTab` triggers `window.scrollTo(0, 0)` ensuring SPA page transitions consistently load from the top of the viewport.
+   - **View-Derived Navbar Isolation:** `isPublicView` ensures `Navbar.tsx` ONLY renders public navigation on public pages, preventing any navbar/content session state mismatch.
    - **Interactive Brand Logo Navigation:** Clicking NexaLink logo smoothly scrolls to top and opens the Landing page, displaying `[ ->| RETURN TO DASHBOARD ]` for authenticated sessions to return seamlessly.
    - **Auth Tab Auto-Redirect:** Authenticated users attempting to visit `auth` are automatically redirected back to `dashboard`.
 
@@ -66,7 +67,6 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
    - **Scope Reduction:** Removed full inline Smart Mentor Match engine; replaced with a compact horizontally-scrollable "Top Matches" preview row linking to Guidance (`mentorship`).
    - **Consolidated Profile Completion:** Single source of truth progress card with embedded resume row (`Resume: aanya_patel_vit.pdf ✓ On File`).
    - **2×2 Stat Grid:** Interactive metric cards (Active Requests, Smart Matches, Job Openings, Campus Events) with deep links to target sections.
-   - **Alumni by Organization:** Single-row horizontally scrollable company chips (logo, name, grad count) with reverse lookup shortcut.
 
 6. **Profile Settings & Storage Persistence (`SettingsPage.tsx`, `storage.ts`)**
    - **Native File Pickers:** Direct `<input type="file">` integrations for uploading resumes, proof documents, and avatars replacing crude browser prompts.
@@ -114,6 +114,11 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
 
 15. **Role-Scoped Command Palette (`CommandPalette.tsx`)**
     - `Ctrl+K` / `Cmd+K` global spotlight interface providing instant navigation, quick actions, and directory search strictly scoped to the active user's permissions. Fullscreen native presentation on mobile.
+
+16. **Alumni Directory & Multi-Filter Search (`AlumniDirectoryPage.tsx`)**
+    - Consolidated search experience replacing heavy hero cards with a streamlined multi-filter row (Department, Company/University, Technical Skills, Mentor Toggle).
+    - Lightweight autocomplete typeahead for master organization lookups bound to the main Company/University input.
+    - Role tabs (All Members, Alumni Profiles, Faculty Profiles) dynamically reflect applied cross-filters.
 
 ---
 

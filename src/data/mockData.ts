@@ -165,15 +165,7 @@ export const DEMO_FACULTY: FacultyProfile = {
   bio: 'HOD Computer Engineering at VIT Wadala with 20+ years of teaching and industrial consultancy experience.'
 };
 
-export const DEPARTMENTS: DepartmentInfo[] = [
-  { code: 'CMPN', name: 'Computer Engineering', establishedYear: 1999, hodName: 'Dr. Ravindra Sangale' },
-  { code: 'INFT', name: 'Information Technology', establishedYear: 1999, hodName: 'Dr. Vidya Chitre' },
-  { code: 'EXTC', name: 'Electronics & Telecommunication', establishedYear: 1999, hodName: 'Dr. Girish Gidaye' },
-  { code: 'EXCS', name: 'Electronics & Computer Science', establishedYear: 2004, hodName: 'Dr. Arun Chavan' },
-  { code: 'BIOM', name: 'Biomedical Engineering', establishedYear: 1999, hodName: 'Dr. Gajanan Nagare' },
-  { code: 'MCA', name: 'Master of Computer Applications', establishedYear: 2008, hodName: 'Dr. Vidya Chitre' },
-  { code: 'MBA', name: 'Master of Management Studies (MMS)', establishedYear: 2006, hodName: 'Dr. Amit Oak' }
-];
+
 
 export const INITIAL_TEACHERS: FacultyProfile[] = [
   DEMO_FACULTY,
@@ -597,30 +589,33 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
 export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {
     id: 'notif-1',
+    user_id: 'mock-user-1',
     title: 'Mentorship Request Accepted',
-    message: 'Rushabh Sanghavi (Google) accepted your mentorship request for System Design.',
-    date: '2026-07-24 18:30',
+    body: 'Rushabh Sanghavi (Google) accepted your mentorship request for System Design.',
+    created_at: '2026-07-24 18:30',
     type: 'Mentorship Approval',
-    isRead: false,
-    linkTab: 'mentorship'
+    is_read: false,
+    link: 'mentorship'
   },
   {
     id: 'notif-2',
+    user_id: 'mock-user-1',
     title: 'New Opportunity Match',
-    message: 'Microsoft India posted: Cloud Systems & DevOps Intern (Matches your Azure/Docker skills).',
-    date: '2026-07-22 10:00',
+    body: 'Microsoft India posted: Cloud Systems & DevOps Intern (Matches your Azure/Docker skills).',
+    created_at: '2026-07-22 10:00',
     type: 'Internship Posting',
-    isRead: false,
-    linkTab: 'jobs'
+    is_read: false,
+    link: 'jobs'
   },
   {
     id: 'notif-3',
+    user_id: 'mock-user-1',
     title: 'Upcoming Grand Reunion',
-    message: 'VIT Annual Grand Alumni Reunion 2026 registration is live. Secure your RSVP spot.',
-    date: '2026-07-20 12:00',
+    body: 'VIT Annual Grand Alumni Reunion 2026 registration is live. Secure your RSVP spot.',
+    created_at: '2026-07-20 12:00',
     type: 'Event Announcement',
-    isRead: true,
-    linkTab: 'events'
+    is_read: true,
+    link: 'events'
   }
 ];
 

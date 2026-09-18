@@ -18,22 +18,9 @@ import type {
   RoleTransitionRequest,
   AdminInvite
 } from '../types';
-import {
-  INITIAL_ALUMNI,
-  INITIAL_STUDENTS,
-  INITIAL_TEACHERS,
-  INITIAL_JOBS,
-  INITIAL_EVENTS,
-  INITIAL_MENTORSHIP_REQUESTS,
-  INITIAL_ANNOUNCEMENTS,
-  INITIAL_NOTIFICATIONS,
-  INITIAL_MESSAGES,
-  DEMO_ADMIN,
-  DEMO_ADMIN_2,
-  INITIAL_ADMIN_INVITES
-} from '../data/mockData';
+// Removed static import of mockData for production tree-shaking
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { subscribeToChatMessages } from '../lib/realtime';
+import { subscribeToChatMessages, subscribeToNotifications } from '../lib/realtime';
 
 interface DataContextType {
   alumniList: AlumniProfile[];
@@ -51,6 +38,7 @@ interface DataContextType {
   messages: ChatMessage[];
   auditLogs: AuditLogEntry[];
   roleTransitionRequests: RoleTransitionRequest[];
+  isDataLoading: boolean;
   
   // Handlers
   approveUserVerification: (userId: string) => void;
@@ -82,7 +70,8 @@ interface DataContextType {
   applyForJob: (jobId: string) => void;
   registerUserInDatabase: (userProfile: StudentProfile | AlumniProfile | FacultyProfile) => void;
   markNotificationRead: (id: string) => void;
-  addAuditLog: (action: string, performedBy: string, details: string, target?: string) => void;
+  markAllNotificationsRead: () => void;
+  addAuditLog: (action: string, performedBy: string, details: string, target?: string, isBulkAction?: boolean, bulkMetadata?: any) => void;
   submitRoleTransitionRequest: (userId: string, proposedAlumniData: any) => void;
   approveRoleTransition: (requestId: string, adminId: string) => void;
   rejectRoleTransition: (requestId: string, adminId: string, reason: string) => void;
@@ -124,25 +113,34 @@ interface DataContextType {
 
   // Legacy Email Backfill Processing
   backfillLegacyEmails: (emailMap: Record<string, string>) => { backfilledCount: number };
+
+  // UI State for Notification Suppression
+  activeChatContactId: string | null;
+  setActiveChatContactId: (id: string | null) => void;
+  pendingChatUserId: string | null;
+  setPendingChatUserId: (id: string | null) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser, updateCurrentUserState } = useAuth();
-  const [adminList, setAdminList] = useState<User[]>([DEMO_ADMIN, DEMO_ADMIN_2]);
-  const [adminInvites, setAdminInvites] = useState<AdminInvite[]>(INITIAL_ADMIN_INVITES);
-  const [alumniList, setAlumniList] = useState<AlumniProfile[]>(INITIAL_ALUMNI);
-  const [studentList, setStudentList] = useState<StudentProfile[]>(INITIAL_STUDENTS);
-  const [facultyList, setFacultyList] = useState<FacultyProfile[]>(INITIAL_TEACHERS);
-  const [jobsList, setJobsList] = useState<JobListing[]>(INITIAL_JOBS);
-  const [eventsList, setEventsList] = useState<EventItem[]>(INITIAL_EVENTS);
-  const [mentorshipRequests, setMentorshipRequests] = useState<MentorshipRequest[]>(INITIAL_MENTORSHIP_REQUESTS);
-  const [announcements, setAnnouncements] = useState<Announcement[]>(INITIAL_ANNOUNCEMENTS);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
-  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
+  const [adminList, setAdminList] = useState<User[]>([]);
+  const [adminInvites, setAdminInvites] = useState<AdminInvite[]>([]);
+  const [alumniList, setAlumniList] = useState<AlumniProfile[]>([]);
+  const [studentList, setStudentList] = useState<StudentProfile[]>([]);
+  const [facultyList, setFacultyList] = useState<FacultyProfile[]>([]);
+  const [jobsList, setJobsList] = useState<JobListing[]>([]);
+  const [eventsList, setEventsList] = useState<EventItem[]>([]);
+  const [mentorshipRequests, setMentorshipRequests] = useState<MentorshipRequest[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [roleTransitionRequests, setRoleTransitionRequests] = useState<RoleTransitionRequest[]>([]);
   const [starredConversations, setStarredConversations] = useState<string[]>([]);
+  const [isDataLoading, setIsDataLoading] = useState<boolean>(isSupabaseConfigured());
+  const [activeChatContactId, setActiveChatContactId] = useState<string | null>(null);
+  const [pendingChatUserId, setPendingChatUserId] = useState<string | null>(null);
   
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([
     {
@@ -157,18 +155,54 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Load live data from Supabase if configured
   useEffect(() => {
-    if (!isSupabaseConfigured()) return;
+    if (!isSupabaseConfigured()) {
+      if (import.meta.env.DEV) {
+        setIsDataLoading(true);
+        import('../data/mockData').then((mockData) => {
+          setAdminList([mockData.DEMO_ADMIN, mockData.DEMO_ADMIN_2]);
+          setAdminInvites(mockData.INITIAL_ADMIN_INVITES);
+          setAlumniList(mockData.INITIAL_ALUMNI);
+          setStudentList(mockData.INITIAL_STUDENTS);
+          setFacultyList(mockData.INITIAL_TEACHERS);
+          setJobsList(mockData.INITIAL_JOBS);
+          setEventsList(mockData.INITIAL_EVENTS);
+          setMentorshipRequests(mockData.INITIAL_MENTORSHIP_REQUESTS);
+          setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
+          setNotifications(mockData.INITIAL_NOTIFICATIONS);
+          setMessages(mockData.INITIAL_MESSAGES);
+        }).finally(() => {
+          setIsDataLoading(false);
+        });
+      }
+      return;
+    }
 
     const loadSupabaseData = async () => {
+      setIsDataLoading(true);
       try {
         // 1. Fetch Users + Profile Tables
-        const { data: usersData, error: uErr } = await supabase.from('users').select('*');
+        const columns = currentUser?.role === 'admin'
+          ? '*'
+          : 'id, name, email, role, avatar_url, department, phone, is_verified, verification_status, rejection_reason, clarification_requested, is_active, enrollment_no, employee_id, bio, privacy_settings, personal_email';
+
+        const { data: usersData, error: uErr } = await supabase.from('users').select(columns);
         if (!uErr && usersData && usersData.length > 0) {
-          const [{ data: studentRows }, { data: alumniRows }, { data: facultyRows }] = await Promise.all([
+          const [studentsRes, alumniRes, facultyRes, notificationsRes] = await Promise.all([
             supabase.from('student_profiles').select('*'),
             supabase.from('alumni_profiles').select('*'),
-            supabase.from('faculty_profiles').select('*')
+            supabase.from('faculty_profiles').select('*'),
+            currentUser ? supabase.from('notifications').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false }).limit(50) : Promise.resolve({ data: null, error: null })
           ]);
+
+          if (studentsRes.error || alumniRes.error || facultyRes.error) {
+            console.error('Failed to load role profiles:', { studentsRes, alumniRes, facultyRes });
+            // Network failure during critical load - trigger global error state or fallback
+            // For now, we log it and avoid crashing by treating data as empty arrays
+          }
+
+          const studentRows = studentsRes.data || [];
+          const alumniRows = alumniRes.data || [];
+          const facultyRows = facultyRes.data || [];
 
           const loadedStudents: StudentProfile[] = [];
           const loadedAlumni: AlumniProfile[] = [];
@@ -382,10 +416,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // 6. Fetch Chat Messages (now using supabase-chat helper)
-        const { fetchAllUserMessages } = await import('../lib/supabase-chat');
+        const { fetchAllUserMessages, fetchReportedMessages } = await import('../lib/supabase-chat');
         if (currentUser?.id) {
           try {
-            const msgData = await fetchAllUserMessages(currentUser.id);
+            let msgData = await fetchAllUserMessages(currentUser.id);
+            
+            if (currentUser.role === 'admin') {
+              const reportedData = await fetchReportedMessages();
+              const existingIds = new Set(msgData.map((m: any) => m.id));
+              reportedData.forEach((r: any) => {
+                if (!existingIds.has(r.id)) {
+                  msgData.push(r);
+                  existingIds.add(r.id);
+                }
+              });
+            }
+
             setMessages(msgData.map((m: any) => ({
               id: m.id,
               senderId: m.sender_id,
@@ -425,18 +471,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // 7. Fetch Audit Logs
-        const { data: logsData, error: lErr } = await supabase.from('audit_logs').select('*').order('timestamp', { ascending: false });
-        if (!lErr && logsData) {
-          setAuditLogs(logsData.map((l: any) => ({
-            id: l.id,
-            action: l.action,
-            performedBy: l.performed_by,
-            targetUserOrItem: l.target_user_or_item || undefined,
-            timestamp: l.timestamp,
-            details: l.details,
-            isBulkAction: l.is_bulk_action,
-            bulkMetadata: l.bulk_metadata || undefined
-          })));
+        if (currentUser?.role === 'admin') {
+          const { data: logsData, error: lErr } = await supabase.from('audit_logs').select('*').order('timestamp', { ascending: false });
+          if (!lErr && logsData) {
+            setAuditLogs(logsData.map((l: any) => ({
+              id: l.id,
+              action: l.action,
+              performedBy: l.performed_by,
+              targetUserOrItem: l.target_user_or_item || undefined,
+              timestamp: l.timestamp,
+              details: l.details,
+              isBulkAction: l.is_bulk_action,
+              bulkMetadata: l.bulk_metadata || undefined
+            })));
+          }
         }
 
         // 8. Fetch Role Transition Requests
@@ -468,7 +516,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           })));
         }
       } catch (err) {
-        console.warn('[DataContext] Error loading Supabase data, continuing with cached/seed state:', err);
+        console.error('Unhandled error in loadSupabaseData:', err);
+      } finally {
+        setIsDataLoading(false);
       }
     };
 
@@ -490,10 +540,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       )
       .subscribe();
 
+    const notifSub = subscribeToNotifications(currentUser.id, (notif) => {
+      // Active Chat Edge Case:
+      // If this is a chat message notification, and the user is CURRENTLY looking at that exact thread
+      const isChatMsg = notif.type === 'Chat Message';
+      const senderMatches = notif.link?.includes(`contact=${activeChatContactId}`);
+      
+      if (isChatMsg && activeChatContactId && senderMatches) {
+        // We suppress it locally and mark it read in the DB immediately.
+        if (isSupabaseConfigured()) {
+          supabase.from('notifications').update({ is_read: true }).eq('id', notif.id).then();
+        }
+        return; // Don't add to UI state
+      }
+      setNotifications(prev => [notif, ...prev]);
+    });
+
     return () => {
       supabase.removeChannel(channel);
+      notifSub.unsubscribe();
     };
-  }, [currentUser?.id]);
+  }, [currentUser?.id, activeChatContactId]);
 
   const handleRealtimeMessageEvent = (payload: any) => {
     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
@@ -541,14 +608,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     u => u.isVerified === false || u.verificationStatus === 'Pending Verification' || u.verificationStatus === 'Needs Clarification'
   ) as (StudentProfile | AlumniProfile | FacultyProfile)[];
 
-  const addAuditLog = (action: string, performedBy: string, details: string, target: string = 'System') => {
+  const addAuditLog = (action: string, performedBy: string, details: string, target: string = 'System', isBulkAction: boolean = false, bulkMetadata: any = null) => {
     const entry: AuditLogEntry = {
       id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `log-${Date.now()}`,
       action,
       performedBy,
       targetUserOrItem: target,
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      details
+      details,
+      isBulkAction,
+      bulkMetadata
     };
     setAuditLogs(prev => [entry, ...prev]);
 
@@ -560,8 +629,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         target_user_or_item: entry.targetUserOrItem || null,
         timestamp: entry.timestamp,
         details: entry.details,
-        is_bulk_action: false,
-        bulk_metadata: null
+        is_bulk_action: entry.isBulkAction,
+        bulk_metadata: entry.bulkMetadata
       }).then(({ error }) => {
         if (error) console.error('[Supabase audit_logs insert error]', error);
       });
@@ -585,10 +654,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newNotif: NotificationItem = {
       id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `notif-${Date.now()}`,
       title: 'Account Approved',
-      message: `Your account (${userId}) has been verified and approved by Administrator.`,
-      date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      body: `Your account (${userId}) has been verified and approved by Administrator.`,
+      created_at: new Date().toISOString().replace('T', ' ').substring(0, 16),
       type: 'Account Verification',
-      isRead: false
+      is_read: false,
+      user_id: userId
     };
     setNotifications(prev => [newNotif, ...prev]);
 
@@ -617,10 +687,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newNotif: NotificationItem = {
       id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `notif-${Date.now()}`,
       title: 'Registration Rejected',
-      message: `Registration status set to Rejected. Reason: ${reason}. You may resubmit with corrected credentials.`,
-      date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      body: `Registration status set to Rejected. Reason: ${reason}. You may resubmit with corrected credentials.`,
+      created_at: new Date().toISOString().replace('T', ' ').substring(0, 16),
       type: 'Account Rejection',
-      isRead: false
+      is_read: false,
+      user_id: userId
     };
     setNotifications(prev => [newNotif, ...prev]);
 
@@ -1006,12 +1077,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newNotif: NotificationItem = {
       id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `notif-grad-${Date.now()}`,
       title: 'Graduation Cohort Transition',
-      message: isProvisional
+      body: isProvisional
         ? 'Your student account has been provisionally graduated. Please update your current employment details.'
         : 'Congratulations on your graduation! Your account is now active as an Alumni profile.',
-      date: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      type: 'Account Verification',
-      isRead: false
+      created_at: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      type: 'System Alert',
+      is_read: false,
+      user_id: studentId
     };
 
     setNotifications(prev => [newNotif, ...prev]);
@@ -1129,22 +1201,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setStudentList(prev => prev.filter(s => !graduatedStudentIds.has(s.id)));
     setAlumniList(prev => [...newAlumniList, ...prev]);
 
-    const newLogEntry: AuditLogEntry = {
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `log-bulk-grad-${Date.now()}`,
-      action: 'BULK_GRADUATION_PROVISIONAL',
-      performedBy: options?.adminId || 'Administrator',
-      targetUserOrItem: `Batch Cohort (${studentsToGraduate.length} Students)`,
-      timestamp: new Date().toISOString().split('T')[0],
-      details: `Provisional graduation executed for ${studentsToGraduate.length} students.`,
-      isBulkAction: true,
-      bulkMetadata: {
+    addAuditLog(
+      'BULK_GRADUATION_PROVISIONAL',
+      options?.adminId || 'Administrator',
+      `Provisional graduation executed for ${studentsToGraduate.length} students.`,
+      `Batch Cohort (${studentsToGraduate.length} Students)`,
+      true,
+      {
         affectedCount: studentsToGraduate.length,
         missingEmailCount: 0,
-        studentNames
+        studentNames,
+        affectedUserIds: studentsToGraduate.map(s => s.id)
       }
-    };
-
-    setAuditLogs(prev => [newLogEntry, ...prev]);
+    );
 
     return { count: studentsToGraduate.length, missingEmailCount: 0 };
   };
@@ -1785,11 +1854,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const markNotificationRead = (id: string) => {
-    setNotifications(prev => prev.map(n => (n.id === id ? { ...n, isRead: true } : n)));
+    setNotifications(prev => prev.map(n => (n.id === id ? { ...n, is_read: true } : n)));
 
     if (isSupabaseConfigured()) {
       supabase.from('notifications').update({ is_read: true }).eq('id', id).then(({ error }) => {
         if (error) console.error('[Supabase markNotificationRead error]', error);
+      });
+    }
+  };
+
+  const markAllNotificationsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    if (isSupabaseConfigured() && currentUser?.id) {
+      supabase.from('notifications').update({ is_read: true }).eq('user_id', currentUser.id).eq('is_read', false).then(({ error }) => {
+        if (error) console.error('[Supabase markAllNotificationsRead error]', error);
       });
     }
   };
@@ -2237,6 +2315,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         applyForJob,
         registerUserInDatabase,
         markNotificationRead,
+        markAllNotificationsRead,
         addAuditLog,
         roleTransitionRequests,
         submitRoleTransitionRequest,
@@ -2261,7 +2340,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toggleStarConversation,
         toggleReaction,
         retryFailedMessage,
-        markThreadAsRead
+        markThreadAsRead,
+        activeChatContactId,
+        setActiveChatContactId,
+        pendingChatUserId,
+        setPendingChatUserId,
+        isDataLoading
       }}
     >
       {children}

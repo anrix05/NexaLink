@@ -24,6 +24,10 @@ import { BottomNav } from './components/common/BottomNav';
 import { AdminMobileInterstitial } from './components/admin/AdminMobileInterstitial';
 import { OpportunitiesPage } from './pages/opportunities/OpportunitiesPage';
 import { WelcomeReveal } from './components/common/WelcomeReveal';
+import { NotFoundPage } from './pages/NotFoundPage';
+import { PrivacyPolicyPage } from './pages/legal/PrivacyPolicyPage';
+import { TermsOfServicePage } from './pages/legal/TermsOfServicePage';
+import { DataGovernancePage } from './pages/legal/DataGovernancePage';
 import type { AlumniProfile } from './types';
 
 const MainContent: React.FC = () => {
@@ -33,7 +37,11 @@ const MainContent: React.FC = () => {
   const [selectedMentorForBooking, setSelectedMentorForBooking] = useState<AlumniProfile | null>(null);
   const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => typeof window !== 'undefined' && window.innerWidth < 1024);
   const [adminBypassWarning, setAdminBypassWarning] = useState<boolean>(false);
-  const { currentRole, currentUser, isAuthenticated, welcomeRevealName, clearWelcomeReveal } = useAuth();
+  const { currentRole, currentUser, isAuthenticated, welcomeRevealName, clearWelcomeReveal, isCheckingSession } = useAuth();
+
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [activeTab]);
 
   React.useEffect(() => {
     const handleResize = () => {
@@ -49,6 +57,15 @@ const MainContent: React.FC = () => {
       setActiveTab('dashboard');
     }
   }, [isAuthenticated, currentUser, activeTab]);
+
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#171717] mb-4"></div>
+        <p className="text-[#6B7280] font-mono text-xs font-bold uppercase tracking-wider">Verifying Session...</p>
+      </div>
+    );
+  }
 
   const handleTabChange = (tab: string, subTab?: string) => {
     if (tab === 'jobs') {
@@ -78,6 +95,18 @@ const MainContent: React.FC = () => {
   const isUnverified = !isLoggedOut && currentUser && (currentUser.isVerified === false || currentUser.verificationStatus === 'Pending Verification' || currentUser.verificationStatus === 'Needs Clarification');
 
   const renderActiveView = () => {
+    if (activeTab === 'privacy') {
+      return <PrivacyPolicyPage setActiveTab={handleTabChange} />;
+    }
+
+    if (activeTab === 'terms') {
+      return <TermsOfServicePage setActiveTab={handleTabChange} />;
+    }
+
+    if (activeTab === 'data-governance') {
+      return <DataGovernancePage setActiveTab={handleTabChange} />;
+    }
+
     if (isLoggedOut) {
       return <LandingPage setActiveTab={handleTabChange} />;
     }
@@ -118,7 +147,6 @@ const MainContent: React.FC = () => {
       case 'admin-console':
         return <AdminDashboard setActiveTab={handleTabChange} initialView="console" />;
       case 'dashboard':
-      default:
         if (currentRole === 'admin') {
           return <AdminDashboard setActiveTab={handleTabChange} initialView="dashboard" />;
         } else if (currentRole === 'student') {
@@ -128,6 +156,8 @@ const MainContent: React.FC = () => {
         } else {
           return <AlumniDashboard setActiveTab={handleTabChange} />;
         }
+      default:
+        return <NotFoundPage setActiveTab={handleTabChange} isAuthenticated={isAuthenticated} />;
     }
   };
 
@@ -176,6 +206,39 @@ const MainContent: React.FC = () => {
               className="w-full max-w-full min-w-0"
             >
               <AuthPage setActiveTab={setActiveTab} />
+            </motion.div>
+          ) : activeTab === 'privacy' ? (
+            <motion.div
+              key="privacy"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full max-w-full min-w-0"
+            >
+              <PrivacyPolicyPage setActiveTab={setActiveTab} />
+            </motion.div>
+          ) : activeTab === 'terms' ? (
+            <motion.div
+              key="terms"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full max-w-full min-w-0"
+            >
+              <TermsOfServicePage setActiveTab={setActiveTab} />
+            </motion.div>
+          ) : activeTab === 'data-governance' ? (
+            <motion.div
+              key="data-governance"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full max-w-full min-w-0"
+            >
+              <DataGovernancePage setActiveTab={setActiveTab} />
             </motion.div>
           ) : isLoggedOut || activeTab === 'landing' ? (
             <motion.div

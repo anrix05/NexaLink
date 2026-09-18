@@ -1,7 +1,8 @@
 import { supabase, isSupabaseConfigured } from './supabase';
-import type { ChatMessage } from '../types';
+import type { ChatMessage, NotificationItem } from '../types';
 
 export type MessageChangeCallback = (message: ChatMessage) => void;
+export type NotificationChangeCallback = (notification: NotificationItem) => void;
 
 /**
  * Subscribes to realtime insertions on the chat_messages table
@@ -52,6 +53,51 @@ export const subscribeToChatMessages = (
           };
           onNewMessage(msg);
         }
+      }
+    )
+    .subscribe();
+
+  return {
+    unsubscribe: () => {
+      supabase.removeChannel(channel);
+    }
+  };
+};
+
+export const subscribeToNotifications = (
+  userId: string,
+  onNewNotification: NotificationChangeCallback
+) => {
+  if (!isSupabaseConfigured()) {
+    return {
+      unsubscribe: () => {}
+    };
+  }
+
+  const channel = supabase
+    .channel(`public:notifications:${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${userId}`
+      },
+      (payload) => {
+        const row = payload.new as any;
+        const notif: NotificationItem = {
+          id: row.id,
+          user_id: row.user_id,
+          title: row.title,
+          body: row.body,
+          created_at: row.created_at ? new Date(row.created_at).toISOString().replace('T', ' ').substring(0, 16) : new Date().toISOString(),
+          type: row.type,
+          is_read: row.is_read ?? false,
+          link: row.link,
+          related_entity_id: row.related_entity_id
+        };
+        onNewNotification(notif);
       }
     )
     .subscribe();

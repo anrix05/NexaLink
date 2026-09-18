@@ -24,7 +24,8 @@ import {
   MapPin,
   Filter,
   RefreshCw,
-  Users
+  Users,
+  MessageSquare
 } from 'lucide-react';
 
 import { getRequestTypeConfig } from '../../utils/relationshipHelper';
@@ -50,7 +51,7 @@ const MASTER_ORGANIZATIONS = [
 ];
 
 export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setActiveTab, onSelectMentor }) => {
-  const { alumniList, facultyList } = useData();
+  const { alumniList, facultyList, isDataLoading, setPendingChatUserId } = useData();
   const { currentUser, currentRole } = useAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -239,24 +240,40 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
           </div>
         </div>
 
-        <div className="pt-4 border-t border-[#E5E7EB] flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            className="flex-1"
-            onClick={() => setActiveModalUser(user as any)}
-          >
-            View Details
-          </Button>
+        <div className="pt-4 border-t border-[#E5E7EB] flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="flex-1"
+              onClick={() => setActiveModalUser(user as any)}
+            >
+              View Details
+            </Button>
+            
+            <Button
+              variant="secondary"
+              size="sm"
+              className="flex-1"
+              onClick={() => {
+                setPendingChatUserId(user.id);
+                setActiveTab('messaging');
+              }}
+              icon={<MessageSquare className="w-3.5 h-3.5" />}
+            >
+              Message
+            </Button>
+          </div>
 
           <Button
             variant="primary"
             size="sm"
+            className="w-full"
             onClick={() => {
               if (onSelectMentor) onSelectMentor(user as any);
               setActiveTab('mentorship');
             }}
-            icon={getActionButtonLabel(user.userType) === 'Request Collaboration' ? <Handshake className="w-3.5 h-3.5" /> : undefined}
+            icon={getActionButtonLabel(user.userType) === 'Request Collaboration' ? <Handshake className="w-3.5 h-3.5" /> : <GraduationCap className="w-3.5 h-3.5" />}
           >
             {getActionButtonLabel(user.userType)}
           </Button>
@@ -305,84 +322,6 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
         </div>
       </div>
 
-      {/* Dark Org Lookup Hub — Solid Black #0A0A0A */}
-      <div className="bg-[#0A0A0A] text-white p-6 rounded-xl border border-[#222222] space-y-4 shadow-none">
-        <div className="flex items-center justify-between border-b border-[#222222] pb-3 font-display">
-          <div className="flex items-center gap-2">
-            <Building2 className="w-4 h-4 text-white" />
-            <h2 className="font-bold text-xs uppercase tracking-wider text-white">
-              Organization-Based Alumni Lookup
-            </h2>
-          </div>
-          <span className="text-[10px] font-bold text-neutral-300 uppercase tracking-widest bg-white/10 px-3 py-0.5 rounded-full border border-white/20">
-            Company & University Hub
-          </span>
-        </div>
-
-        <p className="text-xs text-neutral-400 font-medium">
-          Type any company (e.g. <strong>Google, Microsoft, Morgan Stanley</strong>) or higher education university (e.g. <strong>Carnegie Mellon, IIT Bombay, TUM</strong>) to find alumni currently working or studying there.
-        </p>
-
-        {/* Search Bar with Master Autocomplete */}
-        <div className="relative">
-          <Search className="w-4 h-4 text-neutral-400 absolute left-4 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={orgSearchTerm}
-            onFocus={() => setShowOrgAutocomplete(true)}
-            onChange={e => { setOrgSearchTerm(e.target.value); setSearchTerm(e.target.value); setShowOrgAutocomplete(true); }}
-            placeholder="Type Organization / University Name (e.g. Google, Carnegie Mellon, IIT Bombay)..."
-            className="w-full bg-white/10 border border-white/20 text-white pl-11 pr-4 py-2.5 text-xs placeholder:text-neutral-400 rounded-lg focus:outline-none focus:border-white font-medium"
-          />
-
-          {showOrgAutocomplete && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-white text-[#0A0A0A] border border-[#E5E7EB] rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto font-sans text-xs">
-              {MASTER_ORGANIZATIONS.filter(o => o.toLowerCase().includes(orgSearchTerm.toLowerCase())).map(org => (
-                <div
-                  key={org}
-                  onClick={() => handleSelectOrg(org)}
-                  className="px-4 py-2.5 hover:bg-[#FAFAFA] cursor-pointer flex items-center justify-between border-b border-[#E5E7EB]"
-                >
-                  <span className="font-bold">{org}</span>
-                  <span className="text-[10px] text-[#6B7280] uppercase tracking-wider font-mono">Standardized Master Name</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Network Density Widgets */}
-        <div className="pt-1">
-          <span className="font-bold text-[10px] uppercase tracking-wider text-neutral-400 block mb-2">
-            Institutional Network Density (Click to Filter):
-          </span>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
-            {[
-              { name: 'Google', count: 142, icon: '🏢' },
-              { name: 'Microsoft', count: 118, icon: '🏢' },
-              { name: 'Morgan Stanley', count: 94, icon: '🏢' },
-              { name: 'TCS Digital', count: 240, icon: '🏢' },
-              { name: 'Carnegie Mellon', count: 32, icon: '🎓' },
-              { name: 'IIT Bombay', count: 45, icon: '🎓' }
-            ].map(widget => (
-              <button
-                key={widget.name}
-                type="button"
-                onClick={() => handleSelectOrg(widget.name)}
-                className={`p-2.5 text-left border rounded-lg transition-all ${
-                  orgSearchTerm.toLowerCase().includes(widget.name.toLowerCase())
-                    ? 'bg-white text-[#0A0A0A] border-white font-bold shadow-xs'
-                    : 'bg-white/5 border-white/10 hover:bg-white/10 text-neutral-200'
-                }`}
-              >
-                <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-300 block">{widget.icon} {widget.name}</span>
-                <span className="font-mono text-xs font-bold text-white block mt-0.5">{widget.count} Grads</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* Role Filter Tabs */}
       <SegmentedTabs
         options={roleTabOptions}
@@ -392,7 +331,7 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
 
       {/* Multi-Filter Search Container */}
       <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-4 shadow-none">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
           <div>
             <label className="app-label text-[#0A0A0A] font-bold">Department</label>
             <select
@@ -409,6 +348,31 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
               <option value="MCA">MCA</option>
               <option value="MBA">MBA</option>
             </select>
+          </div>
+
+          <div className="relative">
+            <label className="app-label text-[#0A0A0A] font-bold">Company / University</label>
+            <input
+              type="text"
+              value={orgSearchTerm}
+              onFocus={() => setShowOrgAutocomplete(true)}
+              onChange={e => { setOrgSearchTerm(e.target.value); setSearchTerm(e.target.value); setShowOrgAutocomplete(true); }}
+              placeholder="e.g. Google, IIT Bombay"
+              className="app-input w-full border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
+            />
+            {showOrgAutocomplete && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white text-[#0A0A0A] border border-[#E5E7EB] rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto font-sans text-xs">
+                {MASTER_ORGANIZATIONS.filter(o => o.toLowerCase().includes(orgSearchTerm.toLowerCase())).map(org => (
+                  <div
+                    key={org}
+                    onClick={() => handleSelectOrg(org)}
+                    className="px-3 py-2 hover:bg-[#FAFAFA] cursor-pointer border-b border-[#E5E7EB] font-bold"
+                  >
+                    {org}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>
@@ -448,8 +412,12 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
         <span>Central Directory Matches ({filteredResults.length})</span>
       </div>
 
-      {/* Grid vs Grouped View */}
-      {viewMode === 'grid' && (
+      {isDataLoading ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#171717]"></div>
+          <p className="text-[#6B7280] font-mono text-xs font-bold uppercase tracking-wider">Loading Directory...</p>
+        </div>
+      ) : viewMode === 'grid' && (
         isOrgSearchActive && groupedResults && Object.keys(groupedResults).length > 0 ? (
           <div className="space-y-6">
             {Object.entries(groupedResults).map(([orgName, members]) => (
@@ -466,14 +434,14 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-4 gap-5">
                   {members.map(user => renderCard(user))}
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-4 gap-5">
             {filteredResults.map(user => renderCard(user))}
           </div>
         )
@@ -572,8 +540,8 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div className="p-3.5 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg space-y-1">
-                  <span className="app-label text-[#0A0A0A] font-bold">Organization & Batch</span>
+                <div className="p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg flex flex-col justify-center">
+                  <span className="app-label text-[#6B7280] font-bold tracking-wider mb-1.5 block">Organization & Batch</span>
                   <p className="font-bold text-[#0A0A0A]">
                     {u.userType === 'alumni'
                       ? `${u.employmentDataPending || !u.company ? 'Employment details pending' : u.company} · Batch of ${u.graduationYear || 2024}`
@@ -584,8 +552,8 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
                   </p>
                 </div>
 
-                <div className="p-3.5 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg space-y-1">
-                  <span className="app-label text-[#0A0A0A] font-bold">Location & University</span>
+                <div className="p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg flex flex-col justify-center">
+                  <span className="app-label text-[#6B7280] font-bold tracking-wider mb-1.5 block">Location & University</span>
                   <p className="font-bold text-[#0A0A0A]">
                     📍 {u.location || 'Mumbai, India'}
                   </p>
@@ -611,17 +579,19 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
                 </Badge>
               </div>
 
-              <div className="space-y-1">
-                <span className="app-label text-[#0A0A0A] font-bold">Bio & Overview</span>
-                <p className="text-[#374151] bg-[#FAFAFA] p-3.5 rounded-lg border border-[#E5E7EB] leading-relaxed font-medium">
-                  "{u.bio || 'Distinguished member of the Vidyalankar Institute of Technology community.'}"
-                </p>
+              <div className="pt-2">
+                <span className="app-label text-[#6B7280] font-bold tracking-wider mb-2 block">Bio & Overview</span>
+                <div className="bg-[#FAFAFA] pl-4 py-3.5 pr-4 rounded-r-xl border-l-2 border-l-[#0A0A0A] border-y border-r border-[#E5E7EB]">
+                  <p className="text-[#374151] leading-loose font-medium text-[12px] sm:text-[13px]">
+                    {u.bio || 'Distinguished member of the Vidyalankar Institute of Technology community.'}
+                  </p>
+                </div>
               </div>
 
               {u.skills && u.skills.length > 0 && (
-                <div className="space-y-1.5">
-                  <span className="app-label text-[#0A0A0A] font-bold">Technical Skills & Expertise ({u.skills.length})</span>
-                  <div className="flex flex-wrap gap-1.5 text-[10px] font-bold">
+                <div className="pt-2">
+                  <span className="app-label text-[#6B7280] font-bold tracking-wider mb-2 block">Technical Skills & Expertise ({u.skills.length})</span>
+                  <div className="flex flex-wrap gap-2 text-[10px] font-bold">
                     {u.skills.map((s: string) => (
                       <span key={s} className="px-2 py-0.5 bg-[#FAFAFA] text-[#374151] border border-[#E5E7EB] rounded font-bold font-mono">
                         {s}
@@ -631,21 +601,38 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#E5E7EB]">
-                <Button variant="secondary" size="md" onClick={() => setActiveModalUser(null)}>
+              <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-5 mt-2 border-t border-[#E5E7EB]">
+                <Button variant="secondary" size="md" className="w-full sm:w-auto order-3 sm:order-1 text-[#6B7280] border-transparent hover:bg-[#FAFAFA] hover:text-[#0A0A0A]" onClick={() => setActiveModalUser(null)}>
                   Close
                 </Button>
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={() => {
-                    if (onSelectMentor) onSelectMentor(u);
-                    setActiveModalUser(null);
-                    setActiveTab('mentorship');
-                  }}
-                >
-                  {actionLabel}
-                </Button>
+                <div className="flex items-center gap-2 w-full sm:w-auto order-1 sm:order-2">
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    className="flex-1 sm:flex-none"
+                    onClick={() => {
+                      setPendingChatUserId(u.id);
+                      setActiveModalUser(null);
+                      setActiveTab('messaging');
+                    }}
+                    icon={<MessageSquare className="w-4 h-4" />}
+                  >
+                    Message
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    className="flex-1 sm:flex-none"
+                    onClick={() => {
+                      if (onSelectMentor) onSelectMentor(u);
+                      setActiveModalUser(null);
+                      setActiveTab('mentorship');
+                    }}
+                    icon={actionLabel === 'Request Collaboration' ? <Handshake className="w-4 h-4" /> : <GraduationCap className="w-4 h-4" />}
+                  >
+                    {actionLabel}
+                  </Button>
+                </div>
               </div>
             </div>
           </Modal>

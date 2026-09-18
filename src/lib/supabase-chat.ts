@@ -26,6 +26,17 @@ export const fetchAllUserMessages = async (userId: string) => {
   return data;
 };
 
+export const fetchReportedMessages = async () => {
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('is_reported', true)
+    .order('reported_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+};
+
 export const markThreadAsReadInDB = async (currentUserId: string, contactId: string) => {
   const { error } = await supabase
     .from('chat_messages')

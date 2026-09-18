@@ -288,7 +288,7 @@ const AdminMessagingGuardView: React.FC = () => {
 };
 
 const StandardMessagingView: React.FC = () => {
-  const { messages, sendMessage: globalSendMessage, alumniList, facultyList, studentList, mentorshipRequests, reportMessage, starredConversations, toggleStarConversation, toggleReaction, retryFailedMessage, markThreadAsRead } = useData();
+  const { messages, sendMessage: globalSendMessage, alumniList, facultyList, studentList, mentorshipRequests, reportMessage, starredConversations, toggleStarConversation, toggleReaction, retryFailedMessage, markThreadAsRead, isDataLoading, setActiveChatContactId, pendingChatUserId, setPendingChatUserId } = useData();
   const { currentUser } = useAuth();
   const shouldReduceMotion = useReducedMotion();
   const currentUserId = currentUser.id;
@@ -408,6 +408,12 @@ const StandardMessagingView: React.FC = () => {
   const [showThreadSearch, setShowThreadSearch] = useState<boolean>(false);
   const [threadSearchQuery, setThreadSearchQuery] = useState<string>('');
   const [activeMatchIndex, setActiveMatchIndex] = useState<number>(0);
+
+  // Sync activeContactId to DataContext for Notification Suppression
+  useEffect(() => {
+    setActiveChatContactId(activeContactId || null);
+    return () => setActiveChatContactId(null);
+  }, [activeContactId, setActiveChatContactId]);
 
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const bottomSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -737,6 +743,16 @@ const StandardMessagingView: React.FC = () => {
     }, 500);
   };
 
+  useEffect(() => {
+    if (pendingChatUserId) {
+      const profile = allDirectoryProfiles.find(p => p.id === pendingChatUserId);
+      if (profile) {
+        startNewChatWith(profile);
+      }
+      setPendingChatUserId(null);
+    }
+  }, [pendingChatUserId, allDirectoryProfiles, setPendingChatUserId]);
+
   return (
     <div className="font-sans text-xs relative bg-white border border-[#E5E5E5] rounded-2xl overflow-hidden shadow-2xs">
 
@@ -914,8 +930,13 @@ const StandardMessagingView: React.FC = () => {
           showMobileChat ? 'flex' : 'hidden md:flex'
         }`}>
 
-          {activeContact ? (
-            <div className="flex flex-col h-full min-h-0">
+        {isDataLoading ? (
+          <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#171717]"></div>
+            <p className="text-[#6B7280] font-mono text-xs font-bold uppercase tracking-wider">Loading Conversation...</p>
+          </div>
+        ) : activeContact ? (
+          <div className="flex flex-col h-full min-h-0">
 
               {/* Chat Header Bar matching screenshot */}
               <div className="p-3.5 px-6 border-b border-[#E5E5E5] flex items-center justify-between bg-white shrink-0 z-10">
@@ -1214,14 +1235,14 @@ const StandardMessagingView: React.FC = () => {
                             <div className="opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center gap-1 mb-1 mr-1">
                               <button
                                 onClick={() => setActiveReactionPickerMsgId(activeReactionPickerMsgId === msg.id ? null : msg.id)}
-                                className="p-1 rounded bg-white border border-[#E5E5E5] text-[#9CA3AF] hover:text-[#0A0A0A] shadow-2xs touch-target-44 sm:min-w-0 sm:min-h-0"
+                                className="p-1 min-w-[44px] min-h-[44px] flex items-center justify-center sm:min-w-0 sm:min-h-0 sm:p-1 rounded bg-white border border-[#E5E5E5] text-[#9CA3AF] hover:text-[#0A0A0A] shadow-2xs"
                                 title="Add reaction"
                               >
                                 <Smile className="w-3 h-3" />
                               </button>
                               <button
                                 onClick={() => setReplyContext({ id: msg.id, name: 'You', content: msg.content || msg.attachmentName || '' })}
-                                className="p-1 rounded bg-white border border-[#E5E5E5] text-[#9CA3AF] hover:text-[#0A0A0A] shadow-2xs"
+                                className="p-1 min-w-[44px] min-h-[44px] flex items-center justify-center sm:min-w-0 sm:min-h-0 sm:p-1 rounded bg-white border border-[#E5E5E5] text-[#9CA3AF] hover:text-[#0A0A0A] shadow-2xs"
                                 title="Reply"
                               >
                                 <Reply className="w-3 h-3" />
@@ -1309,14 +1330,14 @@ const StandardMessagingView: React.FC = () => {
                               <div className="opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center gap-1 mb-1 ml-1">
                                 <button
                                   onClick={() => setActiveReactionPickerMsgId(activeReactionPickerMsgId === msg.id ? null : msg.id)}
-                                  className="p-1 rounded bg-white border border-[#E5E5E5] text-[#9CA3AF] hover:text-[#0A0A0A] shadow-2xs touch-target-44 sm:min-w-0 sm:min-h-0"
+                                  className="p-1 min-w-[44px] min-h-[44px] flex items-center justify-center sm:min-w-0 sm:min-h-0 sm:p-1 rounded bg-white border border-[#E5E5E5] text-[#9CA3AF] hover:text-[#0A0A0A] shadow-2xs"
                                   title="Add reaction"
                                 >
                                   <Smile className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={() => setReplyContext({ id: msg.id, name: msg.senderName || activeContact.name, content: msg.content || msg.attachmentName || '' })}
-                                  className="p-1 rounded bg-white border border-[#E5E5E5] text-[#9CA3AF] hover:text-[#0A0A0A] shadow-2xs"
+                                  className="p-1 min-w-[44px] min-h-[44px] flex items-center justify-center sm:min-w-0 sm:min-h-0 sm:p-1 rounded bg-white border border-[#E5E5E5] text-[#9CA3AF] hover:text-[#0A0A0A] shadow-2xs"
                                   title="Reply"
                                 >
                                   <Reply className="w-3 h-3" />

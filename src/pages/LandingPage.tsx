@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useData } from '../context/DataContext';
-import { DEPARTMENTS } from '../data/mockData';
+import { DEPARTMENTS } from '../data/constants';
 import {
   ArrowRight,
   Sparkles,
@@ -125,6 +125,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ setActiveTab }) => {
   const [quickName, setQuickName] = useState('');
   const [quickEmail, setQuickEmail] = useState('');
   const [heroMounted, setHeroMounted] = useState(false);
+  const [navScrolled, setNavScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    document.title = "NexaLink | Vidyalankar Institute of Technology, Mumbai";
+  }, []);
 
   const { alumniList, mentorshipRequests, jobsList } = useData();
 

@@ -11,6 +11,7 @@ export interface BadgeProps {
   icon?: React.ReactNode;
   className?: string;
   size?: 'sm' | 'md';
+  title?: string;
 }
 
 export const Badge: React.FC<BadgeProps> = ({
@@ -18,7 +19,8 @@ export const Badge: React.FC<BadgeProps> = ({
   children,
   icon,
   className = '',
-  size = 'md'
+  size = 'md',
+  title
 }) => {
   const getStyles = () => {
     switch (variant) {
@@ -42,6 +44,7 @@ export const Badge: React.FC<BadgeProps> = ({
 
   return (
     <span
+      title={title}
       className={`inline-flex items-center gap-1.5 rounded-full border font-sans font-bold uppercase tracking-wider transition-colors ${getStyles()} ${sizeClass} ${className}`}
     >
       {icon}
@@ -427,7 +430,7 @@ export const Modal: React.FC<ModalProps> = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="text-[#6B7280] hover:text-[#0A0A0A] p-2 rounded-lg hover:bg-[#F3F4F6] transition-colors cursor-pointer shrink-0 touch-target-44"
+                  className="text-[#6B7280] hover:text-[#0A0A0A] p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center rounded-lg hover:bg-[#F3F4F6] transition-colors cursor-pointer shrink-0"
                 >
                   <X className="w-5 h-5" />
                 </button>

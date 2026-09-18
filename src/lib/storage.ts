@@ -14,6 +14,62 @@ const sanitizeFilename = (name: string): string => {
 };
 
 /**
+ * Client-side image compression using HTML5 Canvas
+ */
+const compressImage = async (file: File, maxWidth = 1600, maxHeight = 1600, quality = 0.8): Promise<File> => {
+  if (!file.type.startsWith('image/') || file.type === 'image/svg+xml' || file.type === 'image/gif') return file;
+  
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(file);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            const newName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+            const compressedFile = new File([blob], newName, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          } else {
+            resolve(file);
+          }
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+    img.onerror = () => resolve(file);
+  });
+};
+
+/**
  * Upload an identity or admit card proof document to private 'proof-documents' bucket
  */
 export const uploadProofDocument = async (
@@ -29,12 +85,13 @@ export const uploadProofDocument = async (
   }
 
   try {
-    const cleanName = sanitizeFilename(file.name);
+    const compressedFile = await compressImage(file, 2048, 2048, 0.85); // High quality for proofs
+    const cleanName = sanitizeFilename(compressedFile.name);
     const filePath = `${userId}/${Date.now()}_${cleanName}`;
 
     const { error: uploadError } = await supabase.storage
       .from('proof-documents')
-      .upload(filePath, file, {
+      .upload(filePath, compressedFile, {
         cacheControl: '3600',
         upsert: true
       });
@@ -101,12 +158,13 @@ export const uploadChatAttachment = async (
   }
 
   try {
-    const cleanName = sanitizeFilename(file.name);
+    const compressedFile = await compressImage(file, 1600, 1600, 0.8);
+    const cleanName = sanitizeFilename(compressedFile.name);
     const filePath = `${senderId}/${Date.now()}_${cleanName}`;
 
     const { error: uploadError } = await supabase.storage
       .from('chat-attachments')
-      .upload(filePath, file, { upsert: true });
+      .upload(filePath, compressedFile, { upsert: true });
 
     if (uploadError) {
       return { path: filePath, url: URL.createObjectURL(file), error: uploadError.message };
@@ -134,12 +192,13 @@ export const uploadAvatar = async (
   }
 
   try {
-    const cleanName = sanitizeFilename(file.name);
+    const compressedFile = await compressImage(file, 400, 400, 0.85); // Small size for avatars
+    const cleanName = sanitizeFilename(compressedFile.name);
     const filePath = `${userId}/${Date.now()}_${cleanName}`;
 
     const { error: uploadError } = await supabase.storage
       .from('avatars')
-      .upload(filePath, file, { upsert: true });
+      .upload(filePath, compressedFile, { upsert: true });
 
     if (uploadError) {
       return { path: filePath, url: URL.createObjectURL(file), error: uploadError.message };

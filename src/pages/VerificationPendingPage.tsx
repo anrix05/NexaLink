@@ -34,6 +34,10 @@ export const VerificationPendingPage: React.FC<VerificationPendingPageProps> = (
   const [resubmitFileUrl, setResubmitFileUrl] = useState<string>('');
   const [notice, setNotice] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
 
+  React.useEffect(() => {
+    document.title = "Verification Pending | NexaLink";
+  }, []);
+
   if (!currentUser) return null;
 
   // Find latest record in DataContext allUsers store

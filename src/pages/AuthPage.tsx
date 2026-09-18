@@ -45,6 +45,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setActiveTab }) => {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [dept, setDept] = useState<DepartmentCode>('CMPN');
+
+  React.useEffect(() => {
+    document.title = "Login or Register | NexaLink";
+  }, []);
   
   // Specific Workflow Fields
   const [enrollmentNo, setEnrollmentNo] = useState('');
@@ -97,6 +101,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setActiveTab }) => {
     setErrorMsg(null);
     setSuccessMsg(null);
 
+    if (!email || email.trim() === '') {
+      setErrorMsg('Email address is required.');
+      return;
+    }
+    if (!password || password.trim() === '') {
+      setErrorMsg('Password is required.');
+      return;
+    }
+
     if (mode === 'login') {
       const targetEmail = (email || '').trim().toLowerCase();
       const matchedUser = allUsers.find(
@@ -112,6 +125,23 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setActiveTab }) => {
     } else {
       if (role === 'admin') {
         setErrorMsg('Administrator accounts are provisioned exclusively by the institution. Please log in using official administrator credentials.');
+        return;
+      }
+
+      if (!name || name.trim() === '') {
+        setErrorMsg('Full Name is required.');
+        return;
+      }
+      if (role === 'student' && !enrollmentNo) {
+        setErrorMsg('PRN / Enrollment Number is required for Student registration.');
+        return;
+      }
+      if (role === 'alumni' && !gradYear) {
+        setErrorMsg('Graduation Year is required for Alumni registration.');
+        return;
+      }
+      if ((role === 'faculty' || role === 'teacher') && !designation) {
+        setErrorMsg('Designation is required for Faculty registration.');
         return;
       }
 
@@ -353,7 +383,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setActiveTab }) => {
 
             {mode !== 'verification-sent' && (errorMsg || loginError) && (
               <div className="p-3.5 bg-rose-50 border border-rose-200/80 rounded-xl text-rose-950 text-xs flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold text-[11px] block text-rose-900 uppercase font-display tracking-wider mb-0.5">
                     Account Verification Required
@@ -406,7 +436,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setActiveTab }) => {
                 </Button>
               </motion.div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-4 text-xs font-sans">
+              <form noValidate onSubmit={handleSubmit} className="space-y-4 text-xs font-sans">
                 <AnimatePresence mode="wait">
                 {mode === 'login' ? (
                   <motion.div
