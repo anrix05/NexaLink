@@ -29,6 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const wasAuthenticatedRef = useRef<boolean>(false);
+  const isMockSessionRef = useRef<boolean>(false);
   const [isCheckingSession, setIsCheckingSession] = useState<boolean>(true);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [welcomeRevealName, setWelcomeRevealName] = useState<string | null>(null);
@@ -83,6 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const isFreshLogin = event === 'SIGNED_IN' && !wasAuthenticatedRef.current;
         loadUserProfileFromSupabase(session.user.id, isFreshLogin);
       } else {
+        if (isMockSessionRef.current) return;
         setIsAuthenticated(false);
         wasAuthenticatedRef.current = false;
         setCurrentUser(null);
@@ -155,6 +157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentRole(role);
     setIsAuthenticated(true);
     wasAuthenticatedRef.current = true;
+    isMockSessionRef.current = true;
     
     const mockData = await import('../data/mockData');
     let targetUser: any = mockData.DEMO_STUDENT;
@@ -224,10 +227,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCurrentUser(matchedUserFromStore);
       setIsAuthenticated(true);
       wasAuthenticatedRef.current = true;
+      isMockSessionRef.current = true;
       triggerWelcomeRevealIfVerified(matchedUserFromStore);
       return { success: true };
     }
 
+    isMockSessionRef.current = true;
     const mockData = await import('../data/mockData');
     let authenticatedUser: any = mockData.DEMO_STUDENT;
 
@@ -391,6 +396,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setIsAuthenticated(false);
     wasAuthenticatedRef.current = false;
+    isMockSessionRef.current = false;
     setCurrentUser(null as any);
     setCurrentRole('student');
     setLoginError(null);
