@@ -28,7 +28,8 @@ import {
   X,
   FileText,
   ExternalLink,
-  ChevronDown
+  ChevronDown,
+  Copy
 } from 'lucide-react';
 import { Badge, Button, SegmentedTabs, Modal, ToastNotice } from '../components/common/UIComponents';
 
@@ -40,8 +41,10 @@ export const SettingsPage: React.FC = () => {
   
   // Admin Invites & Role Step-Down States
   const [inviteEmailInput, setInviteEmailInput] = useState('');
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [showStepDownModal, setShowStepDownModal] = useState(false);
   const [stepDownTargetRole, setStepDownTargetRole] = useState<'faculty' | 'alumni'>('faculty');
+  const [stepDownTargetDepartment, setStepDownTargetDepartment] = useState<string>('CMPN');
   
   // Base Profile State
   const [name, setName] = useState(currentUser.name || '');
@@ -915,27 +918,54 @@ export const SettingsPage: React.FC = () => {
                     <p className="text-xs text-[#6B7280] font-medium">No active pending Admin invites.</p>
                   ) : (
                     <div className="space-y-2 max-w-lg">
-                      {adminInvites.filter(i => i.status === 'pending').map(inv => (
-                        <div key={inv.id} className="p-3 bg-white border border-[#E5E7EB] rounded-lg flex items-center justify-between">
-                          <div>
-                            <p className="font-bold text-[#0A0A0A] text-xs font-mono">{inv.invitedEmail}</p>
-                            <p className="text-[10px] text-[#6B7280]">
-                              Invited on: {new Date(inv.invitedAt).toLocaleDateString('en-IN')}
-                            </p>
+                      {adminInvites.filter(i => i.status === 'pending').map(inv => {
+                        const inviteUrl = `${window.location.origin}/?tab=admin-invite&email=${encodeURIComponent(inv.invitedEmail)}`;
+                        return (
+                          <div key={inv.id} className="p-3 bg-white border border-[#E5E7EB] rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex-1 min-w-0 space-y-2">
+                              <div>
+                                <p className="font-bold text-[#0A0A0A] text-xs font-mono">{inv.invitedEmail}</p>
+                                <p className="text-[10px] text-[#6B7280]">
+                                  Invited on: {new Date(inv.invitedAt).toLocaleDateString('en-IN')}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <code className="flex-1 block truncate text-[10px] bg-[#F3F4F6] text-[#374151] px-2 py-1.5 rounded border border-[#E5E7EB]">
+                                  {inviteUrl}
+                                </code>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(inviteUrl);
+                                    setCopiedInviteId(inv.id);
+                                    setTimeout(() => setCopiedInviteId(null), 2000);
+                                  }}
+                                  className="shrink-0 p-1.5 text-[#6B7280] hover:text-[#0A0A0A] hover:bg-[#F3F4F6] rounded-md transition-colors border border-[#E5E7EB]"
+                                  title="Copy invite link"
+                                >
+                                  {copiedInviteId === inv.id ? (
+                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="shrink-0 self-start sm:self-center"
+                              onClick={() => {
+                                revokeAdminInvite(inv.id);
+                                showToast(`Revoked Admin invite for ${inv.invitedEmail}`);
+                              }}
+                              icon={<Trash2 className="w-3.5 h-3.5" />}
+                            >
+                              Revoke
+                            </Button>
                           </div>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => {
-                              revokeAdminInvite(inv.id);
-                              showToast(`Revoked Admin invite for ${inv.invitedEmail}`);
-                            }}
-                            icon={<Trash2 className="w-3.5 h-3.5" />}
-                          >
-                            Revoke
-                          </Button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -989,19 +1019,49 @@ export const SettingsPage: React.FC = () => {
             You are about to voluntarily step down from the <strong>Admin</strong> role. Your account will be safely converted to a verified member profile.
           </p>
 
-          <div className="space-y-2">
-            <label className="app-label text-[#0A0A0A] font-bold">Select Converted Profile Role:</label>
-            <select
-              value={stepDownTargetRole}
-              onChange={e => setStepDownTargetRole(e.target.value as 'faculty' | 'alumni')}
-              className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-            >
-              <option value="faculty">Faculty Member (Professor / Advisory)</option>
-              <option value="alumni">Graduated Alumni Member</option>
-            </select>
+          <div className="space-y-5">
+            <div className="space-y-3">
+              <label className="text-[10px] font-display font-bold text-slate-500 uppercase tracking-wider">
+                Converted Profile Role
+              </label>
+              
+              <div className="p-4 text-left border rounded-xl bg-emerald-50 border-emerald-500 shadow-sm ring-1 ring-emerald-500/20">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-600">
+                    <Briefcase className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-emerald-900">
+                      Faculty Member
+                    </div>
+                    <div className="text-[10px] text-emerald-600">
+                      Professor / Advisory
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-[10px] font-display font-bold text-slate-500 uppercase tracking-wider">
+                Select Academic Department
+              </label>
+              <select
+                value={stepDownTargetDepartment}
+                onChange={e => setStepDownTargetDepartment(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-900 rounded-xl focus:outline-none focus:border-slate-950 transition-colors duration-150"
+              >
+                <option value="CMPN">Computer Engineering (CMPN)</option>
+                <option value="INFT">Information Technology (INFT)</option>
+                <option value="EXTC">Electronics & Telecommunication (EXTC)</option>
+                <option value="EXCS">Electronics & Computer Science (EXCS)</option>
+                <option value="BIOM">Biomedical Engineering (BIOM)</option>
+                <option value="Admin">Institutional Administration (Non-Academic)</option>
+              </select>
+            </div>
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-2 border-t border-[#E5E7EB]">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
             <Button variant="secondary" size="md" onClick={() => setShowStepDownModal(false)}>
               Cancel
             </Button>
@@ -1009,7 +1069,7 @@ export const SettingsPage: React.FC = () => {
               variant="primary"
               size="md"
               onClick={() => {
-                const res = stepDownAsAdmin(currentUser.id, stepDownTargetRole);
+                const res = stepDownAsAdmin(currentUser.id, stepDownTargetRole, stepDownTargetDepartment);
                 if (res.success) {
                   setShowStepDownModal(false);
                   showToast(`Role transfer complete! Your account is now a ${stepDownTargetRole.toUpperCase()} profile.`);

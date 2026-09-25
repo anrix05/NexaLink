@@ -11,6 +11,7 @@ import { MentorshipPage } from './pages/mentorship/MentorshipPage';
 import { MessagingPage } from './pages/messaging/MessagingPage';
 import { ReportsExportPage } from './pages/admin/ReportsExportPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
+import { AcceptAdminInvitePage } from './pages/admin/AcceptAdminInvitePage';
 import { StudentDashboard } from './pages/student/StudentDashboard';
 import { AlumniDashboard } from './pages/alumni/AlumniDashboard';
 import { FacultyDashboard } from './pages/faculty/FacultyDashboard';
@@ -36,6 +37,14 @@ const MainContent: React.FC = () => {
   const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => typeof window !== 'undefined' && window.innerWidth < 1024);
   const [adminBypassWarning, setAdminBypassWarning] = useState<boolean>(false);
   const { currentRole, currentUser, isAuthenticated, welcomeRevealName, clearWelcomeReveal, isCheckingSession } = useAuth();
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    if (tabParam) {
+      setActiveTab(tabParam);
+    }
+  }, []);
 
   React.useEffect(() => {
     window.scrollTo(0, 0);
@@ -204,6 +213,17 @@ const MainContent: React.FC = () => {
               className="w-full max-w-full min-w-0"
             >
               <AuthPage setActiveTab={setActiveTab} />
+            </motion.div>
+          ) : activeTab === 'admin-invite' ? (
+            <motion.div
+              key="admin-invite"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full max-w-full min-w-0"
+            >
+              <AcceptAdminInvitePage setActiveTab={setActiveTab} />
             </motion.div>
           ) : activeTab === 'privacy' ? (
             <motion.div

@@ -9,6 +9,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isCheckingSession: boolean;
   loginError: string | null;
+  clearLoginError: () => void;
   welcomeRevealName: string | null;
   clearWelcomeReveal: () => void;
   switchRole: (role: UserRole) => void;
@@ -330,6 +331,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return { success: false, message: `Database Error: ${insertError.message}. (Did you update the Supabase RLS policies and email triggers?)` };
           }
 
+          // Insert specific role profile data to persist semester, gradYear, company, etc.
+          if (role === 'student') {
+            await supabase.from('student_profiles').insert({
+              user_id: finalUser.id,
+              enrollment_no: userData.enrollmentNo || userData.prn || '22101A0099',
+              semester: userData.semester || 'Semester 1',
+              expected_graduation_year: new Date().getFullYear() + 4 // Basic fallback
+            });
+          } else if (role === 'alumni') {
+            await supabase.from('alumni_profiles').insert({
+              user_id: finalUser.id,
+              enrollment_no: userData.enrollmentNo || '',
+              graduation_year: parseInt(userData.gradYear as string) || new Date().getFullYear(),
+              company: userData.company || '',
+              designation: userData.designation || ''
+            });
+          } else if (role === 'faculty') {
+            await supabase.from('faculty_profiles').insert({
+              user_id: finalUser.id,
+              employee_id: userData.employeeId || '',
+              designation: userData.designation || 'Professor'
+            });
+          }
+
           const successMessage = `Registration successful! Your account status is "Pending Verification". The administrator will verify your ${
             role === 'student' || role === 'alumni' ? 'Enrollment Number & Academic Credentials' : 'Employee ID & Official Email'
           } before enabling login access.`;
@@ -424,6 +449,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentRole,
         isAuthenticated,
         loginError,
+        clearLoginError: () => setLoginError(null),
         welcomeRevealName,
         clearWelcomeReveal: () => setWelcomeRevealName(null),
         switchRole,

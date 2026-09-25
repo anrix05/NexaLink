@@ -35,7 +35,7 @@ interface AuthPageProps {
 }
 
 export const AuthPage: React.FC<AuthPageProps> = ({ setActiveTab }) => {
-  const { login, register, switchRole, loginError, requestPasswordReset, confirmPasswordReset } = useAuth();
+  const { login, register, switchRole, loginError, clearLoginError, requestPasswordReset, confirmPasswordReset } = useAuth();
   const { registerUserInDatabase, adminInvites, acceptAdminInvite, allUsers } = useData();
   const shouldReduceMotion = useReducedMotion();
 
@@ -153,7 +153,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setActiveTab }) => {
         enrollmentNo: enrollmentNo || undefined,
         employeeId: employeeId || undefined,
         proofDocumentName: proofDocName || undefined,
-        verificationDocumentUrl: proofDocUrl || undefined
+        verificationDocumentUrl: proofDocUrl || undefined,
+        semester: role === 'student' ? semester : undefined,
+        gradYear: role === 'alumni' ? gradYear : undefined,
+        company: role === 'alumni' ? companyOrUniv : undefined,
+        designation: designation || undefined
       };
 
       const result = await register(userData, role as UserRole);
@@ -362,7 +366,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setActiveTab }) => {
                   <button
                     key={m}
                     type="button"
-                    onClick={() => { setMode(m); setErrorMsg(null); setSuccessMsg(null); }}
+                    onClick={() => { setMode(m); setErrorMsg(null); setSuccessMsg(null); clearLoginError(); }}
                     className={`relative flex-1 py-2.5 rounded-lg transition-colors duration-150 z-10 cursor-pointer ${
                       isActive ? 'text-white' : 'text-slate-600 hover:text-slate-950'
                     }`}
@@ -386,7 +390,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setActiveTab }) => {
                 <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold text-[11px] block text-rose-900 uppercase font-display tracking-wider mb-0.5">
-                    Account Verification Required
+                    {((errorMsg || loginError)?.toLowerCase().includes('pending admin approval') || (errorMsg || loginError)?.toLowerCase().includes('verification')) 
+                      ? 'Account Verification Required' 
+                      : 'Authentication Error'}
                   </span>
                   {errorMsg || loginError}
                 </div>
@@ -429,7 +435,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setActiveTab }) => {
                   type="button"
                   variant="secondary" 
                   size="md" 
-                  onClick={() => setMode('login')} 
+                  onClick={() => { setMode('login'); setErrorMsg(null); clearLoginError(); }} 
                   className="mt-6 w-full"
                 >
                   Return to Sign In
@@ -513,7 +519,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setActiveTab }) => {
                             <button
                               key={r}
                               type="button"
-                              onClick={() => { setRole(r); setErrorMsg(null); }}
+                              onClick={() => { setRole(r); setErrorMsg(null); clearLoginError(); }}
                               className={`relative py-2 rounded-lg transition-colors duration-150 cursor-pointer z-10 ${
                                 isRoleActive ? 'text-white' : 'text-slate-600 hover:text-slate-950'
                               }`}
@@ -719,7 +725,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setActiveTab }) => {
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             placeholder="••••••••••••"
-                            className="w-full bg-stone-50 border border-stone-200 px-4 py-2.5 text-xs text-slate-950 placeholder:text-slate-400 focus:outline-none focus:border-slate-950 transition-colors duration-150"
+                            className="w-full bg-stone-50 border border-stone-200 px-4 py-2 text-xs text-slate-950 placeholder:text-slate-400 focus:outline-none focus:border-slate-950 transition-colors duration-150"
                           />
                         </motion.div>
                       </>
@@ -759,21 +765,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setActiveTab }) => {
                   ? 'CONFIRM EMAIL OTP & SUBMIT'
                   : 'VERIFY EMAIL & PROCEED'} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-150" />
               </motion.button>
-
-              <div className="pt-3 border-t border-slate-200 text-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAcceptInviteModal(true);
-                    setInviteError(null);
-                    setInviteSuccess(null);
-                  }}
-                  className="text-xs font-display font-bold text-slate-700 hover:text-slate-950 underline flex items-center justify-center gap-1.5 mx-auto cursor-pointer"
-                >
-                  <UserCheck className="w-3.5 h-3.5" />
-                  Have an Admin Invite? Accept Admin Invite
-                </button>
-              </div>
             </form>
             )}
 
@@ -782,141 +773,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setActiveTab }) => {
 
       </div>
 
-      {/* Modal 1: Accept Admin Invite Modal */}
-      <Modal
-        isOpen={showAcceptInviteModal}
-        onClose={() => setShowAcceptInviteModal(false)}
-        title="Accept Admin Invite"
-        icon={<ShieldCheck className="w-5 h-5 text-emerald-600" />}
-      >
-        <div className="space-y-4 font-sans text-xs">
-          <p className="text-slate-600 leading-relaxed">
-            If you received an institutional Admin invite, enter your invited email address below to activate your administrator credentials.
-          </p>
 
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
-            <span className="text-[10px] font-display font-bold text-slate-500 uppercase tracking-wider block">
-              Active Pending Invites (Demo Preview):
-            </span>
-            {adminInvites.filter(i => i.status === 'pending').length === 0 ? (
-              <p className="text-[11px] text-slate-400 italic">No active pending invites. Send an invite from Settings → Security first.</p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {adminInvites.filter(i => i.status === 'pending').map(inv => (
-                  <button
-                    key={inv.id}
-                    type="button"
-                    onClick={() => {
-                      setInviteMatchEmail(inv.invitedEmail);
-                      setInviteFullName('Dr. Meera Sharma');
-                    }}
-                    className="px-2 py-1 bg-white border border-slate-300 rounded font-mono text-[11px] font-bold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
-                  >
-                    {inv.invitedEmail}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {inviteError && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-              <span>{inviteError}</span>
-            </div>
-          )}
-
-          {inviteSuccess && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-              <span>{inviteSuccess}</span>
-            </div>
-          )}
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setInviteError(null);
-              setInviteSuccess(null);
-
-              const matchingInvite = adminInvites.find(i => i.invitedEmail.toLowerCase() === inviteMatchEmail.trim().toLowerCase() && i.status === 'pending');
-              if (!matchingInvite) {
-                setInviteError('No active pending Admin invite found matching this email.');
-                return;
-              }
-
-              const res = acceptAdminInvite(matchingInvite.id, inviteFullName || 'New Admin User', inviteNewPassword || 'AdminPass@2026');
-              if (res.success) {
-                setInviteSuccess('Admin invite accepted! Your administrator account is now active.');
-                setTimeout(() => {
-                  setShowAcceptInviteModal(false);
-                  login(inviteMatchEmail.trim().toLowerCase());
-                  setActiveTab('dashboard');
-                }, 1200);
-              } else {
-                setInviteError(res.error || 'Failed to accept invite.');
-              }
-            }}
-            className="space-y-3"
-          >
-            <div>
-              <label className="block text-slate-700 font-display font-bold text-[10px] uppercase tracking-wider mb-1">
-                Invited Email Address
-              </label>
-              <input
-                type="email"
-                required
-                value={inviteMatchEmail}
-                onChange={e => setInviteMatchEmail(e.target.value)}
-                placeholder="meera.sharma@vit.edu.in"
-                className="w-full bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-900 rounded-lg font-bold app-input"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-700 font-display font-bold text-[10px] uppercase tracking-wider mb-1">
-                Your Full Name
-              </label>
-              <input
-                type="text"
-                required
-                value={inviteFullName}
-                onChange={e => setInviteFullName(e.target.value)}
-                placeholder="Dr. Meera Sharma"
-                className="w-full bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-900 rounded-lg font-bold app-input"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-700 font-display font-bold text-[10px] uppercase tracking-wider mb-1">
-                Create Admin Password
-              </label>
-              <input
-                type="password"
-                required
-                value={inviteNewPassword}
-                onChange={e => setInviteNewPassword(e.target.value)}
-                placeholder="••••••••••••"
-                className="w-full bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-900 rounded-lg app-input"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={() => setShowAcceptInviteModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" variant="primary" size="md">
-                Activate Admin Account
-              </Button>
-            </div>
-          </form>
-        </div>
-      </Modal>
 
       {/* Modal 2: Reset Password Modal */}
       <Modal

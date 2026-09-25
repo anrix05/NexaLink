@@ -81,9 +81,9 @@ interface DataContextType {
   // Admin Handoff & Invite Methods
   inviteNewAdmin: (invitedEmail: string, invitedByAdminId: string) => { success: boolean; error?: string };
   revokeAdminInvite: (inviteId: string) => void;
-  acceptAdminInvite: (inviteId: string, name: string, password: string) => { success: boolean; error?: string };
+  acceptAdminInvite: (inviteId: string, name: string, password: string) => Promise<{ success: boolean; error?: string }>;
   getActiveAdminCount: () => number;
-  stepDownAsAdmin: (adminId: string, newRole: 'faculty' | 'alumni') => { success: boolean; error?: string };
+  stepDownAsAdmin: (adminId: string, newRole: 'faculty' | 'alumni', department?: string) => { success: boolean; error?: string };
 
   // Message Moderation Queue Methods
   getReportedMessages: () => ChatMessage[];
@@ -561,6 +561,47 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       notifSub.unsubscribe();
     };
   }, [currentUser?.id, activeChatContactId]);
+
+  // Supabase Realtime Subscription for Admin Dashboard (Users & Invites)
+  useEffect(() => {
+    if (!isSupabaseConfigured() || currentUser?.role !== 'admin') return;
+
+    const adminChannel = supabase
+      .channel('admin_dashboard_updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'admin_invites' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newInvite = payload.new as any;
+            setAdminInvites((prev) => {
+              if (prev.some(i => i.id === newInvite.id)) return prev;
+              return [...prev, {
+                id: newInvite.id,
+                invitedEmail: newInvite.invited_email,
+                invitedByAdminId: newInvite.invited_by_admin_id,
+                status: newInvite.status,
+                invitedAt: newInvite.invited_at,
+              }];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedInvite = payload.new as any;
+            setAdminInvites((prev) =>
+              prev.map((i) =>
+                i.id === updatedInvite.id
+                  ? { ...i, status: updatedInvite.status }
+                  : i
+              )
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(adminChannel);
+    };
+  }, [currentUser?.role]);
 
   const handleRealtimeMessageEvent = (payload: any) => {
     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
@@ -2071,11 +2112,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, error: 'Please enter a valid email address.' };
     }
 
-    const isAlreadyUser = allUsers.some(u => u.email.toLowerCase() === cleanEmail);
+    const existingUser = allUsers.find(u => u.email.toLowerCase() === cleanEmail);
     const isAlreadyInvited = adminInvites.some(i => i.invitedEmail.toLowerCase() === cleanEmail && i.status === 'pending');
 
-    if (isAlreadyUser) {
-      return { success: false, error: 'A user with this email address already exists in the system.' };
+    if (existingUser) {
+      if (existingUser.role === 'admin') {
+        return { success: false, error: 'This user is already an Administrator.' };
+      }
+      if (existingUser.role !== 'faculty' && existingUser.role !== 'teacher') {
+        return { success: false, error: 'Only existing Faculty members can be promoted to Administrator. This email belongs to a Student or Alumni.' };
+      }
     }
     if (isAlreadyInvited) {
       return { success: false, error: 'A pending Admin invite has already been sent to this email address.' };
@@ -2119,35 +2165,84 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const acceptAdminInvite = (inviteId: string, name: string, _password: string): { success: boolean; error?: string } => {
-    const invite = adminInvites.find(i => i.id === inviteId && i.status === 'pending');
-    if (!invite) {
-      return { success: false, error: 'No active pending Admin invite found matching this email.' };
+  const acceptAdminInvite = async (inviteEmail: string, name: string, _password: string): Promise<{ success: boolean; error?: string }> => {
+    // Unauthenticated users cannot read `admin_invites` from Supabase due to RLS, so `adminInvites` array might be empty.
+    // Instead of validating against the local array first, we trust the UI email and rely on Supabase Auth.
+    const localInvite = adminInvites.find(i => i.invitedEmail.toLowerCase() === inviteEmail.toLowerCase() && i.status === 'pending');
+    const existingUser = allUsers.find(u => u.email.toLowerCase() === inviteEmail.toLowerCase());
+
+    if (existingUser) {
+      if (isSupabaseConfigured()) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: inviteEmail,
+          password: _password
+        });
+        if (signInError) {
+          return { success: false, error: signInError.message === 'Invalid login credentials' 
+            ? 'Incorrect password. Please enter your existing NexaLink password to accept the admin invite.'
+            : `Authentication failed: ${signInError.message}` };
+        }
+        
+        const { error: updateError } = await supabase.from('users').update({ role: 'admin' }).eq('id', existingUser.id);
+        
+        if (updateError) {
+          return { success: false, error: updateError.message };
+        }
+        
+        const { error: inviteUpdateError } = await supabase.from('admin_invites').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('invited_email', inviteEmail.toLowerCase());
+        if (inviteUpdateError) console.error(inviteUpdateError);
+      }
+      
+      const acceptedAt = new Date().toISOString();
+      const promotedAdmin = { ...existingUser, role: 'admin' as const };
+      
+      setAdminList(prev => [...prev, promotedAdmin]);
+      setStudentList(prev => prev.filter(u => u.id !== existingUser.id));
+      setFacultyList(prev => prev.filter(u => u.id !== existingUser.id));
+      setAlumniList(prev => prev.filter(u => u.id !== existingUser.id));
+      setAdminInvites(prev => prev.map(i => i.invitedEmail.toLowerCase() === inviteEmail.toLowerCase() ? { ...i, status: 'accepted', acceptedAt } : i));
+      
+      return { success: true };
     }
 
-    const acceptedAt = new Date().toISOString();
-    const newAdmin: User = {
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `user-admin-${Date.now()}`,
-      name: name.trim(),
-      email: invite.invitedEmail,
-      role: 'admin',
-      department: 'CMPN',
-      isVerified: true,
-      verificationStatus: 'Verified',
-      isActive: true,
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
-      bio: 'Institutional Administrator & Alumni Cell Executive.'
-    };
-
-    setAdminList(prev => [...prev, newAdmin]);
-    setAdminInvites(prev => prev.map(i => i.id === inviteId ? { ...i, status: 'accepted', acceptedAt } : i));
-    addAuditLog('ADMIN_INVITE_ACCEPTED', name, `Accepted Admin invite and activated verified Admin account (${invite.invitedEmail}).`, newAdmin.id);
-
     if (isSupabaseConfigured()) {
-      supabase.from('admin_invites').update({ status: 'accepted', accepted_at: acceptedAt }).eq('id', inviteId).then(({ error }) => {
-        if (error) console.error(error);
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: inviteEmail,
+        password: _password,
+        options: {
+          data: {
+            name: name.trim(),
+            role: 'admin',
+            department: 'CMPN'
+          }
+        }
       });
-      supabase.from('users').insert({
+
+      if (authError) {
+        return { success: false, error: authError.message || 'Failed to create admin credentials.' };
+      }
+
+      const newUserId = authData.user?.id || `user-admin-${Date.now()}`;
+      const acceptedAt = new Date().toISOString();
+      const newAdmin: User = {
+        id: newUserId,
+        name: name.trim(),
+        email: inviteEmail,
+        role: 'admin',
+        department: 'CMPN',
+        isVerified: true,
+        verificationStatus: 'Verified',
+        isActive: true,
+        avatar: ''
+      };
+
+      setAdminList(prev => [...prev, newAdmin]);
+      setAdminInvites(prev => prev.map(i => i.invitedEmail.toLowerCase() === inviteEmail.toLowerCase() ? { ...i, status: 'accepted', acceptedAt } : i));
+      addAuditLog('ADMIN_INVITE_ACCEPTED', name, `Accepted Admin invite and activated verified Admin account (${inviteEmail}).`, newAdmin.id);
+
+      // We must insert the user into `users` table FIRST, which grants them the `admin` role in public.users.
+      // This makes the `is_admin()` Postgres function return TRUE, allowing the subsequent update to `admin_invites` to bypass RLS!
+      const { error: userError } = await supabase.from('users').insert({
         id: newAdmin.id,
         name: newAdmin.name,
         email: newAdmin.email,
@@ -2158,15 +2253,45 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         verification_status: 'Verified',
         is_active: true,
         bio: newAdmin.bio
-      }).then(({ error }) => {
-        if (error) console.error(error);
       });
-    }
+      if (userError) console.error(userError);
 
-    return { success: true };
+      const { error: inviteError } = await supabase.from('admin_invites')
+        .update({ status: 'accepted', accepted_at: acceptedAt })
+        .eq('invited_email', inviteEmail)
+        .eq('status', 'pending');
+      if (inviteError) console.error(inviteError);
+
+      return { success: true };
+    } else {
+      if (!localInvite) {
+        return { success: false, error: 'No active pending Admin invite found matching this email.' };
+      }
+      
+      const acceptedAt = new Date().toISOString();
+      const newAdmin: User = {
+        id: `user-admin-${Date.now()}`,
+        name: name.trim(),
+        email: localInvite.invitedEmail,
+        role: 'admin',
+        department: 'CMPN',
+        isVerified: true,
+        verificationStatus: 'Verified',
+        isActive: true,
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
+        bio: 'Institutional Administrator & Alumni Cell Executive.'
+      };
+
+      setAdminList(prev => [...prev, newAdmin]);
+      setAdminInvites(prev => prev.map(i => i.invitedEmail.toLowerCase() === inviteEmail.toLowerCase() ? { ...i, status: 'accepted', acceptedAt } : i));
+      
+      addAuditLog('ADMIN_INVITE_ACCEPTED', name, `Accepted Admin invite and activated verified Admin account (${localInvite.invitedEmail}).`, newAdmin.id);
+
+      return { success: true };
+    }
   };
 
-  const stepDownAsAdmin = (adminId: string, newRole: 'faculty' | 'alumni'): { success: boolean; error?: string } => {
+  const stepDownAsAdmin = (adminId: string, newRole: 'faculty' | 'alumni', department: string = 'CMPN'): { success: boolean; error?: string } => {
     if (getActiveAdminCount() <= 1) {
       return { success: false, error: "You're the only Admin account. Invite another Admin before stepping down." };
     }
@@ -2182,6 +2307,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const newFacultyProfile: FacultyProfile = {
         ...targetAdmin,
         role: 'faculty',
+        department: department as any,
         employeeId: targetAdmin.employeeId || 'EMP-FAC-CONVERTED',
         designation: 'Professor & Department Advisor',
         specialization: 'Institutional Governance & Computer Science',
@@ -2219,6 +2345,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const newAlumniProfile: AlumniProfile = {
         ...targetAdmin,
         role: 'alumni',
+        department: department as any,
         enrollmentNo: targetAdmin.enrollmentNo || 'EX-ADMIN-001',
         graduationYear: 2020,
         company: 'Vidyalankar Institute of Technology',

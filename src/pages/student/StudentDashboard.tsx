@@ -47,7 +47,11 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
 
   // Role Transition State
   const gradYear = studentProfile.expectedGraduationYear || studentProfile.graduationYear || 0;
-  const isPastGraduation = gradYear > 2000 && gradYear <= new Date().getFullYear();
+  
+  // Only trigger graduation if they are in their final semester (Semester 8/BE) AND the grad year has passed,
+  // OR if they genuinely have a valid graduation year in the past.
+  const isFinalSemester = studentProfile.semester === 'Semester 8' || studentProfile.semester === 'BE';
+  const isPastGraduation = gradYear > 2000 && gradYear <= new Date().getFullYear() && isFinalSemester;
   
   const pendingOrApprovedRequest = roleTransitionRequests.find(r => r.userId === studentProfile.id && (r.status === 'pending' || r.status === 'approved'));
   const rejectedRequest = roleTransitionRequests.find(r => r.userId === studentProfile.id && r.status === 'rejected');
