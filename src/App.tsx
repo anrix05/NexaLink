@@ -7,8 +7,6 @@ import { SidebarNav } from './components/common/SidebarNav';
 import { Footer } from './components/common/Footer';
 import { LandingPage } from './pages/LandingPage';
 import { AlumniDirectoryPage } from './pages/directory/AlumniDirectoryPage';
-import { JobPortalPage } from './pages/jobs/JobPortalPage';
-import { EventsPage } from './pages/events/EventsPage';
 import { MentorshipPage } from './pages/mentorship/MentorshipPage';
 import { MessagingPage } from './pages/messaging/MessagingPage';
 import { ReportsExportPage } from './pages/admin/ReportsExportPage';

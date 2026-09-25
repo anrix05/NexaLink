@@ -119,6 +119,12 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
     - Consolidated search experience replacing heavy hero cards with a streamlined multi-filter row (Department, Company/University, Technical Skills, Mentor Toggle).
     - Lightweight autocomplete typeahead for master organization lookups bound to the main Company/University input.
     - Role tabs (All Members, Alumni Profiles, Faculty Profiles) dynamically reflect applied cross-filters.
+    - **Direct Messaging Access:** Contextual "Message" buttons added to profile modals for verified users, enabling seamless 1:1 NexaChat creation directly from the directory without routing through the chat app.
+
+17. **Production Optimization & Demo Reliability**
+    - **Tree-Shaking Mock Data:** Converted static imports of `mockData.ts` into dynamic `import()` boundaries gated by `import.meta.env.DEV`, ensuring heavy dummy data (30+ KB) is completely purged from the production Vercel bundle.
+    - **Ghost Session Protection:** Implemented `isMockSessionRef` in `AuthContext` to prevent asynchronous Supabase token refreshes from forcefully logging out local development mock sessions.
+    - **Landing Page Polish:** Simplified hero copy and navigation IDs (`#overview`, `#features`, `#benefits`, `#academic`) for better readability and SEO indexing.
 
 ---
 
@@ -138,5 +144,5 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
 - [x] **Phase 2: System Design & Branding** (Rebranded to NexaLink/NexaChats, monochrome design system)
 - [x] **Phase 3: Frontend Architecture & Governance** (Identity verification, admin handoff, reported messages queue, accreditation analytics, motion system, mobile responsiveness, Opportunities unified navigation, verification gate redesign, session security)
 - [x] **Phase 4: Backend & Database Foundations** (Express server structure & SQLite schema in `backend/`)
-- [ ] **Phase 5: Production Deployment & E2E Integration Testing**
+- [x] **Phase 5: Production Deployment & E2E Integration Testing** (Vercel deployment, Supabase Auth/DB, Custom Domain integration, tree-shaking optimization)
 
