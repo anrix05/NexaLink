@@ -7,7 +7,7 @@
 - **Project Title:** NexaLink (Institutional Edition)
 - **Problem Statement Code:** SIH25017 – Digital Platform for Centralized Alumni Data Management and Engagement
 - **Institution:** Vidyalankar Institute of Technology (VIT), Wadala, Mumbai
-- **Version:** 2.5.0 (Phase 5 Supabase Backend Integration Complete — Dual-Mode Postgres + Auth + Storage + Realtime)
+- **Version:** 3.0.0 ("Open Canvas" Redesign, Unified Shell Architecture, Privileged RPC Security Model & Storage Hardening)
 - **Classification:** Institutional Enterprise Infrastructure — Hosted Cloud Backend with Dual-Mode Offline Evaluation
 - **Tech Stack:** React 19, TypeScript, Vite, Tailwind CSS v4, Framer Motion, Supabase (@supabase/supabase-js), jsPDF, Lucide React
 
@@ -17,201 +17,145 @@
 
 NexaLink is the central digital infrastructure platform for Vidyalankar Institute of Technology (VIT), Wadala, connecting verified students, alumni, faculty, and administrators into a secure, accredited, and role-governed ecosystem.
 
-The platform transforms fragmented data silos (WhatsApp groups, static spreadsheets, outdated email lists) into an institutional command center that powers:
-1. **Accredited Alumni Governance:** Structured post-graduation data tracking with dual-email authentication workflows (institutional and personal).
-2. **1:1 Structured Mentorship & Advisory:** Algorithmic smart-matching connecting students with verified graduates and faculty advisors.
+The v3.0 "Open Canvas" release establishes an unbordered, whitespace-driven layout system across the entire application, eliminating nested cards and boxed controls in favor of 1px hairlines, tabular typographic rhythm, and clear informational hierarchy. Simultaneously, the backend is hardened with strict Row Level Security (`FORCE RLS`), tamper-resistant cryptographic audit logs, server-side brute-force lockout, and privileged stored procedures (`security definer` RPCs).
+
+### Core Pillars:
+1. **Accredited Alumni Governance:** Structured post-graduation data tracking with dual-email authentication workflows (institutional and personal recovery email enforcement).
+2. **1:1 Structured Mentorship & Advisory:** Algorithmic smart-matching connecting students with verified graduates and faculty advisors with defensive null safety and mentee capacity controls.
 3. **Verified Opportunities & Referrals:** Direct corporate job postings, internships, and research collaborations with built-in application workflows.
-4. **Institutional Events & Accreditation:** Campus talk scheduling, RSVPs, waitlist queues, automated client-side PDF participation certificates, and one-click NAAC Criteria 5.4.1 / NIRF report exports.
-5. **NexaChats Messaging:** Private peer-to-peer messaging guarded by strict institutional role-isolation policies.
-6. **Unified Responsive Design:** 10-tier responsive layout matrix (320px to 1920px+) with an intentional desktop-only interstitial for complex administrator operations.
+4. **Institutional Events & Accreditation:** Dedicated events hub, campus talks, RSVPs, waitlist queues, automated client-side PDF participation certificates, and one-click NAAC Criteria 5.4.1 / NIRF report exports.
+5. **NexaChats Messaging:** Private peer-to-peer messaging guarded by strict institutional role-isolation policies with snapshot-based audit reporting for moderation.
+6. **Open Canvas Design Architecture:** Whitespace-first interface using standardized primitives (`AppShell`, `TopBar`, `SidebarNav`, `PageHeader`, `Section`, `StatStrip`, `ListRow`, `FocusPanel`, `MasterDetail`, `RightRail`, `UnderlineTabs`).
+7. **Privileged Security & Tamper Resistance:** Database-level column update protection, SHA-256 hash-chained audit trails, server-side authentication attempt rate-limiting, and signed storage access.
 
 ---
 
 ## 1.1 Current Implementation Status
 
-To ensure complete transparency for evaluators, judges, and technical stakeholders, the following matrix details the **completed full-stack architecture** (with dual-mode fallback preserving offline demo evaluation):
-
 | Capability Area | Current Status (Production & Evaluation Mode) | Backend Architecture Details |
 | :--- | :--- | :--- |
-| **User Interfaces & Workspaces** | **Complete:** Full role workspaces for Student, Alumni, Faculty, and Admin with polished UX and role switching. | Dual-shell layout with sticky desktop sidebar and mobile safe-area BottomNav. |
-| **Design System & Motion** | **Complete:** Obsidian palette (`#0A0A0A`, `#FFFFFF`, `#FAFAFA`, `#E5E7EB`), custom chamfered N-Link monogram, spring physics, and CLS = 0. | Ultra-crisp typography, zero-layout-jump navigation, and prefers-reduced-motion support. |
-| **Data Persistence** | **Complete (Phase 5):** Supabase hosted PostgreSQL with 14 relational tables, foreign keys, triggers, auto-updated timestamps, and dual-mode client-side fallback for offline evaluations. | Version-controlled SQL schema (`supabase/migrations/20260916000001_initial_schema.sql`), seed data (`20260916000004_seed_data.sql`), and strongly typed TypeScript definitions. |
-| **Authentication & Security** | **Complete (Phase 5):** Supabase GoTrue Auth with email/password authentication, session synchronization on mount, server-side rate-limiting lockout check, and Google OAuth SSO helper. | Local fallback preserves instant demo switcher chips (Student, Alumni, Faculty, Admin) and password reset flows for evaluation without cloud credentials. |
-| **Document & File Uploads** | **Complete (Phase 5):** Supabase Storage buckets (`avatars`, `proof-documents`, `resumes`, `chat-attachments`, `event-certificates`) with size/MIME validation. | Automatic fallback to `URL.createObjectURL` when unconfigured or running offline evaluations. |
-| **NexaChats Messaging** | **Complete (Phase 5):** Realtime WebSocket pub/sub via Supabase `postgres_changes` on `chat_messages`, persistent chat history, and reported message moderation queue. | Role-guarded RLS privacy policy (admin cannot inspect private messages unless flagged with `is_reported = true`). |
-| **Accreditation Exports & Reports** | **Complete:** Client-side generation of NAAC Criteria 5.4.1 and NIRF reports via `xlsx` and `papaparse`, plus event participation certificates via `jspdf`. | Instant one-click spreadsheet generation and audit logging of all exports. |
-| **Mobile & Responsive Fit** | **Complete:** Rigorous 10-tier responsive sweep (320px to 1920px+) with mobile BottomNav, dual-mode Spotlight Carousel, and root viewport clipping. | Zero horizontal scroll leakage, strict 44×44px touch targets, and desktop interstitial for admin workflows. |
+| **User Workspaces & Shell** | **Complete (v3.0 Open Canvas):** Unified `AppShell` with identical geometry across all 4 roles (Student, Alumni, Faculty, Admin). Fixed 240px `SidebarNav`, 64px `TopBar`, and mobile `BottomNav`. | Single layout root in `App.tsx`; zero layout jump; responsive across 4 fluid width tiers. |
+| **Design System & Typography** | **Complete (v3.0):** Pure white background (`#FFFFFF`), 1px hairlines (`#E5E7EB`), single quiet container (`#FAFAFA` `FocusPanel`), tabular numbers for metrics, and strict `font-mono` restriction to machine IDs (PRN, employee ID). | Zero design lint warnings (`node scripts/lint-design-system.mjs`); uppercase restricted strictly to `<Eyebrow>`; text contrast ≥ 4.5:1. |
+| **Verification Master-Detail** | **Complete (v3.0):** High-throughput split-pane verification console with 60s signed document previewer, registrar comparison table, SLA indicators, and keyboard shortcuts (`J/K`, `A`, `C`, `R`). | Powered by privileged RPCs `approve_user_verification`, `reject_user_verification`, and `request_user_clarification`. |
+| **Graduation Lockout Protection** | **Complete (v3.0):** `bulkGraduateStudents` evaluates and safeguards graduating students lacking personal recovery emails, preventing account lockout when college emails deactivate. | Database trigger and client validation; reports safe skips in audit log. |
+| **Backend & Privileged RPCs** | **Complete (v3.0):** Supabase PostgreSQL with 17 relational tables, `FORCE ROW LEVEL SECURITY`, `private` schema helpers, column protection trigger, and privileged action RPCs. | Tamper-resistant append-only `audit_logs` with SHA-256 hash chains (`prev_hash`). Direct admin SELECT on `chat_messages` revoked. |
+| **Server-Side Lockout Guard** | **Complete (v3.0):** `auth_attempts` tracking table + `auth-login-guard` Supabase Edge Function locking accounts for 15 minutes after 5 consecutive failures. | SHA-256 hashed email + IP logging to prevent brute-force attacks. |
+| **Storage Hardening** | **Complete (v3.0):** Private storage buckets for `proof-documents` with 60s signed URLs; scoped access on `resumes` and `chat-attachments`; MIME type allowlists. | Zero public document leakage; server-side storage RLS policies in `20261001000002_storage_hardening.sql`. |
+| **Production Guards** | **Complete (v3.0):** `scripts/verify-prod-bundle.mjs` verifying zero OTP leaks or mock credentials in `dist/`; `vercel.json` with strict CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`. | Production build validation in CI/CD pipeline. |
 
 ---
 
-## 2. Institutional Architecture & Monochromatic Design System
+## 2. Institutional Architecture & Open Canvas Design System
 
-### 2.1 Brand Identity & Visual Language
-- **Obsidian Architectural Palette:**
-  - Primary Background: `#FFFFFF` (Crisp Institutional White)
-  - Surface Backgrounds: `#FAFAFA` (Soft Light Gray) / `#F3F4F6` (Hover Surface)
+### 2.1 Brand Identity & Palette
+- **Monochrome Base:**
+  - Background: `#FFFFFF` (Pure Institutional White)
+  - Surface Background: `#FAFAFA` (Focus panel & table headers)
   - Text & Accents: `#0A0A0A` (Deep Obsidian / Pure Black)
-  - Structural Borders: `#E5E7EB` (Hairline Crisp Gray)
-  - Muted Typography: `#6B7280` / `#9CA3AF` (Secondary Neutral)
-- **Semantic Status Accents:**
+  - Hairline Dividers: `#E5E7EB` (1px Structural Borders)
+  - Secondary Text: `#6B7280` (Neutral gray with contrast ≥ 4.5:1 on white; `#9CA3AF` strictly forbidden for text)
+- **Semantic Accents (Strictly Scoped):**
   - **Verified Emerald:** `#065F46` / `#ECFDF5` (Verified alumnus/student status, approval badges)
   - **Actionable Amber:** `#B45309` / `#FEF3C7` (Pending review, clarification requests, waitlist alerts)
-  - **Governance Rose:** `#991B1B` / `#FEE2E2` (Rejected records, safety warnings)
+  - **Governance Rose:** `#991B1B` / `#FEE2E2` (Rejected records, reported content, validation errors)
   - **Academic Indigo:** `#3730A3` / `#EEF2FF` (Role identification badges)
-- **Architectural Logo Mark:** Custom isometric "N-Link" monogram with precision 45-degree chamfered connector bridge and bold institutional typography.
+- **Canonical Vector Monogram:** Interlocking geometric N-Link monogram with 45-degree chamfers and single central amber nexus core node (`#FD9C03`).
 
-### 2.2 Micro-Interactions & Fluid Motion
-- **Spring Physics Standard:** Framer Motion spring physics (`stiffness: 400–450, damping: 17–22`), micro-scale feedback (`whileHover={{ scale: 1.03 }}`, `whileTap={{ scale: 0.95 }}`).
-- **FLIP Sliding Pills:** Segmented tabs and bottom navigation indicators utilize synchronized `layoutId` pill animations for zero-layout-jump navigation.
-- **Accessibility:** Comprehensive `prefers-reduced-motion` compliance across all transitions, carousels, and hero animations.
-
----
-
-## 3. Responsive Breakpoint Matrix & Dual-Shell Layout
-
-NexaLink enforces explicit fit across 10 responsive width tiers, with zero horizontal scroll leakage and strict 44×44px touch targets:
-
-| Tier | Viewport Width | Primary Target Devices | Shell & Navigation Treatment |
-|---|---|---|---|
-| **1** | **320px** | Compact smartphones (iPhone SE1, compact Android) | Single-column, clamped padding (p-3.5 to p-4), bottom nav, full-width cards |
-| **2** | **375px** | iPhone SE2/3, iPhone 12/13 mini | Single-column, mobile bottom navigation, clamped popovers |
-| **3** | **390–430px** | Standard iPhone 14/15/16, modern Android flagships | Full mobile portal shell, bottom sheet modals, safe area padding |
-| **4** | **540–639px** | Phablets, portrait foldables | Fluid scaling, 1-to-2 column transitions |
-| **5** | **640–767px** | Landscape phones, small tablets | 2-column cards, centered modal dialogs |
-| **6** | **768–834px** | iPad portrait, medium tablets | Dual-pane NexaChats (col-span-4 + col-span-8), BottomNav active |
-| **7** | **1024px** | **Boundary Width** (iPad landscape / small laptop) | Desktop SidebarNav visible (`lg:block`), BottomNav hidden (`lg:hidden`) |
-| **8** | **1025–1279px** | Small laptops, MacBook Air | Desktop shell, 3-column grids, sticky workspace sidebar |
-| **9** | **1280–1439px** | Standard laptops, 1080p desktop | Full desktop experience with max-w-7xl / max-w-[1720px] limits |
-| **10**| **1440–1920px+**| Large desktop monitors, 4K displays | Centered bounded containers with generous margin breathing room |
-
-### 3.1 Dual-Shell Navigation
-1. **Desktop Shell (`≥1024px`):** Sticky `SidebarNav` (col-span-3) displaying workspace navigation, active pill animations, user profile badge, and unread counters.
-2. **Mobile Shell (`<1024px`):** Fixed `BottomNav` with safe-area insets (`pb-safe`), active sliding pill indicator, and 5 core destinations: Home, Directory, Opportunities, Guidance/Advisory, and NexaChats.
-3. **Admin Mobile Interstitial:** Because institutional admin operations involve dense accreditation grids, verification queues, and multi-field spreadsheets, viewports `<1024px` automatically trigger the `AdminMobileInterstitial` ("Best experienced on desktop") with an emergency horizontal-scroll bypass hatch.
+### 2.2 Open Canvas Primitives
+1. `AppShell`: Single layout shell housing top navigation, fixed sidebar, main content area, and mobile navigation.
+2. `TopBar`: 64px header with 1px hairline bottom, brand link navigating to dashboard, global search trigger, notifications trigger, and avatar menu.
+3. `SidebarNav`: Fixed 240px width across all 4 roles, right hairline divider, left active bar indicator (3px `#0A0A0A`), count badges, and system status indicator in footer.
+4. `PageHeader`: Structured header with Eyebrow, Outfit 32–36px title, subtitle, and primary actions.
+5. `Section`: Title 18/24, right action, top 1px hairline divider, and comfortable spacing.
+6. `StatStrip`: Horizontal single row with 4 stat figures, vertical hairline dividers, tabular numbers, collapsible into a checklist if all zero.
+7. `ListRow`: Minimal unboxed row item with leading icon/avatar, title, subtitle/meta, trailing status or action, and `#FAFAFA` hover state.
+8. `FocusPanel`: Single `#FAFAFA` 12px rounded container without border for primary next action or alert.
+9. `EmptyState`: Left-aligned sentence + primary action button (no dashed boxes or center-aligned generic empty states).
+10. `MasterDetail`: Split-pane queue and detail view with keyboard navigation (`J/K`, `A`, `C`, `R`).
+11. `RightRail`: Quiet context rail for desktop viewports (`≥1280px`).
+12. `UnderlineTabs`: Accessible tab navigation with active underline indicator, replacing heavy boxed segmented controls.
+13. `CapacityMeter`: Segmented visual stepper for mentee advisory limits.
+14. `Switch`: Accessible toggle control for availability states.
 
 ---
 
-## 4. Feature Specifications by Domain
+## 3. Responsive Breakpoint Matrix: 4 Fluid Tiers
 
-### 4.1 Public Portal & Landing Page
-- **Hero Section:** Responsive typography (`text-3xl sm:text-5xl lg:text-7xl break-words`) with staggered entrance motion, magnetic CTA button ("Access Member Portal"), and quick registration intake form.
-- **Campus Spotlight Carousel (Dual-Mode Architecture):**
-  - High-resolution campus architectural photographs of Vidyalankar Institute of Technology:
-    1. *Vidyalankar Auditorium* (Wadala) – Blue geometric glass facade
-    2. *Glass Facade* (Campus) – Tree canopy angle
-    3. *Campus Grounds* (Wadala) – Sports field and lawn at dusk
-    4. *Auditorium Hall* (Campus) – Tiered acoustic interior & theater stage
-    5. *V-Lounge* (Campus) – Multi-tier architectural courtyard & atrium
-    6. *Campus Pavilion* (Wadala) – Slanted metallic ribbon facade & mirrored panels
-  - **Desktop View (`≥768px`):** 6-photo fanning shingled accordion rail with interactive hover and click expansion (`flex-[3.4]`), negative margins, and exclusive spotlight caption badges.
-  - **Mobile View (`<768px`):** Dedicated single full-width card with native touch-swipe gestures (`drag="x"` with elastic resistance), direction-aware spring transitions, and unclipped glassmorphic captions.
-  - **Controls:** 44px touch-target next/prev buttons, slide counter (`01 / 06`), and interactive indicator dots.
-- **Live Accreditation Metrics:** Staggered scroll-triggered count-ups dynamically computed from live `DataContext` records (Verified Alumni count, unique international alumni countries, active mentorship sessions, and verified job referrals; plus official static NAAC 'A+' / NBA accreditation) with responsive 2x2 mobile grid reflow.
-- **Academic Pillars & Disciplines:** Accreditation breakdown across all 7 VIT Wadala engineering departments (CMPN, INFT, EXTC, EXCS, BIOM, MCA, MBA).
+NexaLink v3 streamlines layout behavior into 4 fluid tiers:
 
-### 4.2 Authentication & Security
-- **Multi-Role Authentication Interface:** Dedicated sign-in and registration flows for Students, Alumni, Faculty, and Admin.
-- **Instant Demo Access:** Development-only quick-switcher chips for instant persona evaluation (Aanya Patel - Student, Rushabh Sanghavi - Alumni, Ravindra Sangale - Faculty, Admin Cell).
-- **Post-Graduation Email Transition:** Support for institutional email (`@student.vit.edu.in`) during active enrollment and personal email (`@gmail.com`) post-graduation (client-side profile model; persistent synchronization in Phase 5).
-- **Security Hardening Workflows:** Client-side rate limiting with 5-attempt account lockout, OTP password reset verification flow (demonstration OTP: `482910`; production SMS/email gateway in Phase 5), and verification document upload (in-browser object URL preview; S3/R2 storage integration in Phase 5).
-- **Responsive Auth Presentation:**
-  - Desktop: Left hero column with 3-step process cards and grayscale campus grounds photo panel with continuous Ken Burns breathing zoom and cursor parallax.
-  - Mobile: Cleanly centered sign-in card with zero scroll clutter.
-
-### 4.3 Student Workspace
-- **Smart Mentorship Recommendations:** Algorithmic ranking engine calculating compatibility scores (up to 98%) based on career goals, department alignment, and skills.
-- **Profile Completion Tracker:** Dynamic progress bar reflecting skills, resume document attachment (local preview), and career aspirations.
-- **Direct 1:1 Guidance Booking:** Mentorship request submission specifying guidance purpose, proposed date/timeslot, and custom notes (persisted to session state).
-- **Alumni by Organization Hub:** Single-row horizontal rail for reverse-lookup across top employers (Google, Microsoft, Morgan Stanley, TCS, CMU, IIT Bombay).
-- **Graduation Role Transition:** Automated graduation detection prompting students to update their profile to verified alumni status upon degree completion.
-
-### 4.4 Alumni & Faculty Workspaces
-- **Mentee Capacity Management:** Capacity limits (e.g., 3–5 active students) preventing mentor overload, with one-click mentoring availability toggle.
-- **Opportunity Publishing:** Alumni and faculty can publish jobs, internships, research openings, and training programs with direct student application routing (persisted to session state).
-- **Mentorship Request Queue:** Accept/decline incoming student requests with optional soft-decline feedback notes.
-- **Review & Rating History:** Aggregate feedback tracking (1.0 to 5.0 stars) derived from completed student mentorship sessions.
-- **Faculty Academic Governance:** Department-level student and alumni metrics, research advisories, and syllabus feedback workflows.
-
-### 4.5 Opportunities Portal (Merged Jobs & Events)
-- **Segmented Hub:** Top-level toggle switching between "Jobs & Internships" and "Campus Events & Talks" active across all screen widths.
-- **Opportunity Postings:** Verified listings with compensation/stipend badges, application deadlines, department requirements, and student smart-match badges.
-- **Campus Events & Masterclasses:**
-  - Event categories: Alumni Meets, Guest Lectures, Technical Workshops, Placement Drives, Research Seminars.
-  - Interactive RSVP management with live capacity counters and automatic waitlist overflow.
-  - Client-side PDF Certificate Generation using `jspdf` for completed event participants (runs entirely in browser).
-
-### 4.6 NexaChats (Peer-to-Peer Messaging Interface)
-- **Role Isolation Privacy Guard:** Strict architectural boundary ensuring administrative accounts cannot inspect private peer-to-peer student-alumnus-faculty chats.
-- **Dual-Pane Desktop / Single-Pane Mobile Layout:**
-  - Viewports `≥768px`: Dual-column layout with contact list (col-span-4) and active chat room (col-span-8).
-  - Viewports `<768px`: Mobile push/pop navigation with back button and safe bottom-nav clearance.
-- **Chat Features:** Message delivery status checks (`sending`, `delivered`, `read`), day separators (`TODAY`, `YESTERDAY`), unread message cutoffs, quoted reply previews, file attachments (local object URLs), emoji reactions, in-thread search, and message reporting for administrative moderation.
-- **Transport Architecture:** Client-side state simulation with simulated reply delays via `setTimeout` (production multi-client WebSocket/Socket.io backend scheduled for Phase 5).
-
-### 4.7 Alumni & Member Directory
-- **Unified Directory:** Filterable registry of verified alumni and faculty members.
-- **Organization Reverse-Lookup Hub:** Search by company (Google, Microsoft, etc.) or university (CMU, IIT Bombay) with live network density badges.
-- **Granular Multi-Filters:** Department dropdown, technical skill pills, graduation batch year, and "Mentors Only" toggle.
-- **Field Privacy Guard:** Automatic field masking (`public`, `institution`, `private`) protecting phone numbers and personal emails based on user preferences.
-
-### 4.8 Settings & Governance Controls
-- **User Profile Management:** Avatar upload (local object URL preview), bio editing, department affiliation, and contact details.
-- **Field-Level Privacy Controls:** Granular visibility toggles for email, phone, current organization, and postgraduate education.
-- **Mentor Limits & Notification Preferences:** Capacity sliders and instant/digest notification settings.
-- **Security & Password Management:** Current password verification for critical credential modifications.
-
-### 4.9 Administrator Governance Console (Desktop Exclusive)
-- **Account Verification Queue:** Detailed audit queue with automated match confidence scoring, uploaded admit card/ID proof previewer, and clarification request issuance.
-- **Bulk Moderation Tools:** Animated bulk approval, rejection, and role transitions with CSV cross-referencing.
-- **Single-Admin Invite Handoff:** Cryptographically generated invite tokens allowing secure administrator onboarding and step-down transitions.
-- **Reported Messages Queue:** Content moderation queue for flagged P2P messages with context inspection and user warnings.
-- **Audit Logging & Analytics Export:** Filterable institutional action logs (session-stored) and automated client-side NAAC Criteria 5.4.1 & NIRF accreditation spreadsheet/PDF exports (`xlsx`, `papaparse`, `jspdf`).
+| Tier | Viewport Width | Device Class | Navigation & Layout Strategy |
+| :--- | :--- | :--- | :--- |
+| **Phone** | `<640px` | Modern smartphones (320px–639px) | Single column, mobile `BottomNav` (5 core tabs), bottom sheets, stacked cards, full-width actions. |
+| **Tablet** | `640–1023px` | Small to large tablets (iPad, Galaxy Tab) | Dual-column grids, modal dialogs, mobile `BottomNav`, top navigation search trigger. |
+| **Compact Desktop** | `1024–1279px` | iPad Pro landscape, MacBook Air 11/13 | Fixed 240px `SidebarNav`, main content area, single column list views, full command palette. |
+| **Full Desktop** | `≥1280px` | Standard monitors, 1080p+, iMac | Fixed 240px `SidebarNav`, main content area, contextual `RightRail` (320px), split `MasterDetail` queues. |
 
 ---
 
-## 5. Technical Stack & Dependencies
+## 4. Security & Privileged Backend Architecture
 
-```json
-{
-  "dependencies": {
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "framer-motion": "^13.0.0",
-    "tailwindcss": "^4.3.3",
-    "@tailwindcss/postcss": "^4.3.3",
-    "lucide-react": "^1.26.0",
-    "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.8",
-    "xlsx": "^0.18.5",
-    "docx": "^9.7.1",
-    "file-saver": "^2.0.5",
-    "papaparse": "^5.5.4"
-  },
-  "devDependencies": {
-    "typescript": "~6.0.2",
-    "vite": "^8.1.1",
-    "@vitejs/plugin-react": "^6.0.3",
-    "oxlint": "^1.71.0"
-  }
-}
-```
+### 4.1 Row Level Security (RLS) & Private Schema
+- All 17 tables enforce `ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL SECURITY`.
+- Default deny: no anonymous or direct authenticated read/write access without explicit policy match.
+- Schema separation: `private` schema contains internal helper functions (`is_admin()`, `admin_role()`, `is_verified()`, `write_audit()`), inaccessible via PostgREST.
+
+### 4.2 Column-Level Update Protection
+- Direct SQL `UPDATE` on privileged columns (`role`, `is_verified`, `verification_status`, `is_active`, `admin_role`) is revoked from `authenticated`.
+- A database `BEFORE UPDATE` trigger (`guard_privileged_user_columns_trigger`) rejects any client attempt to alter these fields without super-admin credentials.
+
+### 4.3 Privileged Action RPCs (`security definer`)
+All sensitive state mutations must pass through authenticated stored procedures that validate caller role and log the operation:
+- `approve_user_verification(target_user_id)`
+- `reject_user_verification(target_user_id, reason)`
+- `request_user_clarification(target_user_id, prompt)`
+- `bulk_graduate_students(student_ids)`
+- `approve_role_transition(target_user_id, target_role)`
+- `report_message(message_id, reason)` (snapshots ±10 context messages into `message_reports`)
+- `action_message_report(report_id, action_taken)`
+- `dismiss_message_report(report_id)`
+
+### 4.4 Tamper-Resistant Audit Trail
+- The `audit_logs` table has all `INSERT`, `UPDATE`, and `DELETE` privileges revoked from `anon` and `authenticated`.
+- Entries can only be written by the internal `private.write_audit()` procedure.
+- Each entry computes a SHA-256 hash chaining `id`, `prev_hash`, `action`, `actor_id`, `created_at`, and `payload`, creating an immutable cryptographic chain.
+
+### 4.5 Server-Side Lockout & Rate Limiting
+- `auth_attempts` tracks failed authentication attempts using a SHA-256 hash of the email and client IP.
+- The `auth-login-guard` Supabase Edge Function enforces a 15-minute lockout if 5 failed attempts occur within a 15-minute sliding window.
+
+### 4.6 Storage Hardening
+- Verification proof documents in the `proof-documents` bucket are non-public and require 60-second time-limited signed URLs generated via server RPC.
+- Scoped policies on `resumes` restrict access to the file owner, accepted mentors, and authorized opportunity posters.
+- File uploads are validated server-side for MIME type allowlists (PDF, JPEG, PNG) and maximum size limits (10MB).
 
 ---
 
-## 6. Non-Functional & Quality Standards
+## 5. Relational Database Schema (17 Tables)
 
-1. **Monochrome-First Aesthetic Integrity:** The base UI strictly adheres to the obsidian, white, and hairline gray visual system. The four semantic status accents defined in Section 2.1 (Verified Emerald, Actionable Amber, Governance Rose, Academic Indigo) are the only sanctioned exceptions, reserved exclusively for their defined semantic meaning — no other colors, decorative gradients, or ad hoc accent usage are permitted.
-2. **Zero Layout Shift (CLS = 0):** Fixed-dimension containers, skeleton fallbacks, and layout animations ensure no content jumping during async loads.
-3. **Touch-Target Compliance:** Minimum 44×44px hit targets across all interactive mobile elements.
-4. **Safe-Area Inset Support:** Native support for notched mobile displays (`pt-safe`, `pb-safe`, `env(safe-area-inset-bottom)`).
-5. **Viewport Containment & Structural Overflow Prevention:** Layouts reflow responsively via calculated CSS Grid and Flexbox rules with strict root viewport containment (`overflow-x: clip; min-width: 0`), preventing horizontal scroll drift across all device widths.
+1. `users`: Master institutional identity table (PRN/Employee ID, role, status, timestamps).
+2. `profile_contacts`: Isolated field-level contact visibility table (personal email, phone, privacy levels).
+3. `student_profiles`: Academic progress, semester, CGPA, graduation targets, career goals, resume URL.
+4. `alumni_profiles`: Graduation year, current employer, designation, higher education, mentee capacity, availability toggle.
+5. `faculty_profiles`: Department, designation, research areas, advisory capacity, availability toggle.
+6. `mentorship_requests`: 1-on-1 mentorship lifecycle (pending, accepted, completed, rejected) with session notes.
+7. `mentorship_reviews`: Star ratings and qualitative student feedback on advisory sessions.
+8. `opportunities`: Jobs, internships, and research projects posted by alumni and faculty.
+9. `opportunity_applications`: Student job/internship applications with resume links and status tracking.
+10. `events`: Institutional seminars, campus talks, and alumni meetups with capacity caps.
+11. `event_attendees`: RSVPs, waitlist positions, check-in timestamps, and certificate download records.
+12. `chat_conversations`: 1-on-1 conversation channel headers between verified members.
+13. `chat_messages`: Realtime direct messages with attachment metadata, reactions, and reply references.
+14. `message_reports`: Moderation snapshot table storing ±10 message context for reported safety violations.
+15. `auth_attempts`: Server-side authentication attempt log for rate limiting and brute force protection.
+16. `admin_invites`: Cryptographically secure single-use 72-hour administrator invitation tokens.
+17. `audit_logs`: Immutable, append-only, SHA-256 hash-chained institutional governance log.
 
 ---
 
-## 7. Delivery & Project Roadmap
+## 6. Verification & Quality Standards
 
-- **Phase 1: Foundations & Brand Identity** — Complete (Architectural N-Link branding, obsidian design system, typography).
-- **Phase 2: Core User Workspaces** — Complete (Student, Alumni, Faculty dashboards, 1:1 Mentorship, Opportunities, Directory).
-- **Phase 3: NexaChats & Advanced Governance** — Complete (P2P messaging interface, Admin audit queues, single-admin handoff, client-side NAAC/NIRF reporting).
-- **Phase 4: Spotlight Photo Carousel & Full-Site Fit** — Complete (Dual-mode desktop fanning accordion + mobile touch-swipe card, full 10-tier responsive sweep, mobile auth refinement).
-- **Phase 5: Backend & Production Deployment** — Complete (Supabase full-stack migration: Hosted PostgreSQL, GoTrue Auth, Storage Buckets, Realtime NexaChats, RLS Policies, and Dual-Mode Client Fallback).
+1. **Design System Linting:** 100% compliance with zero warnings via `scripts/lint-design-system.mjs`.
+2. **Type Safety:** 100% strict TypeScript compilation with zero errors via `npx tsc --noEmit`.
+3. **Production Bundle Verification:** Automated scan of `dist/` via `scripts/verify-prod-bundle.mjs` ensuring no hardcoded demo OTPs, test credentials, or un-treeshaken demo data exist in production assets.
+4. **Accessibility:** WCAG AA compliance with text contrast ≥ 4.5:1, input borders ≥ 3:1, minimum 44×44px touch targets, visible keyboard focus indicators, and `prefers-reduced-motion` support.
+5. **Zero Layout Shift:** Content loads without Cumulative Layout Shift (CLS = 0) through reserved aspect ratios, skeleton loaders, and FLIP layout animations.

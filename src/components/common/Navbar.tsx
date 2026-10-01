@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
-import { LogoMark } from './LogoMark';
 import { NexaMark } from '../brand/NexaMark';
 import { Badge } from './UIComponents';
 import { CommandPalette } from './CommandPalette';
+import { formatDisplayName } from '../../utils/validators';
 import {
   Bell,
   Menu,
@@ -13,10 +13,8 @@ import {
   LogOut,
   Search,
   CheckCircle2,
-  Sparkles,
-  Shield,
-  ExternalLink,
-  ChevronDown
+  ChevronDown,
+  ArrowRight
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -42,11 +40,85 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [scrolledPastHero, setScrolledPastHero] = useState(false);
+  const [navVisible, setNavVisible] = useState(true);
+  const [activeSection, setActiveSection] = useState('overview');
+  const lastScrollY = useRef(0);
 
   const isMac = typeof window !== 'undefined' && (
     /Mac|iPod|iPhone|iPad/.test((navigator as any)?.userAgentData?.platform || navigator?.platform || '')
   );
   const shortcutHint = isMac ? '⌘K' : 'Ctrl K';
+
+  const isPublicView = activeTab === 'landing' || activeTab === 'auth' || activeTab === 'reset-password' || !isAuthenticated || !currentUser;
+
+  // Scroll direction and header backdrop-blur tracking for public view
+  useEffect(() => {
+    if (!isPublicView) {
+      setNavVisible(true);
+      setScrolledPastHero(false);
+      return;
+    }
+
+    const handleScroll = () => {
+      const currentY = window.scrollY;
+      setScrolledPastHero(currentY > 40);
+
+      if (currentY > 120) {
+        if (currentY > lastScrollY.current + 6) {
+          setNavVisible(false); // scrolling down
+        } else if (currentY < lastScrollY.current - 6) {
+          setNavVisible(true); // scrolling up
+        }
+      } else {
+        setNavVisible(true);
+      }
+      lastScrollY.current = currentY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isPublicView]);
+
+  // Active section observer on landing page
+  useEffect(() => {
+    if (activeTab !== 'landing') return;
+
+    const sectionIds = ['overview', 'features', 'how-it-works', 'roles', 'campus', 'academic', 'departments'];
+    const observers: IntersectionObserver[] = [];
+
+    sectionIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            setActiveSection(id);
+          }
+        },
+        { threshold: 0.25, rootMargin: '-64px 0px -40% 0px' }
+      );
+
+      observer.observe(el);
+      observers.push(observer);
+    });
+
+    return () => {
+      observers.forEach((obs) => obs.disconnect());
+    };
+  }, [activeTab]);
+
+  // Close mobile menu on Esc
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && mobileMenuOpen) {
+        setMobileMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileMenuOpen]);
 
   const getSearchPlaceholder = () => {
     if (currentRole === 'student') return 'Search alumni, companies, skills...';
@@ -96,13 +168,16 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
   const isUnverified = isAuthenticated && currentUser && (currentUser.isVerified === false || currentUser.verificationStatus === 'Pending Verification' || currentUser.verificationStatus === 'Needs Clarification');
-  const isPublicView = activeTab === 'landing' || activeTab === 'auth' || activeTab === 'reset-password' || !isAuthenticated || !currentUser;
 
   const handleLogoClick = () => {
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-    setActiveTab('landing');
+    if (isAuthenticated && currentUser) {
+      setActiveTab('dashboard');
+    } else {
+      setActiveTab('landing');
+    }
   };
 
   const handleLogoutAction = () => {
@@ -163,7 +238,17 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
 
   return (
     <>
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-white/95 border-b border-[#E5E7EB] transition-all w-full max-w-full overflow-x-clip">
+      <header
+        className={`sticky top-0 z-50 transition-all duration-300 w-full max-w-full overflow-x-clip ${
+          !isPublicView
+            ? 'backdrop-blur-md bg-white/95 border-b border-[#E5E7EB]'
+            : `${navVisible ? 'translate-y-0' : '-translate-y-full'} ${
+                scrolledPastHero
+                  ? 'backdrop-blur-md bg-white/90 border-b border-[#E5E7EB]'
+                  : 'bg-transparent border-b border-transparent'
+              }`
+        }`}
+      >
         <div className="app-container">
           <div className="flex items-center justify-between h-16">
           
@@ -184,31 +269,48 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
           {isPublicView ? (
             <nav className="hidden lg:flex items-center gap-7 text-xs font-sans font-medium text-[#6B7280]">
               <button
-                onClick={() => scrollToSection('hero-section')}
-                className="hover:text-[#0A0A0A] transition cursor-pointer"
+                onClick={() => scrollToSection('overview')}
+                className={`transition-colors cursor-pointer ${
+                  activeSection === 'overview' ? 'text-[#0A0A0A] font-semibold' : 'hover:text-[#0A0A0A]'
+                }`}
               >
                 Overview
               </button>
 
               <button
-                onClick={() => scrollToSection('framework-section')}
-                className="hover:text-[#0A0A0A] transition cursor-pointer"
+                onClick={() => scrollToSection('features')}
+                className={`transition-colors cursor-pointer ${
+                  activeSection === 'features' ? 'text-[#0A0A0A] font-semibold' : 'hover:text-[#0A0A0A]'
+                }`}
+              >
+                Features
+              </button>
+
+              <button
+                onClick={() => scrollToSection('how-it-works')}
+                className={`transition-colors cursor-pointer ${
+                  activeSection === 'how-it-works' ? 'text-[#0A0A0A] font-semibold' : 'hover:text-[#0A0A0A]'
+                }`}
               >
                 How it works
               </button>
 
               <button
-                onClick={() => scrollToSection('benefits-section')}
-                className="hover:text-[#0A0A0A] transition cursor-pointer"
+                onClick={() => scrollToSection('academic')}
+                className={`transition-colors cursor-pointer ${
+                  activeSection === 'academic' ? 'text-[#0A0A0A] font-semibold' : 'hover:text-[#0A0A0A]'
+                }`}
               >
-                Platform benefits
+                Accreditation
               </button>
 
               <button
-                onClick={() => scrollToSection('programs-section')}
-                className="hover:text-[#0A0A0A] transition cursor-pointer"
+                onClick={() => scrollToSection('departments')}
+                className={`transition-colors cursor-pointer ${
+                  activeSection === 'departments' ? 'text-[#0A0A0A] font-semibold' : 'hover:text-[#0A0A0A]'
+                }`}
               >
-                Academic programs
+                Departments
               </button>
             </nav>
           ) : (
@@ -236,19 +338,21 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
             
             {isPublicView ? (
               <>
-                <button
-                  onClick={() => {
-                    if (isAuthenticated && currentUser) {
-                      setActiveTab('dashboard');
-                    } else {
-                      setActiveTab('auth');
-                    }
-                  }}
-                  className="px-3.5 sm:px-4 py-2 bg-[#0A0A0A] hover:bg-[#222222] text-white font-sans font-medium text-xs transition rounded-lg flex items-center gap-2 cursor-pointer touch-target-44"
-                >
-                  <LogIn className="w-3.5 h-3.5 shrink-0" />
-                  <span>{isAuthenticated && currentUser ? 'Return to dashboard' : 'Sign in'}</span>
-                </button>
+                {activeTab !== 'auth' && (
+                  <button
+                    onClick={() => {
+                      if (isAuthenticated && currentUser) {
+                        setActiveTab('dashboard');
+                      } else {
+                        setActiveTab('auth');
+                      }
+                    }}
+                    className="px-3.5 sm:px-4 py-2 bg-[#0A0A0A] hover:bg-[#222222] text-white font-sans font-medium text-xs transition rounded-lg flex items-center gap-2 cursor-pointer touch-target-44"
+                  >
+                    <LogIn className="w-3.5 h-3.5 shrink-0" />
+                    <span>{isAuthenticated && currentUser ? 'Return to dashboard' : 'Sign in'}</span>
+                  </button>
+                )}
 
                 {/* Mobile Public Navigation Menu Button */}
                 <button
@@ -381,9 +485,12 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                         {currentUser.name ? currentUser.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
                       </div>
                     )}
-                    <div className="hidden sm:block text-left min-w-0">
-                      <p className="text-xs font-medium text-[#0A0A0A] truncate leading-none">
-                        {currentUser.name.split(' ')[0]}
+                    <div className="hidden sm:block text-left min-w-0 max-w-[140px] md:max-w-[180px]">
+                      <p
+                        className="text-xs font-semibold text-[#0A0A0A] truncate leading-none"
+                        title={formatDisplayName(currentUser.name)}
+                      >
+                        {formatDisplayName(currentUser.name)}
                       </p>
                       <Badge variant="indigo" size="sm" className="mt-0.5 text-[10px] px-1.5 py-0 capitalize">
                         {currentRole}
@@ -537,35 +644,58 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
         </div>
       </div>
 
-      {/* Mobile Drawer */}
+      {/* Mobile Drawer / Full-Screen Overlay */}
       {mobileMenuOpen && (
-        <div className="lg:hidden bg-white border-b border-[#E5E7EB] px-4 pt-2 pb-6 space-y-3 font-sans text-xs animate-in slide-in-from-top-2">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation menu"
+          className="lg:hidden fixed inset-x-0 top-16 bottom-0 z-50 bg-white/98 backdrop-blur-xl px-6 py-6 flex flex-col justify-between overflow-y-auto animate-in fade-in slide-in-from-top-4 duration-200"
+          style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+        >
           {!isAuthenticated ? (
-            <div className="space-y-1 font-medium text-xs">
-              <button
-                onClick={() => { scrollToSection('hero-section'); setMobileMenuOpen(false); }}
-                className="block w-full text-left py-2.5 px-2 text-[#6B7280] hover:text-[#0A0A0A] hover:bg-[#FAFAFA] rounded-lg transition touch-target-44"
-              >
-                Overview
-              </button>
-              <button
-                onClick={() => { scrollToSection('framework-section'); setMobileMenuOpen(false); }}
-                className="block w-full text-left py-2.5 px-2 text-[#6B7280] hover:text-[#0A0A0A] hover:bg-[#FAFAFA] rounded-lg transition touch-target-44"
-              >
-                How it works
-              </button>
-              <button
-                onClick={() => { scrollToSection('benefits-section'); setMobileMenuOpen(false); }}
-                className="block w-full text-left py-2.5 px-2 text-[#6B7280] hover:text-[#0A0A0A] hover:bg-[#FAFAFA] rounded-lg transition touch-target-44"
-              >
-                Platform benefits
-              </button>
-              <button
-                onClick={() => { scrollToSection('programs-section'); setMobileMenuOpen(false); }}
-                className="block w-full text-left py-2.5 px-2 text-[#6B7280] hover:text-[#0A0A0A] hover:bg-[#FAFAFA] rounded-lg transition touch-target-44"
-              >
-                Academic programs
-              </button>
+            <div className="space-y-4">
+              <span className="text-[11px] font-medium text-[#6B7280] block border-b border-[#E5E7EB] pb-2">
+                Public Navigation
+              </span>
+
+              <div className="space-y-1">
+                {[
+                  { id: 'overview', label: 'Overview' },
+                  { id: 'features', label: 'Features' },
+                  { id: 'how-it-works', label: 'How it works' },
+                  { id: 'academic', label: 'Accreditation' },
+                  { id: 'departments', label: 'Departments' },
+                  { id: 'campus', label: 'Campus life' },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      scrollToSection(item.id);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="w-full text-left py-3 px-3 text-lg font-display font-semibold text-[#0A0A0A] hover:bg-[#FAFAFA] rounded-xl transition-all flex items-center justify-between touch-target-44"
+                  >
+                    <span>{item.label}</span>
+                    <ArrowRight className="w-4 h-4 text-[#6B7280]" />
+                  </button>
+                ))}
+              </div>
+
+              {activeTab !== 'auth' && (
+                <div className="pt-6 border-t border-[#E5E7EB] space-y-3">
+                  <button
+                    onClick={() => {
+                      setActiveTab('auth');
+                      setMobileMenuOpen(false);
+                    }}
+                    className="w-full py-3.5 bg-[#0A0A0A] text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2 cursor-pointer touch-target-44"
+                  >
+                    <LogIn className="w-4 h-4" />
+                    <span>Sign in</span>
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
@@ -578,6 +708,16 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
               />
             </div>
           )}
+
+          <div className="pt-6 border-t border-[#E5E7EB] flex items-center justify-between text-xs text-[#6B7280]">
+            <span>Press Esc to close</span>
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="text-[#0A0A0A] font-medium p-2 touch-target-44"
+            >
+              Close menu
+            </button>
+          </div>
         </div>
       )}
 

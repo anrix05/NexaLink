@@ -41,8 +41,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onClose,
   setActiveTab
 }) => {
-  const { currentRole, isAuthenticated } = useAuth();
+  const { currentRole, isAuthenticated, currentUser } = useAuth();
   const { alumniList, studentList, facultyList } = useData();
+
+  const isUnverified = currentUser && (currentUser.isVerified === false || currentUser.verificationStatus === 'Pending Verification' || currentUser.verificationStatus === 'Needs Clarification');
 
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -50,16 +52,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   // Focus input when opened
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !isUnverified) {
       setQuery('');
       setSelectedIndex(0);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [isOpen]);
+  }, [isOpen, isUnverified]);
 
   // Command items builder
   const allItems = useMemo(() => {
-    if (!isAuthenticated) return [];
+    if (!isAuthenticated || isUnverified) return [];
 
     const items: CommandItem[] = [];
 
@@ -78,8 +80,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       navs.push(
         { id: 'nav-dash', title: 'Home', subtitle: 'Personal metrics, updates & feeds', tab: 'dashboard', icon: <Compass className="w-4 h-4" /> },
         { id: 'nav-dir', title: 'Directory', subtitle: 'Search verified profiles, companies & skills', tab: 'directory', icon: <GraduationCap className="w-4 h-4" /> },
-        { id: 'nav-opps', title: 'Opportunities', subtitle: 'Jobs, internships & event talks', tab: 'opportunities', icon: <Briefcase className="w-4 h-4" /> },
-        { id: 'nav-mentor', title: 'Guidance', subtitle: '1-on-1 advice, reviews & connections', tab: 'mentorship', icon: <BookOpen className="w-4 h-4" /> },
+        { id: 'nav-opps', title: 'Opportunities', subtitle: 'Jobs, internships & referral listings', tab: 'opportunities', icon: <Briefcase className="w-4 h-4" /> },
+        { id: 'nav-events', title: 'Events', subtitle: 'Workshops, masterclasses & guest lectures', tab: 'events', icon: <Calendar className="w-4 h-4" /> },
+        { id: 'nav-mentor', title: 'Mentorship', subtitle: '1-on-1 advice, reviews & connections', tab: 'mentorship', icon: <BookOpen className="w-4 h-4" /> },
         { id: 'nav-msg', title: 'Chats', subtitle: 'Direct 1-on-1 communication', tab: 'messaging', icon: <MessageSquare className="w-4 h-4" /> },
         { id: 'nav-settings', title: 'Profile & settings', subtitle: 'Account preferences, privacy & profile', tab: 'settings', icon: <Settings className="w-4 h-4" /> }
       );

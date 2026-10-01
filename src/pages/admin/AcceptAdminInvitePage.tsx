@@ -71,7 +71,7 @@ export const AcceptAdminInvitePage: React.FC<AcceptAdminInvitePageProps> = ({ se
           <div className="w-10 h-10 mx-auto flex items-center justify-center">
             <LogoMark className="w-8 h-8 text-slate-950" />
           </div>
-          <h3 className="font-display font-bold text-base text-slate-950 uppercase tracking-wider">
+          <h3 className="font-display font-semibold text-base text-slate-950">
             Admin Portal
           </h3>
           <p className="font-sans text-xs text-slate-500">
@@ -83,7 +83,7 @@ export const AcceptAdminInvitePage: React.FC<AcceptAdminInvitePageProps> = ({ se
         <div className="p-6 space-y-6">
           <div className="flex items-center gap-2 border-b border-stone-200 pb-4">
             <ShieldCheck className="w-5 h-5 text-emerald-600" />
-            <h2 className="text-sm font-display font-bold text-stone-900 tracking-wide uppercase">Accept Admin Invite</h2>
+            <h2 className="text-sm font-display font-semibold text-stone-900">Accept Admin Invite</h2>
           </div>
 
           <p className="text-slate-600 text-xs leading-relaxed font-sans">
@@ -93,7 +93,7 @@ export const AcceptAdminInvitePage: React.FC<AcceptAdminInvitePageProps> = ({ se
           {!isValidInvite && (
             <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-1.5 flex flex-col items-center justify-center text-center">
               <AlertCircle className="w-6 h-6 text-rose-500 mb-1" />
-              <span className="text-[11px] font-display font-bold text-rose-800 uppercase tracking-wider block">
+              <span className="text-xs font-semibold text-rose-800 block">
                 Invalid or Expired Invite Link
               </span>
               <p className="text-[11px] text-rose-600/80 leading-relaxed max-w-[280px]">
@@ -119,7 +119,7 @@ export const AcceptAdminInvitePage: React.FC<AcceptAdminInvitePageProps> = ({ se
 
           <form onSubmit={handleSubmit} className="space-y-4 font-sans">
             <div>
-              <label className="block text-slate-700 font-display font-bold text-[10px] uppercase tracking-wider mb-1">
+              <label className="block text-slate-700 font-medium text-xs mb-1">
                 Invited Email Address
               </label>
               <input
@@ -134,7 +134,7 @@ export const AcceptAdminInvitePage: React.FC<AcceptAdminInvitePageProps> = ({ se
             </div>
 
             <div>
-              <label className="block text-slate-700 font-display font-bold text-[10px] uppercase tracking-wider mb-1">
+              <label className="block text-slate-700 font-medium text-xs mb-1">
                 Full Name
               </label>
               <input
@@ -149,7 +149,7 @@ export const AcceptAdminInvitePage: React.FC<AcceptAdminInvitePageProps> = ({ se
             </div>
 
             <div>
-              <label className="block text-slate-700 font-display font-bold text-[10px] uppercase tracking-wider mb-1">
+              <label className="block text-slate-700 font-medium text-xs mb-1">
                 Account Password
               </label>
               <div className="relative">
@@ -191,7 +191,7 @@ export const AcceptAdminInvitePage: React.FC<AcceptAdminInvitePageProps> = ({ se
               <button 
                 type="button"
                 onClick={() => setActiveTab('auth')}
-                className="text-[10px] font-display font-bold uppercase tracking-wider text-slate-500 hover:text-slate-800 transition-colors underline"
+                className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors underline"
               >
                 Return to standard login
               </button>

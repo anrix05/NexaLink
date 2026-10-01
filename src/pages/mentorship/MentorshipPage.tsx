@@ -19,7 +19,9 @@ import {
   Lock,
   RefreshCw,
   AlertCircle,
-  X
+  X,
+  Search,
+  CheckCircle2
 } from 'lucide-react';
 import { Badge, Button, SegmentedTabs, Modal, ToastNotice, EmptyState, TextField, SelectField, TextArea } from '../../components/common/UIComponents';
 
@@ -46,8 +48,8 @@ const AdminMentorshipGuardView: React.FC = () => {
           <Lock className="w-4 h-4 text-[#0A0A0A]" />
         </div>
         <div>
-          <h2 className="font-bold text-xs uppercase tracking-wider text-[#0A0A0A] mb-1">
-            Admin Role: Guidance & Advisory Access Restricted
+          <h2 className="text-xs font-semibold text-[#0A0A0A] mb-1">
+            Admin Role: Mentorship & Advisory Access Restricted
           </h2>
           <p className="text-xs text-[#6B7280] font-medium leading-relaxed">
             Administrator accounts do not participate in or inspect peer mentorship requests directly. This is a deliberate
@@ -138,6 +140,28 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({ selectedMentorF
   const [declineModalReq, setDeclineModalReq] = useState<any | null>(null);
   const [declineReasonChip, setDeclineReasonChip] = useState<string>('Not available right now');
   const [customDeclineNote, setCustomDeclineNote] = useState<string>('');
+  const [mentorSearchQuery, setMentorSearchQuery] = useState<string>('');
+
+  const filteredAlumniMentors = availableAlumniMentors.filter(a => {
+    if (!mentorSearchQuery.trim()) return true;
+    const q = mentorSearchQuery.toLowerCase();
+    return (
+      a.name.toLowerCase().includes(q) ||
+      (a.company || '').toLowerCase().includes(q) ||
+      (a.department || '').toLowerCase().includes(q) ||
+      (a.skills || []).some(s => s.toLowerCase().includes(q))
+    );
+  });
+
+  const filteredFacultyMentors = availableFacultyMentors.filter(f => {
+    if (!mentorSearchQuery.trim()) return true;
+    const q = mentorSearchQuery.toLowerCase();
+    return (
+      f.name.toLowerCase().includes(q) ||
+      (f.designation || '').toLowerCase().includes(q) ||
+      (f.department || '').toLowerCase().includes(q)
+    );
+  });
 
   const selectedAlumniMentor = alumniList.find(a => a.id === selectedMentorId) || availableAlumniMentors[0];
   const selectedFacultyMentor = facultyList.find(f => f.id === selectedMentorId) || availableFacultyMentors[0];
@@ -321,22 +345,66 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({ selectedMentorF
                 </Button>
               </div>
             ) : (
-              <SelectField
-                label={`Select target ${mentorType === 'alumni' ? 'alumni' : 'faculty'} member`}
-                value={selectedMentorId}
-                onChange={e => setSelectedMentorId(e.target.value)}
-                options={
-                  mentorType === 'alumni'
-                    ? availableAlumniMentors.map(a => ({
-                        value: a.id,
-                        label: `${a.name} — ${a.company} (${a.designation}) [${a.department}]`
-                      }))
-                    : availableFacultyMentors.map(f => ({
-                        value: f.id,
-                        label: `${f.name} — ${f.designation} [${f.department}]`
-                      }))
-                }
-              />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="app-label">
+                    Select target mentor
+                  </label>
+                  <span className="text-[11px] text-[#6B7280]">
+                    {mentorType === 'alumni' ? availableAlumniMentors.length : availableFacultyMentors.length} available mentors
+                  </span>
+                </div>
+
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-[#9CA3AF]" />
+                  <input
+                    type="text"
+                    value={mentorSearchQuery}
+                    onChange={e => setMentorSearchQuery(e.target.value)}
+                    placeholder={`Search ${mentorType === 'alumni' ? 'alumni by name, company, or skills' : 'faculty by name or department'}...`}
+                    className="w-full bg-[#FAFAFA] border border-[#E5E7EB] pl-8 pr-3 py-2 rounded-lg text-xs font-semibold text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                  {(mentorType === 'alumni' ? filteredAlumniMentors : filteredFacultyMentors).map(m => {
+                    const isSelected = selectedMentorId === m.id;
+                    return (
+                      <div
+                        key={m.id}
+                        onClick={() => setSelectedMentorId(m.id)}
+                        className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-start justify-between gap-2.5 ${
+                          isSelected
+                            ? 'bg-[#0A0A0A] text-white border-[#0A0A0A]'
+                            : 'bg-white text-[#0A0A0A] border-[#E5E7EB] hover:border-[#9CA3AF]'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          {m.avatar ? (
+                            <img src={m.avatar} alt={m.name} className="w-8 h-8 rounded-full object-cover shrink-0" />
+                          ) : (
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${isSelected ? 'bg-white text-[#0A0A0A]' : 'bg-[#0A0A0A] text-white'}`}>
+                              {m.name.charAt(0)}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <span className="font-bold block truncate">{m.name}</span>
+                            <span className={`text-[11px] block truncate ${isSelected ? 'text-neutral-300' : 'text-[#6B7280]'}`}>
+                              {'company' in m ? `${m.company} (${m.designation})` : m.designation}
+                            </span>
+                            <span className={`text-[10px] block ${isSelected ? 'text-neutral-400' : 'text-[#9CA3AF]'}`}>
+                              Dept of {m.department}
+                            </span>
+                          </div>
+                        </div>
+                        {isSelected && (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -17,14 +17,197 @@
     <meta property="og:type" content="website" />
     <meta property="og:image" content="/images/nexalink-brand-lockup.jpg" />
     
-    <!-- Google Fonts: Inter, Plus Jakarta Sans & JetBrains Mono -->
+    <!-- Google Fonts: Inter, Plus Jakarta Sans, Outfit & JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- One-time Intro Decision Script (Runs before first paint) -->
+    <script>
+      (function() {
+        try {
+          var href = window.location.href;
+          var search = window.location.search || '';
+          var hash = window.location.hash || '';
+          var fullQuery = search + hash;
+          var path = window.location.pathname || '/';
+
+          // 1. Forced override via query params
+          if (search.indexOf('intro=1') !== -1) {
+            sessionStorage.setItem('nexalink:intro:v1', 'true');
+            document.documentElement.dataset.intro = 'play';
+            return;
+          }
+          if (search.indexOf('intro=0') !== -1) {
+            sessionStorage.setItem('nexalink:intro:v1', 'true');
+            document.documentElement.dataset.intro = 'skip';
+            return;
+          }
+
+          // 1.5 Authenticated session bypass
+          try {
+            var hasAuth = false;
+            for (var i = 0; i < localStorage.length; i++) {
+              var key = localStorage.key(i);
+              if (key && ((key.indexOf('sb-') === 0 && key.indexOf('-auth-token') !== -1) || key === 'nexalink_auth_user')) {
+                hasAuth = true;
+                break;
+              }
+            }
+            if (hasAuth) {
+              document.documentElement.dataset.intro = 'skip';
+              return;
+            }
+          } catch (e) {}
+
+          // 2. Strict route check: only on initial boot at '/'
+          if (path !== '/') {
+            sessionStorage.setItem('nexalink:intro:v1', 'true');
+            document.documentElement.dataset.intro = 'skip';
+            return;
+          }
+
+          // 3. Supabase Auth callback parameter detection
+          if (
+            fullQuery.indexOf('access_token') !== -1 ||
+            fullQuery.indexOf('type=recovery') !== -1 ||
+            fullQuery.indexOf('type=signup') !== -1 ||
+            fullQuery.indexOf('type=magiclink') !== -1 ||
+            fullQuery.indexOf('code=') !== -1 ||
+            fullQuery.indexOf('error_description=') !== -1
+          ) {
+            sessionStorage.setItem('nexalink:intro:v1', 'true');
+            document.documentElement.dataset.intro = 'skip';
+            return;
+          }
+
+          // 4. Accessibility and automation
+          if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            sessionStorage.setItem('nexalink:intro:v1', 'true');
+            document.documentElement.dataset.intro = 'skip';
+            return;
+          }
+          if (navigator.webdriver) {
+            sessionStorage.setItem('nexalink:intro:v1', 'true');
+            document.documentElement.dataset.intro = 'skip';
+            return;
+          }
+
+          // 5. Cheap hardware and network signals
+          var nav = navigator;
+          var conn = nav.connection || nav.mozConnection || nav.webkitConnection;
+          if (conn && conn.saveData) {
+            sessionStorage.setItem('nexalink:intro:v1', 'true');
+            document.documentElement.dataset.intro = 'skip';
+            return;
+          }
+          if ((nav.hardwareConcurrency && nav.hardwareConcurrency <= 2) || (nav.deviceMemory && nav.deviceMemory <= 2)) {
+            sessionStorage.setItem('nexalink:intro:v1', 'true');
+            document.documentElement.dataset.intro = 'skip';
+            return;
+          }
+
+          // 6. Session persistence check (one-time per browser session tab)
+          var seen = sessionStorage.getItem('nexalink:intro:v1');
+          if (seen) {
+            document.documentElement.dataset.intro = 'skip';
+            return;
+          }
+
+          // Mark as seen immediately at start of playback so mid-intro refresh does not replay
+          sessionStorage.setItem('nexalink:intro:v1', 'true');
+          document.documentElement.dataset.intro = 'play';
+        } catch (e) {
+          // If storage access fails, default to skip to prevent breaking user flow
+          document.documentElement.dataset.intro = 'skip';
+        }
+      })();
+    </script>
+
+    <!-- Intro Stage Styles & Failsafes -->
+    <style>
+      :root {
+        --nexalink-node: #FD9C03;
+      }
+      #intro-root {
+        display: none;
+      }
+      html[data-intro="play"],
+      html[data-intro="exit"] {
+        background: #000000 !important;
+      }
+      html[data-intro="play"] body,
+      html[data-intro="exit"] body {
+        overflow: hidden !important;
+        background: #000000 !important;
+      }
+      html[data-intro="play"] #intro-root,
+      html[data-intro="exit"] #intro-root {
+        display: grid;
+        place-items: center;
+        position: fixed;
+        inset: 0;
+        z-index: 999999;
+        background: #000000;
+        pointer-events: auto;
+      }
+      /* Prevent navbar or landing page from ever bleeding through while intro plays */
+      #root {
+        transition: opacity 400ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      html[data-intro="play"] #root {
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }
+      html[data-intro="exit"] #root {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+      }
+      [data-intro-target="logo"] {
+        transition: opacity 200ms ease;
+      }
+      html[data-intro="play"] [data-intro-target="logo"],
+      html[data-intro="exit"] [data-intro-target="logo"] {
+        opacity: 0 !important;
+      }
+      html[data-intro="done"] [data-intro-target="logo"] {
+        opacity: 1 !important;
+      }
+      /* Hard failsafe: hides overlay after 5 seconds if edge case occurs */
+      @keyframes nexalinkIntroFailsafe {
+        0%, 99.9% {
+          visibility: visible;
+        }
+        100% {
+          visibility: hidden;
+          pointer-events: none;
+          opacity: 0;
+        }
+      }
+      html[data-intro="play"] #intro-root {
+        animation: nexalinkIntroFailsafe 5s forwards;
+      }
+    </style>
+
+    <noscript>
+      <style>
+        #intro-root {
+          display: none !important;
+        }
+        html[data-intro="play"] body {
+          overflow: auto !important;
+        }
+        html[data-intro="play"] [data-intro-target="logo"] {
+          opacity: 1 !important;
+        }
+      </style>
+    </noscript>
+
     <!-- Plausible Analytics -->
     <script defer data-domain="nexalink.vit.edu.in" src="https://plausible.io/js/script.js"></script>
   </head>
   <body class="bg-white text-slate-950 font-sans antialiased min-h-screen selection:bg-slate-900 selection:text-white">
+    <div id="intro-root" aria-hidden="true"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

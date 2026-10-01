@@ -16,7 +16,8 @@ import {
   Calendar,
   MapPin,
   RefreshCw,
-  Send
+  Send,
+  Filter
 } from 'lucide-react';
 import {
   Badge,
@@ -178,13 +179,16 @@ export const JobPortalPage: React.FC = () => {
         </div>
       )}
 
-      {/* Category Tabs */}
-      <div className="overflow-x-auto pb-1 scrollbar-none">
-        <SegmentedTabs
-          options={categoryTabOptions}
-          activeTab={activeTypeFilter}
-          onChange={(type) => setActiveTypeFilter(type)}
-        />
+      {/* B6: Category Tabs with Horizontal Scroll & Gradient Edge Fade */}
+      <div className="relative w-full">
+        <div className="overflow-x-auto pb-1 scrollbar-none flex">
+          <SegmentedTabs
+            options={categoryTabOptions}
+            activeTab={activeTypeFilter}
+            onChange={(type) => setActiveTypeFilter(type)}
+          />
+        </div>
+        <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-8 bg-gradient-to-l from-white to-transparent hidden sm:block" />
       </div>
 
       {/* Search Input Bar */}
@@ -197,28 +201,48 @@ export const JobPortalPage: React.FC = () => {
         />
       </div>
 
-      {/* Opportunities List or Empty State */}
+      {/* Opportunities List or Empty State (P2: Dual empty state) */}
       {isDataLoading ? (
         <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#0A0A0A] border-t-transparent"></div>
           <p className="text-[#6B7280] text-xs">Loading opportunities...</p>
         </div>
       ) : filteredJobs.length === 0 ? (
-        <EmptyState
-          icon={<Briefcase className="w-6 h-6" />}
-          title="No opportunities found"
-          description="No active listings match your selected category filter or search terms."
-          action={
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => { setActiveTypeFilter('All'); setSearchTerm(''); }}
-              icon={<RefreshCw className="w-3.5 h-3.5" />}
-            >
-              Reset filters
-            </Button>
-          }
-        />
+        publishedJobs.length === 0 ? (
+          <EmptyState
+            icon={<Briefcase className="w-8 h-8 text-[#0A0A0A]" />}
+            title="No opportunities posted yet"
+            description="Verified alumni and faculty have not posted any active listings yet. Check back soon or post an opening."
+            action={
+              (currentRole === 'alumni' || currentRole === 'faculty' || currentRole === 'admin') ? (
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => setShowPostJobModal(true)}
+                  icon={<Plus className="w-4 h-4" />}
+                >
+                  Post an opportunity
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <EmptyState
+            icon={<Filter className="w-8 h-8 text-[#6B7280]" />}
+            title="No results match your filters"
+            description="No active listings match your selected category filter or search terms."
+            action={
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => { setActiveTypeFilter('All'); setSearchTerm(''); }}
+                icon={<RefreshCw className="w-3.5 h-3.5" />}
+              >
+                Clear filters
+              </Button>
+            }
+          />
+        )
       ) : (
         <div className="space-y-4">
           {filteredJobs.map((job, index) => {

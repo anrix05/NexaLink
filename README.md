@@ -3,7 +3,7 @@
 > **Institution:** Vidyalankar Institute of Technology (VIT), Wadala, Mumbai  
 > **Problem Statement:** SIH25017 – Digital Platform for Centralized Alumni Data Management & Engagement  
 > **Project Type:** Third Year Mini Project  
-> **Version:** 2.5.0 (Phase 5 — Supabase Full-Stack Complete)
+> **Version:** 2.7.0 (One-Time Logo Intro Animation & Motion System Hardening)
 
 ---
 
@@ -72,6 +72,20 @@ It bridges academic preparation with verified industry mentorship, corporate job
 - **Framer Motion Physics:** Spring animations (`stiffness: 400, damping: 17`), `layoutId` sliding pills, staggered card entrances, `IntersectionObserver` scroll reveals, GPU-accelerated count-up stats
 - **Accessibility:** Full `prefers-reduced-motion` OS compliance across all animations
 - **Responsive:** 10-tier responsive layout matrix (320px → 1920px+) with mobile BottomNav and desktop-only admin interstitial
+
+---
+
+### 🎬 Intro Animation (One-Time Brand Assembly & Flight)
+NexaLink features an institutional one-time opening intro sequence:
+- **Assembly & Settle:** Full obsidian `#0A0A0A` canvas where the two halves of the "N-Link" mark assemble from 4 vertical geometric slices (staggered from the center outwards).
+- **The "Link" Ignition:** The central amber nexus core node (`#FD9C03`) pops in with a short spring, a white dot flash, and a single expanding pulse ring.
+- **Flight & Color Handoff:** The wordmark dissolves while the mark flies smoothly into the header logo via a seamless FLIP translation/scale animation with a fast color handoff at mid-alpha.
+- **Session Rules:** Plays once per browser session (tab) on initial boot at `/` (`sessionStorage` key `nexalink:intro:v1`). Refreshing or in-app navigation never replays the intro.
+- **Instant Bypasses:** Automatically skipped under `prefers-reduced-motion: reduce`, `low` performance tiers (`saveData`, low hardware cores/memory), automated environments (`navigator.webdriver`), or Supabase Auth callback URLs (`#access_token`, `type=recovery`, etc.).
+- **User Skip Controls:** Click, tap, `Esc`, or any keyboard interaction initiates an instant 250ms fade-out skip. An `ESC / TAP TO SKIP` hint surfaces after 600ms.
+- **Failsafe:** Pre-JS CSS fallback hides `#intro-root` after 4s; `<noscript>` keeps content immediately visible if JS is disabled.
+- **Replay Capabilities:** Force playback anytime via `/?intro=1`, via the "REPLAY INTRO" link in the public footer, or via the `Replay Intro Animation` command in the `CommandPalette` (`Ctrl+K`).
+- **Configuration:** Fully customizable in `src/lib/intro.ts` (`INTRO_SCOPE`, `INTRO_ENABLED_ROUTES`, `INTRO_NODE_COLOR`, durations).
 
 ---
 
@@ -286,8 +300,8 @@ NexaLink features an intelligent **Dual-Mode architecture**:
 - [x] **Phase 1: Requirement Analysis** (SIH25017 problem scope & roles defined)
 - [x] **Phase 2: System Design & Branding** (Rebranded to NexaLink/NexaChats, monochrome design system)
 - [x] **Phase 3: Frontend Architecture & Governance** (Identity verification, admin handoff, reported messages queue, accreditation analytics, motion system)
-- [x] **Phase 4: Backend & Database Foundations** (Express server structure & SQLite schema in `backend/`)
-- [x] **Phase 5: Supabase Full-Stack Migration** (Hosted PostgreSQL, GoTrue Auth, Storage Buckets, Realtime NexaChats, RLS Policies, and Dual-Mode Client Fallback)
+- [x] **Phase 4: Open Canvas Redesign & Security Hardening** (Full Open Canvas UI migration, FORCE RLS, privileged RPCs, signed storage, server-side lockout)
+- [x] **Phase 5: Supabase Full-Stack Architecture** (Hosted PostgreSQL 17 tables, GoTrue Auth, Realtime NexaChats, hash-chained audit logs, and dual-mode client fallback)
 
 ---
 

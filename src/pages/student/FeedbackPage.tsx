@@ -123,7 +123,7 @@ export const FeedbackPage: React.FC = () => {
         {/* Left: Submit New Feedback Form */}
         <form onSubmit={handleSubmitTicket} className="lg:col-span-6 bg-white border border-slate-200/85 p-6 rounded-2xl shadow-sm space-y-5">
           <div className="border-b border-slate-100 pb-3">
-            <h2 className="font-display font-bold text-slate-950 text-sm uppercase tracking-wider flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-slate-950 flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-indigo-600" />
               Submit Feedback or Report Issue
             </h2>
@@ -183,7 +183,7 @@ export const FeedbackPage: React.FC = () => {
         {/* Right: Track Submitted Tickets & Status */}
         <div className="lg:col-span-6 bg-white border border-slate-200/85 p-6 rounded-2xl shadow-sm space-y-4">
           <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
-            <h2 className="font-display font-bold text-slate-950 text-sm uppercase tracking-wider flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-slate-950 flex items-center gap-2">
               <Tag className="w-4 h-4 text-indigo-600" />
               Submitted Tickets ({tickets.length})
             </h2>
@@ -207,7 +207,7 @@ export const FeedbackPage: React.FC = () => {
 
                 {tkt.response && (
                   <div className="p-3 bg-indigo-50/70 border border-indigo-100/80 rounded-xl text-indigo-950 font-medium text-xs space-y-1 mt-2">
-                    <p className="font-display font-bold text-indigo-700 text-[10px] uppercase tracking-wider">Alumni Cell Response:</p>
+                    <p className="font-semibold text-indigo-800 text-xs">Alumni Cell Response:</p>
                     <p className="leading-snug">{tkt.response}</p>
                   </div>
                 )}

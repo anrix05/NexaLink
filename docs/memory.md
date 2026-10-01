@@ -15,8 +15,9 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
 ### Design System & Visual Guidelines
 - **Color Palette:** Pure white (`#FFFFFF`) canvas, near-black (`#0A0A0A`) primary text & buttons, `#6B7280` muted text, `#E5E7EB` 1px hairline borders. No soft fuzzy drop shadows.
 - **Sanctioned Semantic Accents:** Strictly adheres to the obsidian, white, and hairline gray visual system. The four semantic status accents defined in PRD Section 2.1 (Verified Emerald `#065F46`, Actionable Amber `#B45309`, Governance Rose `#991B1B`, Academic Indigo `#3730A3`) are the only sanctioned exceptions, reserved exclusively for their defined semantic meaning — no other colors, decorative gradients, or ad hoc accent usage are permitted.
-- **Logomark:** Geometric "N" Monogram with 2 connected circular network nodes forming a diagonal bridge.
+- **Logomark:** Geometric "N-Link" Monogram built from two interlocking halves with precision 45-degree chamfers and one central connecting nexus core node (orange ring `#FD9C03` with white inner dot).
 - **Motion System & Micro-Interactions:** 
+  - **One-Time Logo Intro Animation (`IntroOverlay.tsx`):** Plays once per browser session at `/` (`sessionStorage: nexalink:intro:v1`). 4-slice geometric assembly (S1..S4 with 1px overlap), central node ignition pop, and seamless FLIP translation/scale flight into the header logo with mid-flight color handoff.
   - Framer Motion spring physics (`stiffness: 400, damping: 17`, `whileHover={{ scale: 1.03 }}`, `whileTap={{ scale: 0.95 }}`).
   - Sliding background pills via `layoutId` across tabs and mode selectors.
   - Real SVG path length checkmark animations for approvals (`AnimatedCheckIcon`).
@@ -39,12 +40,15 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
    - **Personal Email Authentication for Alumni:** College emails `@student.vit.edu.in` deactivate post-graduation. Alumni authenticate against `personalEmail` (e.g. Gmail/Outlook), while Student & Faculty authenticate against active `@vit.edu.in` domains.
    - **Proof-Document Upload Flow:** File upload inputs (`accept="image/*,.pdf"`) store `verificationDocumentUrl` and `verificationDocumentName` via `URL.createObjectURL(file)` session previews.
    - **Auth Page Layout & Smooth Transitions:** Top-aligned grid layout (`items-start`), dynamic card height animation (`layout` + `<AnimatePresence mode="wait">`), sliding pills (`layoutId="authModePill"`, `layoutId="authRolePill"`), and staggered field groups.
+   - **Self-Healing Registration Flow:** Detects orphaned accounts (where Supabase Auth succeeded but `public.users` profile insertion failed due to database constraints) and silently repairs them by logging the user in to seamlessly complete profile creation.
+   - **Defensive Profile Fetching:** Uses `.maybeSingle()` for loading extended role datasets (`student_profiles`, etc.) to prevent fatal sign-in crashes when optional data is missing.
    - Rate-limiting lockout (5 failed attempts) and OTP password reset.
 
-2. **Session Security & View-Derived Navbar Isolation (`AuthContext.tsx`, `Navbar.tsx`, `App.tsx`)**
+2. **Session Security & Global Navigation (`AuthContext.tsx`, `Navbar.tsx`, `App.tsx`)**
    - **Immutable Session Nulling:** `logout()` sets `currentUser = null`, `isAuthenticated = false`, and clears `sessionStorage`.
-   - **Root Route Protection:** `isLoggedOut = !isAuthenticated || !currentUser` unmounts portal wrappers and forces public Landing Page rendering.
-   - **View-Derived Navbar Isolation:** `isPublicView = activeTab === 'landing' || activeTab === 'auth' || !isAuthenticated || !currentUser` ensures `Navbar.tsx` ONLY renders public navigation on public pages, preventing any navbar/content session state mismatch.
+   - **Public Legal Pages & Root Protection:** Public legal pages (Terms, Privacy, Data Governance) are explicitly un-gated in the root router (`App.tsx`). The fallback for unauthenticated users is the Landing Page.
+   - **Global Scroll Restoration:** A top-level `useEffect` listening to `activeTab` triggers `window.scrollTo(0, 0)` ensuring SPA page transitions consistently load from the top of the viewport.
+   - **View-Derived Navbar Isolation:** `isPublicView` ensures `Navbar.tsx` ONLY renders public navigation on public pages, preventing any navbar/content session state mismatch.
    - **Interactive Brand Logo Navigation:** Clicking NexaLink logo smoothly scrolls to top and opens the Landing page, displaying `[ ->| RETURN TO DASHBOARD ]` for authenticated sessions to return seamlessly.
    - **Auth Tab Auto-Redirect:** Authenticated users attempting to visit `auth` are automatically redirected back to `dashboard`.
 
@@ -64,9 +68,13 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
    - **Scope Reduction:** Removed full inline Smart Mentor Match engine; replaced with a compact horizontally-scrollable "Top Matches" preview row linking to Guidance (`mentorship`).
    - **Consolidated Profile Completion:** Single source of truth progress card with embedded resume row (`Resume: aanya_patel_vit.pdf ✓ On File`).
    - **2×2 Stat Grid:** Interactive metric cards (Active Requests, Smart Matches, Job Openings, Campus Events) with deep links to target sections.
-   - **Alumni by Organization:** Single-row horizontally scrollable company chips (logo, name, grad count) with reverse lookup shortcut.
 
-6. **Defensive Recommendation Engine & Component Null Guards (`recommendationEngine.ts`, Shell Components)**
+6. **Profile Settings & Storage Persistence (`SettingsPage.tsx`, `storage.ts`)**
+   - **Native File Pickers:** Direct `<input type="file">` integrations for uploading resumes, proof documents, and avatars replacing crude browser prompts.
+   - **Instant Persistence Architecture:** Avatar uploads are executed via `uploadAvatar` (Supabase Storage) and instantly written to the user's database profile and local session state (`updateCurrentUserState`), ensuring permanence against page reloads without requiring a manual form submission.
+   - **Clean Default State:** Blank states for unpopulated arrays/strings rather than mock dummy autofill data.
+
+7. **Defensive Recommendation Engine & Component Null Guards (`recommendationEngine.ts`, Shell Components)**
    - Added defensive `if (!student || !target) return ...` null checks in `calculateAlumniMatch`, `calculateFacultyMatch`, and `calculateOpportunityMatch`.
    - Early `if (!currentUser) return null;` guards in `StudentDashboard.tsx`, `AlumniDashboard.tsx`, `FacultyDashboard.tsx`, `SidebarNav.tsx`, and `BottomNav.tsx` preventing runtime errors during session unmounting.
 
@@ -100,23 +108,34 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
     - **Registrar Source-of-Truth Disclaimer:** Non-authoritative list notice banner clarifying that candidate lists are derived from stored `graduationYear ≤ 2024` records.
     - **Consolidated Audit Logging:** Consolidates batch operations into **ONE** audit log entry (`BULK_GRADUATION_PROVISIONAL`) containing structured metadata. Rendered with expandable rows in Audit Logs.
 
-13. **NexaChats (Messaging Workspace)**
+14. **NexaChats (Messaging Workspace)**
     - Topic-focused peer-to-peer messaging for accepted mentees and alumni peers.
     - Dynamic viewport height (`100dvh`) and touch-accessible message actions.
     - Admin privacy guard preventing unauthorized access to private P2P threads.
 
-14. **Role-Scoped Command Palette (`CommandPalette.tsx`)**
+15. **Role-Scoped Command Palette (`CommandPalette.tsx`)**
     - `Ctrl+K` / `Cmd+K` global spotlight interface providing instant navigation, quick actions, and directory search strictly scoped to the active user's permissions. Fullscreen native presentation on mobile.
+
+16. **Alumni Directory & Multi-Filter Search (`AlumniDirectoryPage.tsx`)**
+    - Consolidated search experience replacing heavy hero cards with a streamlined multi-filter row (Department, Company/University, Technical Skills, Mentor Toggle).
+    - Lightweight autocomplete typeahead for master organization lookups bound to the main Company/University input.
+    - Role tabs (All Members, Alumni Profiles, Faculty Profiles) dynamically reflect applied cross-filters.
+    - **Direct Messaging Access:** Contextual "Message" buttons added to profile modals for verified users, enabling seamless 1:1 NexaChat creation directly from the directory without routing through the chat app.
+
+17. **Production Optimization & Demo Reliability**
+    - **Tree-Shaking Mock Data:** Converted static imports of `mockData.ts` into dynamic `import()` boundaries gated by `import.meta.env.DEV`, ensuring heavy dummy data (30+ KB) is completely purged from the production Vercel bundle.
+    - **Ghost Session Protection:** Implemented `isMockSessionRef` in `AuthContext` to prevent asynchronous Supabase token refreshes from forcefully logging out local development mock sessions.
+    - **Landing Page Polish:** Simplified hero copy and navigation IDs (`#overview`, `#features`, `#benefits`, `#academic`) for better readability and SEO indexing.
 
 ---
 
 ## 3. Technology Stack
 
-- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, Framer Motion, Lucide React icons
-- **State Management:** React Context API (`AuthContext`, `DataContext`)
-- **Export Capabilities:** `jspdf`, `jspdf-autotable`, `xlsx`, `html2canvas`
-- **Backend (Phase 4 Ready):** Node.js, Express.js (`backend/server.js`)
-- **Database (Phase 4 Ready):** SQLite (`backend/database/db.js`)
+- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, Framer Motion, Lucide React icons
+- **State Management:** React Context API (`AuthContext`, `DataContext`) with optimistic RPC integration
+- **Export Capabilities:** `jspdf`, `jspdf-autotable`, `xlsx`, `papaparse`
+- **Backend & Cloud:** Supabase Hosted PostgreSQL (17 Relational Tables), GoTrue Auth, Realtime WebSockets, Supabase Edge Functions (`auth-login-guard`, `accept-admin-invite`)
+- **Security:** `FORCE ROW LEVEL SECURITY`, `private` schema helper RPCs, append-only SHA-256 hash-chained `audit_logs`, server-side brute-force lockout, 60s signed storage URLs
 
 ---
 
@@ -125,6 +144,7 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
 - [x] **Phase 1: Requirement Analysis** (SIH25017 problem scope & roles defined)
 - [x] **Phase 2: System Design & Branding** (Rebranded to NexaLink/NexaChats, monochrome design system)
 - [x] **Phase 3: Frontend Architecture & Governance** (Identity verification, admin handoff, reported messages queue, accreditation analytics, motion system, mobile responsiveness, Opportunities unified navigation, verification gate redesign, session security)
-- [x] **Phase 4: Backend & Database Foundations** (Express server structure & SQLite schema in `backend/`)
-- [ ] **Phase 5: Production Deployment & E2E Integration Testing**
+- [x] **Phase 4: Backend Hardening & Privileged RPC Architecture** (FORCE RLS, security definer stored procedures, cryptographic audit trail, server-side lockout, storage hardening)
+- [x] **Phase 5: "Open Canvas" Redesign & Design System Linting** (Unbordered whitespace architecture, AppShell, TopBar, SidebarNav, PageHeader, StatStrip, ListRow, FocusPanel, MasterDetail, RightRail, UnderlineTabs, zero design lint warnings)
+- [x] **v3.0 Release:** Unified institutional platform with 4 fluid responsive tiers, verified graduation safeguards, and production security guards
 

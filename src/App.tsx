@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { Navbar } from './components/common/Navbar';
-import { SidebarNav } from './components/common/SidebarNav';
+import { AppShell } from './components/ui/AppShell';
 import { Footer } from './components/common/Footer';
 import { LandingPage } from './pages/LandingPage';
 import { AlumniDirectoryPage } from './pages/directory/AlumniDirectoryPage';
@@ -20,6 +20,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { FeedbackPage } from './pages/student/FeedbackPage';
 import { AuthPage } from './pages/AuthPage';
 import { VerificationPendingPage } from './pages/VerificationPendingPage';
+import { GateShell } from './components/gate/GateShell';
 import { BottomNav } from './components/common/BottomNav';
 import { AdminMobileInterstitial } from './components/admin/AdminMobileInterstitial';
 import { OpportunitiesPage } from './pages/opportunities/OpportunitiesPage';
@@ -29,6 +30,7 @@ import { PrivacyPolicyPage } from './pages/legal/PrivacyPolicyPage';
 import { TermsOfServicePage } from './pages/legal/TermsOfServicePage';
 import { DataGovernancePage } from './pages/legal/DataGovernancePage';
 import { IntroOverlay } from './components/intro/IntroOverlay';
+import { StyleguidePage } from './pages/dev/StyleguidePage';
 import type { AlumniProfile } from './types';
 
 const MainContent: React.FC = () => {
@@ -46,7 +48,9 @@ const MainContent: React.FC = () => {
     const tabParam = params.get('tab');
     const subtabParam = params.get('subtab');
     if (tabParam) {
-      if (tabParam === 'analytics' || tabParam === 'reports') {
+      if (tabParam === 'styleguide' || tabParam === 'dev/styleguide') {
+        setActiveTab('styleguide');
+      } else if (tabParam === 'analytics' || tabParam === 'reports') {
         if (subtabParam === 'exporter' || subtabParam === 'export') {
           setReportsSubTab('export');
         } else if (subtabParam === 'analytics') {
@@ -58,6 +62,8 @@ const MainContent: React.FC = () => {
       }
     } else if (typeof window !== 'undefined' && (window.location.pathname === '/reset-password' || window.location.pathname.startsWith('/reset-password'))) {
       setActiveTab('reset-password');
+    } else if (typeof window !== 'undefined' && (window.location.pathname === '/dev/styleguide' || window.location.pathname === '/styleguide')) {
+      setActiveTab('styleguide');
     }
   }, []);
 
@@ -149,6 +155,10 @@ const MainContent: React.FC = () => {
       return <DataGovernancePage setActiveTab={handleTabChange} />;
     }
 
+    if (activeTab === 'styleguide') {
+      return <StyleguidePage setActiveTab={handleTabChange} />;
+    }
+
     if (isLoggedOut) {
       return <LandingPage setActiveTab={handleTabChange} />;
     }
@@ -158,6 +168,9 @@ const MainContent: React.FC = () => {
 
     switch (activeTab) {
       case 'directory':
+        if (currentRole === 'admin') {
+          return <AdminDashboard setActiveTab={handleTabChange} initialTab="users" />;
+        }
         return (
           <AlumniDirectoryPage
             setActiveTab={handleTabChange}
@@ -183,15 +196,30 @@ const MainContent: React.FC = () => {
       case 'reports':
       case 'analytics':
         return <ReportsExportPage initialSubTab={reportsSubTab} />;
+      case 'verification':
+      case 'verification-queue':
+        return <AdminDashboard setActiveTab={handleTabChange} initialTab="approvals" />;
+      case 'moderation':
+        return <AdminDashboard setActiveTab={handleTabChange} initialTab="moderation" />;
+      case 'announcements':
+        return <AdminDashboard setActiveTab={handleTabChange} initialTab="announcements" />;
+      case 'audit':
+      case 'audit-log':
+        return <AdminDashboard setActiveTab={handleTabChange} initialTab="audit" />;
+      case 'graduation':
+        return <AdminDashboard setActiveTab={handleTabChange} initialTab="graduation" />;
+      case 'users':
+      case 'user-roster':
+        return <AdminDashboard setActiveTab={handleTabChange} initialTab="users" />;
       case 'settings':
         return <SettingsPage />;
       case 'feedback':
         return <FeedbackPage />;
       case 'admin-console':
-        return <AdminDashboard setActiveTab={handleTabChange} initialView="console" />;
+        return <AdminDashboard setActiveTab={handleTabChange} initialTab="approvals" />;
       case 'dashboard':
         if (currentRole === 'admin') {
-          return <AdminDashboard setActiveTab={handleTabChange} initialView="dashboard" />;
+          return <AdminDashboard setActiveTab={handleTabChange} initialTab="overview" />;
         } else if (currentRole === 'student') {
           return <StudentDashboard setActiveTab={handleTabChange} />;
         } else if (currentRole === 'faculty' || currentRole === 'teacher') {
@@ -204,8 +232,17 @@ const MainContent: React.FC = () => {
     }
   };
 
-  const isPortalTab = !isLoggedOut && activeTab !== 'landing' && activeTab !== 'auth' && activeTab !== 'reset-password' && activeTab !== 'admin-invite' && activeTab !== 'privacy' && activeTab !== 'terms' && activeTab !== 'data-governance';
+  const isPortalTab = !isLoggedOut && !isUnverified && activeTab !== 'landing' && activeTab !== 'auth' && activeTab !== 'reset-password' && activeTab !== 'admin-invite' && activeTab !== 'privacy' && activeTab !== 'terms' && activeTab !== 'data-governance';
   const showAdminMobileInterstitial = isPortalTab && currentRole === 'admin' && isMobileScreen && !adminBypassWarning;
+
+  // Intercept unverified accounts and isolate in minimal GateShell (no sidebar, no search, no bell)
+  if (isUnverified && activeTab !== 'privacy' && activeTab !== 'terms' && activeTab !== 'data-governance' && activeTab !== 'auth') {
+    return (
+      <GateShell>
+        <VerificationPendingPage setActiveTab={setActiveTab} />
+      </GateShell>
+    );
+  }
 
   // Responsive motion variants: horizontal slide on mobile tab changes, subtle vertical lift on desktop
   const pageVariants = isMobileScreen
@@ -233,167 +270,138 @@ const MainContent: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {!welcomeRevealName && (
+      {!welcomeRevealName && !isPortalTab && (
         <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
       )}
 
-      <main className="flex-1 w-full max-w-full min-w-0 overflow-x-clip">
-        <AnimatePresence mode="wait">
-          {activeTab === 'auth' ? (
-            <motion.div
-              key="auth"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-full min-w-0"
-            >
-              <AuthPage setActiveTab={setActiveTab} />
-            </motion.div>
-          ) : activeTab === 'reset-password' ? (
-            <motion.div
-              key="reset-password"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-full min-w-0"
-            >
-              <ResetPasswordPage setActiveTab={setActiveTab} />
-            </motion.div>
-          ) : activeTab === 'admin-invite' ? (
-            <motion.div
-              key="admin-invite"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-full min-w-0"
-            >
-              <AcceptAdminInvitePage setActiveTab={setActiveTab} />
-            </motion.div>
-          ) : activeTab === 'privacy' ? (
-            <motion.div
-              key="privacy"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-full min-w-0"
-            >
-              <PrivacyPolicyPage setActiveTab={setActiveTab} />
-            </motion.div>
-          ) : activeTab === 'terms' ? (
-            <motion.div
-              key="terms"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-full min-w-0"
-            >
-              <TermsOfServicePage setActiveTab={setActiveTab} />
-            </motion.div>
-          ) : activeTab === 'data-governance' ? (
-            <motion.div
-              key="data-governance"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-full min-w-0"
-            >
-              <DataGovernancePage setActiveTab={setActiveTab} />
-            </motion.div>
-          ) : isLoggedOut || activeTab === 'landing' ? (
-            <motion.div
-              key="landing"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-full min-w-0"
-            >
-              <LandingPage setActiveTab={setActiveTab} />
-            </motion.div>
-          ) : isUnverified ? (
-            <motion.div
-              key="unverified"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <VerificationPendingPage setActiveTab={setActiveTab} />
-            </motion.div>
-          ) : showAdminMobileInterstitial ? (
-            <motion.div
-              key="admin-interstitial"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.2 }}
-            >
-              <AdminMobileInterstitial
-                onBypass={() => setAdminBypassWarning(true)}
-                setActiveTab={setActiveTab}
-              />
-            </motion.div>
-          ) : isPortalTab ? (
-            /* Unified App Portal Layout with Responsive Shell & Bottom Nav Accommodation */
-            <div
-              key="portal-wrapper"
-              className={`w-full ${
-                currentRole === 'admin' ? 'app-container-wide' : 'app-container'
-              } py-4 pb-20 lg:pb-6 ${
-                currentRole === 'admin' && isMobileScreen && adminBypassWarning ? 'overflow-x-auto min-w-[1024px]' : ''
-              }`}
-            >
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                
-                {/* Left Workspace Sidebar Nav (Desktop only) */}
-                <div className="hidden lg:block lg:col-span-3 sticky top-20 z-20">
-                  <SidebarNav activeTab={activeTab} setActiveTab={setActiveTab} />
-                </div>
-
-                {/* Main Right Content Area */}
-                <div className="col-span-1 lg:col-span-9 min-w-0">
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={activeTab}
-                      initial={pageVariants.initial}
-                      animate={pageVariants.animate}
-                      exit={pageVariants.exit}
-                      transition={pageVariants.transition}
-                    >
-                      {renderActiveView()}
-                    </motion.div>
-                  </AnimatePresence>
-                </div>
-
-              </div>
-            </div>
+      {isPortalTab ? (
+        <AppShell activeTab={activeTab} setActiveTab={setActiveTab}>
+          {showAdminMobileInterstitial ? (
+            <AdminMobileInterstitial
+              onBypass={() => setAdminBypassWarning(true)}
+              setActiveTab={setActiveTab}
+            />
           ) : (
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            >
-              {renderActiveView()}
-            </motion.div>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={pageVariants.initial}
+                animate={pageVariants.animate}
+                exit={pageVariants.exit}
+                transition={pageVariants.transition}
+              >
+                {renderActiveView()}
+              </motion.div>
+            </AnimatePresence>
           )}
-        </AnimatePresence>
-      </main>
+        </AppShell>
+      ) : (
+        <main className="flex-1 w-full max-w-full min-w-0 overflow-x-clip">
+          <AnimatePresence mode="wait">
+            {activeTab === 'auth' ? (
+              <motion.div
+                key="auth"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                className="w-full max-w-full min-w-0"
+              >
+                <AuthPage setActiveTab={setActiveTab} />
+              </motion.div>
+            ) : activeTab === 'reset-password' ? (
+              <motion.div
+                key="reset-password"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                className="w-full max-w-full min-w-0"
+              >
+                <ResetPasswordPage setActiveTab={setActiveTab} />
+              </motion.div>
+            ) : activeTab === 'admin-invite' ? (
+              <motion.div
+                key="admin-invite"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                className="w-full max-w-full min-w-0"
+              >
+                <AcceptAdminInvitePage setActiveTab={setActiveTab} />
+              </motion.div>
+            ) : activeTab === 'privacy' ? (
+              <motion.div
+                key="privacy"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                className="w-full max-w-full min-w-0"
+              >
+                <PrivacyPolicyPage setActiveTab={setActiveTab} />
+              </motion.div>
+            ) : activeTab === 'terms' ? (
+              <motion.div
+                key="terms"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                className="w-full max-w-full min-w-0"
+              >
+                <TermsOfServicePage setActiveTab={setActiveTab} />
+              </motion.div>
+            ) : activeTab === 'data-governance' ? (
+              <motion.div
+                key="data-governance"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                className="w-full max-w-full min-w-0"
+              >
+                <DataGovernancePage setActiveTab={setActiveTab} />
+              </motion.div>
+            ) : isLoggedOut || activeTab === 'landing' ? (
+              <motion.div
+                key="landing"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                className="w-full max-w-full min-w-0"
+              >
+                <LandingPage setActiveTab={setActiveTab} />
+              </motion.div>
+            ) : isUnverified ? (
+              <motion.div
+                key="unverified"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <VerificationPendingPage setActiveTab={setActiveTab} />
+              </motion.div>
+            ) : (
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              >
+                {renderActiveView()}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </main>
+      )}
 
       {/* Footer rendered for public and verified portal pages only (hidden for unverified pending view) */}
-      {!isUnverified && <Footer setActiveTab={setActiveTab} isPublicPage={!isPortalTab} />}
-
-      {/* Mobile Bottom Navigation — authenticated portal only */}
-      {isPortalTab && !isUnverified && (
-        <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
-      )}
+      {!isUnverified && !isPortalTab && <Footer setActiveTab={setActiveTab} isPublicPage={true} />}
     </div>
   );
 };
@@ -401,6 +409,17 @@ const MainContent: React.FC = () => {
 export function App() {
   const [shouldMountIntro] = useState<boolean>(() => {
     if (typeof document === 'undefined') return false;
+    try {
+      const isIntroForce = window.location.search.includes('intro=1');
+      if (!isIntroForce) {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && ((key.startsWith('sb-') && key.endsWith('-auth-token')) || key === 'nexalink_auth_user')) {
+            return false;
+          }
+        }
+      }
+    } catch {}
     return document.documentElement.dataset.intro === 'play';
   });
 

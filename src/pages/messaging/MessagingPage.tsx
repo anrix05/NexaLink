@@ -23,6 +23,7 @@ import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import type { MentorshipGuidancePurpose, UserRole } from '../../types';
 import { uploadChatAttachment } from '../../lib/storage';
+import { getGreetingName } from '../../utils/validators';
 import {
   MessageSquare,
   Send,
@@ -54,6 +55,7 @@ import {
   Pause
 } from 'lucide-react';
 import { Button, Modal, ToastNotice } from '../../components/common/UIComponents';
+import { Eyebrow } from '../../components/common/Eyebrow';
 
 export interface ContactItem {
   id: string;
@@ -237,7 +239,7 @@ const AdminMessagingGuardView: React.FC = () => {
   return (
     <div className="space-y-6 font-sans text-xs bg-white p-8 border border-[#E5E7EB] rounded-xl">
       <div className="border-b border-[#E5E7EB] pb-4">
-        <p className="text-xs uppercase tracking-wide text-[#6B7280] font-semibold">Governance & Privacy</p>
+        <Eyebrow>Governance & Privacy</Eyebrow>
         <h1 className="text-2xl font-bold text-[#0A0A0A] tracking-tight mt-1">Chats</h1>
         <p className="text-xs text-[#6B7280] mt-1">
           Institutional privacy protection & peer-to-peer communication boundaries.
@@ -1193,7 +1195,7 @@ const StandardMessagingView: React.FC = () => {
                               <FileText className="w-3.5 h-3.5 shrink-0" />
                               <span className="truncate font-medium">{sanitizedDisplayName}</span>
                             </div>
-                            <span className="text-[10px] uppercase font-mono tracking-wider shrink-0 text-[#9CA3AF]">Attachment</span>
+                            <span className="text-[10px] font-medium shrink-0 text-[#6B7280]">Attachment</span>
                           </div>
                         );
                       };
@@ -1206,7 +1208,7 @@ const StandardMessagingView: React.FC = () => {
                               ? 'bg-[#1F1F1F] border-l-white text-[#D1D5DB]'
                               : 'bg-[#F8F8F8] border-l-[#0A0A0A] text-[#6B6B6B]'
                           }`}>
-                            <p className="font-bold text-[10px] uppercase tracking-wider">{msg.replyTo.name}</p>
+                            <p className="font-semibold text-[11px]">{msg.replyTo.name}</p>
                             <p className="truncate text-[11px] font-normal mt-0.5">"{msg.replyTo.content}"</p>
                           </div>
                         );
@@ -1372,7 +1374,7 @@ const StandardMessagingView: React.FC = () => {
                                     <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-[#E5E5E5] shadow-md py-1 animate-in fade-in">
                                       <button
                                         onClick={() => handleReport(msg.id)}
-                                        className="w-full px-3 py-1.5 flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider text-rose-600 hover:bg-[#F0F0F0] whitespace-nowrap"
+                                        className="w-full px-3 py-1.5 flex items-center gap-2 text-xs font-medium text-rose-600 hover:bg-[#F0F0F0] whitespace-nowrap"
                                       >
                                         <Flag className="w-3.5 h-3.5" /> Report to Admin
                                       </button>
@@ -1398,18 +1400,18 @@ const StandardMessagingView: React.FC = () => {
                               )}
 
                               {/* Timestamp */}
-                              <div className="flex items-center gap-2 pt-1 text-[11px] font-mono text-[#9CA3AF]">
+                              <div className="flex items-center gap-2 pt-1 text-[11px] font-mono text-[#6B7280]">
                                 <span>{formatBubbleTime(msg.timestamp)}</span>
                                 {!isReported && (
                                   <button
                                     onClick={() => setOpenMenuMsgId(openMenuMsgId === msg.id ? null : msg.id)}
-                                    className="opacity-0 group-hover:opacity-100 transition text-[#9CA3AF] hover:text-[#0A0A0A]"
+                                    className="opacity-0 group-hover:opacity-100 transition text-[#6B7280] hover:text-[#0A0A0A]"
                                     title="Options"
                                   >
                                     <MoreVertical className="w-3 h-3" />
                                   </button>
                                 )}
-                                {isReported && <span className="text-rose-600 font-bold uppercase tracking-wider">Reported</span>}
+                                {isReported && <span className="text-rose-600 font-semibold text-[11px]">Reported</span>}
                               </div>
                             </div>
                           </div>
@@ -1427,9 +1429,9 @@ const StandardMessagingView: React.FC = () => {
                 {!isNearBottom && (
                   <button
                     onClick={() => scrollToBottom(true)}
-                    className="absolute bottom-4 right-6 z-20 flex items-center gap-1.5 pl-3 pr-2 py-1.5 bg-[#0A0A0A] text-white text-[11px] font-mono uppercase tracking-wider shadow-md hover:bg-[#222222] transition-colors"
+                    className="absolute bottom-4 right-6 z-20 flex items-center gap-1.5 pl-3 pr-2 py-1.5 bg-[#0A0A0A] text-white text-xs font-medium rounded-full shadow-md hover:bg-[#222222] transition-colors"
                   >
-                    {newBelowCount > 0 ? `${newBelowCount} NEW` : 'LATEST'}
+                    {newBelowCount > 0 ? `${newBelowCount} new` : 'Latest'}
                     <ChevronDown className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -1509,7 +1511,7 @@ const StandardMessagingView: React.FC = () => {
                     onChange={e => setDraftText(e.target.value)}
                     onKeyDown={handleComposerKeyDown}
                     rows={1}
-                    placeholder={`Message ${activeContact?.name?.split(' ')[0] || 'Contact'}...`}
+                    placeholder={`Message ${getGreetingName(activeContact?.name) || 'Contact'}...`}
                     className="w-full max-h-[120px] text-xs py-0.5 bg-transparent border-0 focus:outline-none font-normal text-[#0A0A0A] placeholder:text-[#9CA3AF] flex-1 min-w-0 resize-none leading-relaxed custom-scrollbar"
                   />
 

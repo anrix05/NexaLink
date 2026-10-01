@@ -121,19 +121,19 @@ export const WelcomeReveal: React.FC<WelcomeRevealProps> = ({ name, onComplete }
           variants={cornerVariants}
           initial="hidden"
           animate="show"
-          className="text-[10px] sm:text-xs font-mono font-bold tracking-widest text-[#9CA3AF] uppercase flex items-center gap-2"
+          className="text-[10px] sm:text-xs font-mono font-medium tracking-wide text-[#D1D5DB] flex items-center gap-2"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span>NEXALINK PORTAL</span>
+          <span>NexaLink Portal</span>
         </motion.div>
 
         <motion.div
           variants={cornerVariants}
           initial="hidden"
           animate="show"
-          className="text-[10px] sm:text-xs font-mono font-bold tracking-widest text-[#9CA3AF] uppercase"
+          className="text-[10px] sm:text-xs font-mono font-medium tracking-wide text-[#D1D5DB]"
         >
-          VIT WADALA, MUMBAI
+          VIT Wadala, Mumbai
         </motion.div>
       </div>
 
@@ -148,9 +148,9 @@ export const WelcomeReveal: React.FC<WelcomeRevealProps> = ({ name, onComplete }
           {/* Eyebrow Label */}
           <motion.span
             variants={wordVariants}
-            className="block text-[11px] sm:text-xs font-display font-bold uppercase tracking-[0.25em] text-[#9CA3AF] mb-1"
+            className="block text-[11px] sm:text-xs font-display font-medium tracking-wider text-[#A3A3A3] mb-1"
           >
-            WELCOME BACK
+            Welcome back
           </motion.span>
 
           {/* Large Bold Display Name */}
@@ -182,9 +182,9 @@ export const WelcomeReveal: React.FC<WelcomeRevealProps> = ({ name, onComplete }
           variants={cornerVariants}
           initial="hidden"
           animate="show"
-          className="text-[10px] sm:text-xs font-mono font-bold tracking-widest text-[#9CA3AF] uppercase"
+          className="text-[10px] sm:text-xs font-mono font-medium tracking-wide text-[#D1D5DB]"
         >
-          ROLE // {roleTag}
+          Role // {roleTag}
         </motion.div>
 
         <motion.div

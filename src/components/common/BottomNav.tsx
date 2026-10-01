@@ -35,12 +35,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, setActiveTab })
     badge?: number;
   }
 
-  // Nav labels identical for all roles that see them: Home, Directory, Opportunities, Guidance, Chats
+  // Nav labels identical for all roles: Home, Directory, Opportunities, Mentorship, Chats
   const destinations: NavDestination[] = [
     { id: 'dashboard', label: 'Home', icon: <LayoutDashboard className="w-5 h-5" /> },
     { id: 'directory', label: 'Directory', icon: <UsersRound className="w-5 h-5" /> },
     { id: 'opportunities', label: 'Opportunities', icon: <Briefcase className="w-5 h-5" /> },
-    { id: 'mentorship', label: 'Guidance', icon: <GraduationCap className="w-5 h-5" /> },
+    { id: 'mentorship', label: 'Mentorship', icon: <GraduationCap className="w-5 h-5" /> },
     { id: 'messaging', label: 'Chats', icon: <MessageSquare className="w-5 h-5" />, badge: unreadMessagesCount }
   ];
 

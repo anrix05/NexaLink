@@ -573,18 +573,7 @@ export const INITIAL_MENTORSHIP_REQUESTS: MentorshipRequest[] = [
   }
 ];
 
-export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
-  {
-    id: 'ann-1',
-    title: 'VIT Wadala Reaccredited with NAAC Grade A+',
-    category: 'Institutional Update',
-    author: 'Dr. Sunita Rawat (Alumni Cell Head)',
-    date: '2026-07-15',
-    content: 'We are proud to announce that Vidyalankar Institute of Technology (VIT Wadala) has been reaccredited with NAAC Grade A+.',
-    isImportant: true,
-    targetAudience: 'All'
-  }
-];
+export const INITIAL_ANNOUNCEMENTS: Announcement[] = [];
 
 export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {

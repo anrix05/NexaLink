@@ -233,7 +233,7 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(({
         <input
           ref={ref}
           id={inputId}
-          className={`app-input ${leadingIcon ? 'pl-9' : ''} ${trailingIcon ? 'pr-9' : ''} ${
+          className={`app-input ${leadingIcon ? 'pl-10.5' : ''} ${trailingIcon ? 'pr-10' : ''} ${
             error ? 'border-[#991B1B] focus:border-[#991B1B] focus:outline-[#991B1B]' : ''
           } ${className}`}
           {...props}
@@ -812,7 +812,11 @@ export function SegmentedTabs<T extends string>({
                 className="absolute inset-0 bg-[#0A0A0A] rounded-lg -z-10"
               />
             )}
-            {opt.icon}
+            {opt.icon && (
+              <span className={`relative z-10 transition-colors ${isActive ? 'text-white [&>*]:text-white' : 'text-[#6B7280] [&>*]:text-[#6B7280]'}`}>
+                {opt.icon}
+              </span>
+            )}
             <span className="relative z-10">{opt.label}</span>
             {opt.count !== undefined && (
               <span

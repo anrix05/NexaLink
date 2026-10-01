@@ -137,16 +137,30 @@ RETURNS TRIGGER AS $$
 DECLARE
     active_admins_remaining INT;
 BEGIN
-    IF (OLD.role = 'admin' AND (NEW.role <> 'admin' OR NEW.is_active = FALSE)) THEN
-        SELECT COUNT(*) INTO active_admins_remaining
-        FROM public.users
-        WHERE role = 'admin' AND is_active = TRUE AND id <> OLD.id;
+    IF TG_OP = 'DELETE' THEN
+        IF OLD.role = 'admin' AND OLD.is_active = TRUE THEN
+            SELECT COUNT(*) INTO active_admins_remaining
+            FROM public.users
+            WHERE role = 'admin' AND is_active = TRUE AND id <> OLD.id;
 
-        IF active_admins_remaining < 1 THEN
-            RAISE EXCEPTION 'Institutional Governance Safeguard: Active administrator count cannot fall below 1.';
+            IF active_admins_remaining < 1 THEN
+                RAISE EXCEPTION 'Institutional Governance Safeguard: Active administrator count cannot fall below 1.';
+            END IF;
         END IF;
+        RETURN OLD;
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF (OLD.role = 'admin' AND (NEW.role <> 'admin' OR NEW.is_active = FALSE)) THEN
+            SELECT COUNT(*) INTO active_admins_remaining
+            FROM public.users
+            WHERE role = 'admin' AND is_active = TRUE AND id <> OLD.id;
+
+            IF active_admins_remaining < 1 THEN
+                RAISE EXCEPTION 'Institutional Governance Safeguard: Active administrator count cannot fall below 1.';
+            END IF;
+        END IF;
+        RETURN NEW;
     END IF;
-    RETURN NEW;
+    RETURN OLD;
 END;
 $$ LANGUAGE plpgsql;
 

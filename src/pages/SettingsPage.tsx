@@ -32,6 +32,7 @@ import {
   Copy
 } from 'lucide-react';
 import { Badge, Button, SegmentedTabs, Modal, ToastNotice, TextField, PasswordField, Toggle, SelectField, TextArea } from '../components/common/UIComponents';
+import { validateEmailByRole, getEmailHintByRole, type UserRole } from '../utils/validators';
 
 export const SettingsPage: React.FC = () => {
   const { currentUser, currentRole, updateCurrentUserState } = useAuth();
@@ -157,10 +158,22 @@ export const SettingsPage: React.FC = () => {
       return;
     }
 
-    // Validate Institutional Email if provided
-    if (institutionalEmail && !institutionalEmail.trim().toLowerCase().endsWith('@vit.edu.in')) {
-      setFormError('Institutional Email must end with @vit.edu.in');
-      return;
+    const normalizedRole: UserRole = currentRole === 'student' ? 'Student' : currentRole === 'alumni' ? 'Alumni' : currentRole === 'admin' ? 'Admin' : 'Faculty';
+
+    // B2: Single shared email validator across all roles
+    if (currentRole === 'alumni') {
+      const emailCheck = validateEmailByRole(email, 'Alumni');
+      if (!emailCheck.isValid) {
+        setFormError(emailCheck.error || 'Please enter a valid personal email address format.');
+        return;
+      }
+    } else {
+      const targetEmail = institutionalEmail || email;
+      const emailCheck = validateEmailByRole(targetEmail, normalizedRole);
+      if (!emailCheck.isValid) {
+        setFormError(emailCheck.error || `Institutional Email must follow ${normalizedRole} format.`);
+        return;
+      }
     }
 
     const emailChanged = email !== currentUser.email;
@@ -290,7 +303,7 @@ export const SettingsPage: React.FC = () => {
 
       {/* TAB 1: PROFILE DETAILS */}
       {activeTab === 'profile' && (
-        <form noValidate onSubmit={handleSaveProfile} className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-6 shadow-none space-y-5 sm:space-y-6">
+        <form noValidate onSubmit={handleSaveProfile} className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-6 shadow-none space-y-5 sm:space-y-6 pb-28 sm:pb-24">
           <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3 sm:pb-4">
             <h2 className="font-bold text-xs text-[#0A0A0A] flex items-center gap-2">
               <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0A0A0A]" />
@@ -346,7 +359,7 @@ export const SettingsPage: React.FC = () => {
             <div className="p-3.5 bg-rose-50 border border-rose-200/80 rounded-xl text-rose-950 text-xs flex items-start gap-2">
               <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold text-[11px] block text-rose-900 uppercase font-display tracking-wider mb-0.5">
+                <span className="font-semibold text-xs block text-rose-900 mb-0.5">
                   Validation Error
                 </span>
                 {formError}
@@ -379,16 +392,22 @@ export const SettingsPage: React.FC = () => {
 
             <div>
               <label className="app-label text-[#0A0A0A] font-bold">
-                Institutional Email (Optional)
+                Institutional Email {currentRole === 'alumni' ? '(Read-only record)' : '(Institutional ID)'}
               </label>
               <input
                 type="email"
                 value={institutionalEmail}
                 onChange={e => setInstitutionalEmail(e.target.value)}
-                placeholder="e.g. name@vit.edu.in"
-                className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
+                disabled={currentRole === 'alumni'}
+                readOnly={currentRole === 'alumni'}
+                placeholder={currentRole === 'student' ? 'e.g. name@student.vit.edu.in' : 'e.g. name@vit.edu.in'}
+                className={`app-input w-full font-bold border-[#E5E7EB] rounded-lg ${currentRole === 'alumni' ? 'bg-[#F3F4F6] cursor-not-allowed text-[#6B7280]' : 'bg-[#FAFAFA]'}`}
               />
-              <p className="text-[10px] text-[#6B7280] mt-1">Must end in @vit.edu.in to save.</p>
+              <p className="text-[10px] text-[#6B7280] mt-1">
+                {currentRole === 'alumni'
+                  ? 'Institutional record is optional and read-only for alumni.'
+                  : getEmailHintByRole(currentRole === 'student' ? 'Student' : currentRole === 'admin' ? 'Admin' : 'Faculty')}
+              </p>
             </div>
 
             <div>
@@ -447,7 +466,7 @@ export const SettingsPage: React.FC = () => {
 
           {currentRole === 'student' && (
             <div className="border-t border-[#E5E7EB] pt-5 sm:pt-6 space-y-4 sm:space-y-5">
-              <h3 className="font-display font-bold text-[11px] sm:text-xs uppercase tracking-wider text-[#0A0A0A] flex items-center gap-2">
+              <h3 className="text-xs sm:text-sm font-semibold text-[#0A0A0A] flex items-center gap-2">
                 <GraduationCap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0A0A0A]" /> Goals & Skills Overview
               </h3>
 
@@ -563,7 +582,7 @@ export const SettingsPage: React.FC = () => {
 
           {currentRole === 'alumni' && (
             <div className="border-t border-[#E5E7EB] pt-5 sm:pt-6 space-y-4 sm:space-y-5">
-              <h3 className="font-display font-bold text-[11px] sm:text-xs uppercase tracking-wider text-[#0A0A0A] flex items-center gap-2">
+              <h3 className="text-xs sm:text-sm font-semibold text-[#0A0A0A] flex items-center gap-2">
                 <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0A0A0A]" /> Alumni Professional & Higher Education Details
               </h3>
 
@@ -624,7 +643,7 @@ export const SettingsPage: React.FC = () => {
       {activeTab === 'privacy' && (
         <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-6 space-y-5 sm:space-y-6 text-xs shadow-none">
           <div className="border-b border-[#E5E7EB] pb-3 sm:pb-4">
-            <h2 className="font-display font-bold text-[11px] sm:text-xs uppercase tracking-wider text-[#0A0A0A] flex items-center gap-2">
+            <h2 className="text-xs sm:text-sm font-semibold text-[#0A0A0A] flex items-center gap-2">
               <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0A0A0A]" /> Profile Field Privacy & Boundary Controls
             </h2>
             <p className="text-[#6B7280] font-medium mt-0.5 sm:mt-1 line-clamp-2 sm:line-clamp-none">
@@ -677,7 +696,7 @@ export const SettingsPage: React.FC = () => {
       {activeTab === 'capacity' && (
         <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-6 space-y-5 sm:space-y-6 text-xs shadow-none">
           <div className="border-b border-[#E5E7EB] pb-3 sm:pb-4">
-            <h2 className="font-display font-bold text-[11px] sm:text-xs uppercase tracking-wider text-[#0A0A0A] flex items-center gap-2">
+            <h2 className="text-xs sm:text-sm font-semibold text-[#0A0A0A] flex items-center gap-2">
               <Sliders className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0A0A0A]" /> Advisor Mentee Capacity & Availability Limits
             </h2>
             <p className="text-[#6B7280] font-medium mt-0.5 sm:mt-1 line-clamp-2 sm:line-clamp-none">
@@ -796,7 +815,7 @@ export const SettingsPage: React.FC = () => {
       {/* TAB 5: SECURITY */}
       {activeTab === 'security' && (
         <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-6 space-y-5 sm:space-y-6 text-xs shadow-none">
-          <h2 className="font-display font-bold text-[11px] sm:text-xs uppercase tracking-wider text-[#0A0A0A] flex items-center gap-2">
+          <h2 className="text-xs sm:text-sm font-semibold text-[#0A0A0A] flex items-center gap-2">
             <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0A0A0A]" /> Security Credentials & Password Update
           </h2>
 
@@ -858,7 +877,7 @@ export const SettingsPage: React.FC = () => {
           {currentRole === 'admin' && (
             <div className="border-t border-[#E5E7EB] pt-5 sm:pt-6 space-y-5 sm:space-y-6">
               <div className="border-b border-[#E5E7EB] pb-3 sm:pb-4">
-                <h2 className="font-display font-bold text-[11px] sm:text-xs uppercase tracking-wider text-[#0A0A0A] flex items-center gap-2">
+                <h2 className="text-xs sm:text-sm font-semibold text-[#0A0A0A] flex items-center gap-2">
                   <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0A0A0A]" /> Admin Delegation & Role Handoff
                 </h2>
                 <p className="text-[#6B7280] font-medium mt-0.5 sm:mt-1 line-clamp-2 sm:line-clamp-none">
@@ -868,8 +887,8 @@ export const SettingsPage: React.FC = () => {
 
               {/* Form 1: Invite New Admin */}
               <div className="p-5 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl space-y-4 font-sans text-xs">
-                <h3 className="font-bold text-[#0A0A0A] text-xs uppercase tracking-wider">Invite New Administrator</h3>
-                {/* TODO: Real email-based invite links (tokens) are a Phase 4 (backend/JWT) concern */}
+                <h3 className="font-semibold text-[#0A0A0A] text-xs">Invite New Administrator</h3>
+                {/* Cryptographically secure single-use 72h tokens are verified via accept-admin-invite edge function */}
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -899,7 +918,7 @@ export const SettingsPage: React.FC = () => {
                 {/* Pending Invites List */}
                 <div className="pt-3 border-t border-[#E5E7EB] space-y-3">
                   <div className="flex items-center gap-2">
-                    <h4 className="font-bold text-[#0A0A0A] text-xs uppercase tracking-wider">Pending Admin Invites</h4>
+                    <h4 className="font-semibold text-[#0A0A0A] text-xs">Pending Admin Invites</h4>
                     <Badge variant="indigo" size="sm">
                       {adminInvites.filter(i => i.status === 'pending').length}
                     </Badge>
@@ -964,7 +983,7 @@ export const SettingsPage: React.FC = () => {
 
               {/* Form 2: Step Down / Role Handoff */}
               <div className="p-5 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl space-y-3 font-sans text-xs">
-                <h3 className="font-bold text-[#0A0A0A] text-xs uppercase tracking-wider">Step Down / Role Handoff</h3>
+                <h3 className="font-semibold text-[#0A0A0A] text-xs">Step Down / Role Handoff</h3>
                 <p className="text-xs text-[#6B7280] font-medium leading-relaxed">
                   Transfer administrative responsibilities by voluntarily converting your account to a Faculty or Alumni role.
                 </p>
@@ -1012,7 +1031,7 @@ export const SettingsPage: React.FC = () => {
 
           <div className="space-y-5">
             <div className="space-y-3">
-              <label className="text-[10px] font-display font-bold text-slate-500 uppercase tracking-wider">
+              <label className="text-xs font-medium text-slate-700">
                 Converted Profile Role
               </label>
               
@@ -1034,7 +1053,7 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             <div className="space-y-3">
-              <label className="text-[10px] font-display font-bold text-slate-500 uppercase tracking-wider">
+              <label className="text-xs font-medium text-slate-700">
                 Select Academic Department
               </label>
               <select

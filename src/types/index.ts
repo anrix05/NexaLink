@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'student' | 'alumni' | 'faculty' | 'teacher';
 
-export type DepartmentCode = 'CMPN' | 'INFT' | 'EXTC' | 'ETRX' | 'EXCS' | 'BIOM' | 'MCA' | 'MBA';
+export type DepartmentCode = 'CMPN' | 'INFT' | 'EXTC' | 'EXCS' | 'BIOM';
 
 export interface DepartmentInfo {
   code: DepartmentCode;
@@ -47,6 +47,7 @@ export interface User {
   requiresReVerification?: boolean;
   loginRecoveryNeeded?: boolean;
   personalEmail?: string | null;
+  createdAt?: string;
 }
 
 export interface StudentProject {
@@ -141,6 +142,8 @@ export interface FacultyProfile extends User {
   industryInterests: string[];
   ongoingResearch: string;
   phone?: string;
+  isMentoringAvailable?: boolean;
+  maxMentees?: number;
 }
 
 export interface AdminProfile extends User {
@@ -375,15 +378,20 @@ export interface NotificationPreferences {
   notifyOnEvents: boolean;
 }
 
+export type AnnouncementSeverity = 'standard' | 'actionable' | 'governance' | 'academic';
+
 export interface Announcement {
   id: string;
   title: string;
-  category: 'Placement Alert' | 'Alumni News' | 'Institutional Update' | 'Event Highlight';
+  category: 'Placement Alert' | 'Alumni News' | 'Institutional Update' | 'Event Highlight' | string;
   author: string;
   date: string;
   content: string;
   isImportant: boolean;
-  targetAudience: 'All' | 'Students' | 'Alumni' | 'Faculty';
+  targetAudience: 'All' | 'Students' | 'Alumni' | 'Faculty' | string;
+  severity?: AnnouncementSeverity;
+  expiresAt?: string;
+  isPinned?: boolean;
   isRetracted?: boolean;
   retractedAt?: string;
 }

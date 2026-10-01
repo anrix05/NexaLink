@@ -1,443 +1,421 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
-import { Badge, Button, FileDropzone } from '../components/common/UIComponents';
-import { uploadProofDocument } from '../lib/storage';
-import {
-  Clock,
-  Check,
-  CheckCircle2,
-  AlertTriangle,
-  RefreshCw,
-  LogOut,
-  ShieldAlert,
-  ExternalLink
-} from 'lucide-react';
+import { ReviewStatusHero } from '../components/gate/ReviewStatusHero';
+import type { GateDerivedState } from '../components/gate/ReviewStatusHero';
+import { OnboardingChecklist } from '../components/gate/OnboardingChecklist';
+import { DetailsList } from '../components/gate/DetailsList';
+import { EditDetailsSheet } from '../components/gate/EditDetailsSheet';
+import { ActivityList } from '../components/gate/ActivityList';
+import { UploadDocumentModal } from '../components/gate/UploadDocumentModal';
+import { VerifyRecoveryModal } from '../components/gate/VerifyRecoveryModal';
+import { DevStateSwitcher } from '../components/gate/DevStateSwitcher';
+import { useVerificationState } from '../hooks/useVerificationState';
+import { ProofUploader } from '../components/auth/ProofUploader';
+import { ArrowRight, RefreshCw, Upload, Mail, CheckCircle2, MessageSquare, AlertCircle } from 'lucide-react';
+import type { UserRole } from '../types';
 
-interface VerificationPendingPageProps {
+export interface VerificationPendingPageProps {
   setActiveTab?: (tab: string) => void;
 }
 
 export const VerificationPendingPage: React.FC<VerificationPendingPageProps> = ({ setActiveTab }) => {
   const { currentUser, logout, updateCurrentUserState } = useAuth();
-  const { allUsers, resubmitUserVerification } = useData();
+  const { resubmitUserVerification } = useData();
+  const shouldReduceMotion = useReducedMotion();
 
-  const [resubmitFile, setResubmitFile] = useState<File | null>(null);
-  const [resubmitFileName, setResubmitFileName] = useState<string>('');
-  const [resubmitFileUrl, setResubmitFileUrl] = useState<string>('');
-  const [notice, setNotice] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
+  const {
+    state,
+    isLoading,
+    isRefreshing,
+    refresh,
+    updateDetails,
+    replaceDocument,
+    lastCheckedTime
+  } = useVerificationState();
 
-  React.useEffect(() => {
-    document.title = "Verification pending | NexaLink";
-  }, []);
+  // Modals & sheets state
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [recoveryModalOpen, setRecoveryModalOpen] = useState(false);
+  const [editSheetOpen, setEditSheetOpen] = useState(false);
+
+  // Clarification reply state
+  const [clarificationReply, setClarificationReply] = useState('');
+  const [clarificationFile, setClarificationFile] = useState<File | null>(null);
+  const [isSendingClarification, setIsSendingClarification] = useState(false);
+
+  // Dev state override for instant testing
+  const [devStateOverride, setDevStateOverride] = useState<GateDerivedState | null>(null);
+
+  // Determine derived state
+  const computeDerivedState = (): GateDerivedState => {
+    if (devStateOverride) return devStateOverride;
+    if (!state) return 'in_review';
+
+    if (state.status === 'Verified' || currentUser?.isVerified) {
+      return 'verified';
+    }
+    if (state.status === 'Rejected') {
+      return 'rejected';
+    }
+    if (state.status === 'Needs Clarification') {
+      return 'needs_clarification';
+    }
+    if (!state.hasDocument) {
+      return 'needs_document';
+    }
+    if (!state.recoveryEmailVerified && currentUser?.role === 'student') {
+      return 'needs_recovery_email';
+    }
+    return 'in_review';
+  };
+
+  const derivedState = computeDerivedState();
+
+  // Auto-advance to portal on Verified state (suppressed when manually previewing in dev switcher)
+  useEffect(() => {
+    if (derivedState === 'verified' && !devStateOverride) {
+      updateCurrentUserState({ isVerified: true, verificationStatus: 'Verified' });
+      const timer = setTimeout(() => {
+        if (!shouldReduceMotion && setActiveTab) {
+          setActiveTab('dashboard');
+        }
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [derivedState, devStateOverride, shouldReduceMotion, setActiveTab, updateCurrentUserState]);
+
+  // Handle Clarification Submit
+  const handleClarificationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser?.id) return;
+
+    setIsSendingClarification(true);
+    try {
+      const docName = clarificationFile?.name || state?.documentName || 'updated_doc.pdf';
+      const docUrl = clarificationFile ? URL.createObjectURL(clarificationFile) : '';
+
+      resubmitUserVerification(currentUser.id, docName, docUrl);
+      if (clarificationFile) {
+        await replaceDocument(clarificationFile);
+      }
+
+      setClarificationReply('');
+      setClarificationFile(null);
+      await refresh();
+    } finally {
+      setIsSendingClarification(false);
+    }
+  };
 
   if (!currentUser) return null;
 
-  const latestUser = allUsers.find(u => u.id === currentUser.id) || currentUser;
-  const isNeedsClarification = latestUser.verificationStatus === 'Needs Clarification' || !!latestUser.clarificationRequested;
-  const isRejected = latestUser.verificationStatus === 'Rejected';
-  const clarificationPrompt = latestUser.clarificationRequested?.text || latestUser.clarificationRequest;
+  // Fixed-height Skeleton Loading State (CLS = 0)
+  if (isLoading && !state) {
+    return (
+      <div className="w-full flex flex-col gap-6 animate-pulse select-none" style={{ minHeight: '600px' }}>
+        <div className="flex items-center justify-between">
+          <div className="w-24 h-4 bg-[#E5E7EB] rounded" />
+          <div className="w-20 h-5 bg-[#E5E7EB] rounded-full" />
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="w-3/4 h-8 bg-[#E5E7EB] rounded" />
+          <div className="w-1/2 h-4 bg-[#E5E7EB] rounded" />
+        </div>
+        <div className="w-full h-12 bg-[#E5E7EB] rounded-lg mt-2" />
+        <div className="w-full h-48 bg-[#E5E7EB] rounded-lg mt-4" />
+      </div>
+    );
+  }
 
-  const showToast = (text: string, type: 'success' | 'info' | 'error' = 'info') => {
-    setNotice({ type, text });
-    setTimeout(() => setNotice(null), 4500);
+  const effectiveState = state || {
+    status: currentUser.verificationStatus || 'Pending Verification',
+    hasDocument: Boolean(currentUser.proofDocumentName || currentUser.verificationDocumentName),
+    documentName: currentUser.proofDocumentName || currentUser.verificationDocumentName || 'college_id.pdf',
+    submittedAt: currentUser.createdAt || new Date().toISOString(),
+    etaAt: 'Friday, 3 October',
+    queueAhead: 4,
+    recoveryEmailVerified: Boolean(currentUser.personalEmail),
+    recoveryEmailMasked: 'a•••@gmail.com',
+    clarification: null,
+    rejectionReason: null,
+    activity: []
   };
 
-  const handleResubmitProof = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!resubmitFileName) {
-      showToast('Please select a proof document file to upload.', 'error');
-      return;
-    }
-
-    resubmitUserVerification(latestUser.id, resubmitFileName, resubmitFileUrl);
-    
-    updateCurrentUserState({
-      ...latestUser,
-      verificationStatus: 'Pending Verification',
-      proofDocumentName: resubmitFileName,
-      verificationDocumentName: resubmitFileName,
-      verificationDocumentUrl: resubmitFileUrl,
-      clarificationRequested: null,
-      clarificationRequest: undefined
-    });
-
-    setResubmitFile(null);
-    setResubmitFileName('');
-    setResubmitFileUrl('');
-    showToast('Updated proof document submitted. Your verification is now pending admin review.', 'success');
-  };
-
-  const handleCheckStatus = () => {
-    const updated = allUsers.find(u => u.id === currentUser.id);
-    if (updated) {
-      if (updated.isVerified || updated.verificationStatus === 'Verified') {
-        updateCurrentUserState({ ...updated, isVerified: true, verificationStatus: 'Verified' });
-        showToast('Your account has been verified. Access granted.', 'success');
-        if (setActiveTab) setActiveTab('dashboard');
-      } else if (updated.verificationStatus === 'Needs Clarification') {
-        updateCurrentUserState(updated);
-        showToast('Action required: Administrator requested clarification on your credentials.', 'info');
-      } else if (updated.verificationStatus === 'Rejected') {
-        updateCurrentUserState(updated);
-        showToast(`Registration status: Rejected. Reason: ${updated.rejectionReason || 'Credential mismatch'}`, 'error');
-      } else {
-        showToast('Verification status: Pending. The administrator is reviewing your registration.', 'info');
-      }
-    } else {
-      showToast('Verification status: Pending administrator review.', 'info');
-    }
-  };
-
-  const handleLogout = () => {
-    logout();
-    if (setActiveTab) setActiveTab('landing');
-  };
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.05
-      }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 12 },
-    show: {
-      opacity: 1,
-      y: 0,
-      transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as const }
-    }
-  };
+  const canEditDetails = derivedState === 'needs_document' || derivedState === 'needs_recovery_email' || derivedState === 'in_review' || derivedState === 'needs_clarification' || derivedState === 'rejected';
 
   return (
-    <div className="min-h-[85vh] flex flex-col justify-center max-w-2xl mx-auto px-4 sm:px-6 py-12 sm:py-16 font-sans text-xs text-[#0A0A0A]">
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="show"
-        className="space-y-8"
-      >
-        {/* Notice Toast */}
-        {notice && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`p-4 rounded-xl text-xs font-medium flex items-center gap-2 border ${
-              notice.type === 'success'
-                ? 'bg-emerald-50 text-emerald-950 border-emerald-200'
-                : notice.type === 'error'
-                ? 'bg-rose-50 text-rose-950 border-rose-200'
-                : 'bg-amber-50 text-amber-950 border-amber-200'
-            }`}
-          >
-            {notice.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-            ) : notice.type === 'error' ? (
-              <ShieldAlert className="w-4 h-4 text-rose-700 shrink-0" />
-            ) : (
-              <Clock className="w-4 h-4 text-amber-700 shrink-0" />
-            )}
-            <span>{notice.text}</span>
-          </motion.div>
-        )}
+    <div className="w-full flex flex-col gap-8 pb-16">
+      {/* 1. Review Status Hero with 3-node Stepper */}
+      <ReviewStatusHero state={derivedState} />
 
-        {/* Status Centerpiece */}
-        <motion.div variants={itemVariants} className="text-center space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#FAFAFA] border border-[#E5E7EB] rounded-full text-xs font-medium text-[#6B7280]">
-            <span>VIT Wadala · Institutional gate</span>
+      {/* 2. State-Specific Prominent Alert / Clarification Action Block */}
+      {derivedState === 'needs_clarification' && (
+        <div className="p-4 rounded-lg border border-[#FDE68A] bg-[#FEF3C7]/40 flex flex-col gap-4 text-left">
+          <div className="flex items-start gap-2.5">
+            <MessageSquare className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-medium text-[#0A0A0A]">
+                Administrator note
+              </span>
+              <blockquote className="border-l-2 border-[#B45309] pl-3 text-xs text-[#0A0A0A] italic my-1">
+                "{effectiveState.clarification?.reason || currentUser.clarificationRequest || 'Please provide a clear scan showing your full enrollment number and academic year.'}"
+              </blockquote>
+              {effectiveState.documentName && (
+                <span className="text-xs text-[#6B7280]">
+                  Original document: <span className="font-medium text-[#0A0A0A]">{effectiveState.documentName}</span>
+                </span>
+              )}
+            </div>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl font-display font-bold text-[#0A0A0A] tracking-tight">
-            Registration under review
-          </h1>
+          <form onSubmit={handleClarificationSubmit} className="flex flex-col gap-3 pt-1">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="clarification-reply" className="text-xs font-medium text-[#0A0A0A]">
+                Your response (optional, max 500 characters)
+              </label>
+              <textarea
+                id="clarification-reply"
+                rows={3}
+                maxLength={500}
+                value={clarificationReply}
+                onChange={(e) => setClarificationReply(e.target.value)}
+                placeholder="Explain the update or provide additional context..."
+                className="w-full p-2.5 rounded-lg border border-[#6B7280] bg-[#FFFFFF] text-xs text-[#0A0A0A] placeholder:text-[#6B7280] focus:border-[#0A0A0A] focus:ring-2 focus:ring-[#0A0A0A] outline-none resize-none"
+              />
+            </div>
 
-          <div className="flex items-center justify-center pt-1">
-            {isNeedsClarification ? (
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-[#B45309] rounded-full text-xs font-medium">
-                <span className="w-2 h-2 rounded-full bg-[#B45309]" />
-                <span>Action required: clarification requested</span>
-              </div>
-            ) : isRejected ? (
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-rose-50 border border-rose-200 text-[#991B1B] rounded-full text-xs font-medium">
-                <span className="w-2 h-2 rounded-full bg-[#991B1B]" />
-                <span>Registration status: rejected</span>
-              </div>
-            ) : (
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#FAFAFA] border border-[#E5E7EB] text-[#0A0A0A] rounded-full text-xs font-medium">
-                <span className="w-2 h-2 rounded-full bg-[#065F46]" />
-                <span>Verification in progress</span>
-              </div>
-            )}
-          </div>
-        </motion.div>
-
-        {/* Stepper */}
-        <motion.div variants={itemVariants} className="py-2">
-          <div className="relative flex items-center justify-between max-w-xl mx-auto">
-            <div className="absolute top-4 left-6 right-6 h-0.5 bg-[#E5E7EB] -z-0" />
-            <motion.div
-              initial={{ scaleX: 0 }}
-              animate={{ scaleX: 1 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="absolute top-4 left-6 w-1/2 h-0.5 bg-[#0A0A0A] origin-left -z-0"
+            <ProofUploader
+              role={currentUser.role as any}
+              label="Attach updated document"
+              onFileSelect={setClarificationFile}
+              onFileRemove={() => setClarificationFile(null)}
+              uploadedFileName={clarificationFile?.name}
             />
 
-            {/* Step 1: Registration */}
-            <div className="relative z-10 flex flex-col items-center text-center">
-              <div className="w-8 h-8 rounded-full bg-[#0A0A0A] text-white flex items-center justify-center font-medium text-xs">
-                <Check className="w-4 h-4 text-white stroke-[2.5]" />
-              </div>
-              <div className="mt-2 space-y-0.5">
-                <span className="block font-medium text-xs text-[#0A0A0A]">
-                  1. Registration
-                </span>
-                <span className="block text-[11px] text-[#6B7280]">
-                  Completed
-                </span>
-              </div>
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={isSendingClarification}
+                className="h-10 px-4 rounded-lg bg-[#0A0A0A] text-[#FFFFFF] text-xs font-medium hover:bg-[#262626] transition-colors inline-flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-[#0A0A0A]"
+              >
+                {isSendingClarification ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Sending reply...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Send reply & resubmit</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </>
+                )}
+              </button>
             </div>
+          </form>
+        </div>
+      )}
 
-            {/* Step 2: Verification */}
-            <div className="relative z-10 flex flex-col items-center text-center">
-              <div className="w-8 h-8 rounded-full bg-white border-2 border-[#0A0A0A] flex items-center justify-center">
-                <div className="w-2.5 h-2.5 rounded-full bg-[#0A0A0A]" />
-              </div>
-              <div className="mt-2 space-y-0.5">
-                <span className="block font-medium text-xs text-[#0A0A0A]">
-                  2. Verification
-                </span>
-                <span className="block text-[11px] text-[#B45309] font-medium">
-                  In progress
-                </span>
-              </div>
-            </div>
-
-            {/* Step 3: Access portal */}
-            <div className="relative z-10 flex flex-col items-center text-center">
-              <div className="w-8 h-8 rounded-full bg-[#FAFAFA] border border-[#E5E7EB] text-[#6B7280] flex items-center justify-center text-xs">
-                <span>3</span>
-              </div>
-              <div className="mt-2 space-y-0.5">
-                <span className="block font-medium text-xs text-[#6B7280]">
-                  3. Access portal
-                </span>
-                <span className="block text-[11px] text-[#6B7280]">
-                  Pending unlock
-                </span>
-              </div>
+      {derivedState === 'rejected' && (
+        <div className="p-4 rounded-lg border border-[#FECDD3] bg-[#FEF2F2] flex flex-col gap-3 text-left">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-[#DC2626] shrink-0 mt-0.5" />
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-medium text-[#991B1B]">
+                Verification declined
+              </span>
+              <p className="text-xs text-[#991B1B]">
+                {effectiveState.rejectionReason || currentUser.rejectionReason || 'The submitted credentials could not be verified against official college records.'}
+              </p>
             </div>
           </div>
-        </motion.div>
 
-        {/* Security Policy Description */}
-        <motion.div variants={itemVariants} className="text-center max-w-lg mx-auto space-y-1.5">
-          <p className="text-xs text-[#374151] leading-relaxed">
-            VIT Wadala administrators are verifying your academic enrollment and credentials against institutional records. You will receive full portal access upon verification.
-          </p>
-          <p className="text-[11px] text-[#6B7280]">
-            Security policy: Unverified accounts cannot access institutional rosters, mentorship workflows, or direct messaging.
-          </p>
-        </motion.div>
+          <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-[#FECDD3]/60">
+            <button
+              type="button"
+              onClick={() => setEditSheetOpen(true)}
+              className="h-9 px-3.5 rounded-lg bg-[#0A0A0A] text-[#FFFFFF] text-xs font-medium hover:bg-[#262626] transition-colors focus:outline-none focus:ring-2 focus:ring-[#0A0A0A]"
+            >
+              Edit details and resubmit
+            </button>
+            <a
+              href="mailto:registrar@vit.edu.in?subject=NexaLink%20Registration%20Appeal"
+              className="text-xs text-[#0A0A0A] underline hover:text-[#6B7280] font-medium"
+            >
+              Contact the registrar
+            </a>
+          </div>
+        </div>
+      )}
 
-        {/* Action Required: Clarification Box */}
-        {isNeedsClarification && (
-          <motion.div variants={itemVariants} className="bg-amber-50/60 border border-amber-200 rounded-xl p-5 space-y-4">
-            <div className="flex items-center gap-2 text-[#B45309] font-medium text-xs">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>Action required: administrator requested clarification</span>
-            </div>
+      {/* 3. Onboarding Checklist ("What happens next") */}
+      <OnboardingChecklist
+        state={effectiveState}
+        derivedState={derivedState}
+        onUploadClick={() => setUploadModalOpen(true)}
+        onVerifyRecoveryClick={() => setRecoveryModalOpen(true)}
+      />
 
-            {clarificationPrompt && (
-              <div className="bg-white border border-amber-200 rounded-lg p-3 text-xs text-[#78350F]">
-                <strong>Admin note:</strong> “{clarificationPrompt}”
-              </div>
-            )}
-
-            <form onSubmit={handleResubmitProof} className="space-y-4">
-              <FileDropzone
-                label="Upload updated proof document"
-                accept="image/*,.pdf"
-                maxSizeMB={5}
-                selectedFile={resubmitFile}
-                helperText="ID card, admit card, or degree certificate scan."
-                onFileSelect={async file => {
-                  setResubmitFile(file);
-                  setResubmitFileName(file.name);
-                  try {
-                    const res = await uploadProofDocument(file, latestUser.id);
-                    setResubmitFileUrl(res.url);
-                  } catch {
-                    const fakeUrl = URL.createObjectURL(file);
-                    setResubmitFileUrl(fakeUrl);
-                  }
-                }}
-                onFileRemove={() => {
-                  setResubmitFile(null);
-                  setResubmitFileName('');
-                  setResubmitFileUrl('');
-                }}
-              />
-
-              <Button
-                type="submit"
-                variant="primary"
-                size="md"
-                disabled={!resubmitFileName}
-              >
-                Submit updated proof to admin
-              </Button>
-            </form>
-          </motion.div>
+      {/* 4. Primary Action / Live Status Row */}
+      <div className="w-full flex flex-col gap-3">
+        {derivedState === 'needs_document' && (
+          <div className="w-full">
+            <button
+              type="button"
+              onClick={() => setUploadModalOpen(true)}
+              className="w-full h-12 rounded-lg bg-[#0A0A0A] text-[#FFFFFF] text-sm font-medium hover:bg-[#262626] transition-colors inline-flex items-center justify-center gap-2 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-[#0A0A0A]"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Upload proof document</span>
+            </button>
+          </div>
         )}
 
-        {/* Submitted Profile Summary */}
-        <motion.div variants={itemVariants} className="space-y-3 pt-4 border-t border-[#E5E7EB]">
-          <div className="flex items-center justify-between pb-1">
-            <h2 className="text-xs font-semibold uppercase tracking-[0.06em] text-[#6B7280]">
-              Submitted registration profile
-            </h2>
-            <span className="text-[11px] font-mono text-[#6B7280]">
-              Ref ID: #{latestUser.id.slice(0, 8)}
+        {derivedState === 'needs_recovery_email' && (
+          <div className="w-full">
+            <button
+              type="button"
+              onClick={() => setRecoveryModalOpen(true)}
+              className="w-full h-12 rounded-lg bg-[#0A0A0A] text-[#FFFFFF] text-sm font-medium hover:bg-[#262626] transition-colors inline-flex items-center justify-center gap-2 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-[#0A0A0A]"
+            >
+              <Mail className="w-4 h-4" />
+              <span>Verify recovery email</span>
+            </button>
+          </div>
+        )}
+
+        {derivedState === 'in_review' && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 rounded-lg border border-[#E5E7EB] bg-[#FAFAFA] text-xs text-[#6B7280]">
+            <span>
+              We'll email you at{' '}
+              <span className="text-[#0A0A0A] font-medium">
+                {currentUser.email || currentUser.institutionalEmail}
+              </span>{' '}
+              when there's an update. Last checked {lastCheckedTime}.
             </span>
+            <button
+              type="button"
+              onClick={() => refresh()}
+              disabled={isRefreshing}
+              className="text-[#0A0A0A] hover:underline font-medium inline-flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-[#0A0A0A] rounded p-0.5 shrink-0"
+            >
+              <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
           </div>
+        )}
 
-          <div className="divide-y divide-[#E5E7EB] border-t border-b border-[#E5E7EB]">
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-[#6B7280]">Full name</span>
-              <span className="font-medium text-[#0A0A0A]">{latestUser.name}</span>
-            </div>
-
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-[#6B7280]">Role requested</span>
-              <span className="font-medium text-[#0A0A0A] capitalize">{latestUser.role}</span>
-            </div>
-
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-[#6B7280]">Department</span>
-              <span className="font-medium text-[#0A0A0A]">{latestUser.department}</span>
-            </div>
-
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-[#6B7280]">Primary email</span>
-              <span className="font-mono text-[#0A0A0A]">{latestUser.email}</span>
-            </div>
-
-            <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-[#6B7280]">ID / enrollment number</span>
-              <span className="font-mono text-[#0A0A0A]">
-                {(latestUser as any).enrollmentNo || (latestUser as any).employeeId || (latestUser as any).prn || '22101A0099'}
-              </span>
-            </div>
-
-            <div className="py-2.5 flex items-center justify-between gap-3 text-xs">
-              <span className="text-[#6B7280]">Proof document</span>
-              <div>
-                {latestUser.verificationDocumentUrl || latestUser.verificationDocumentName || (latestUser as any).proofDocumentName ? (
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-[#0A0A0A] max-w-[180px] sm:max-w-xs truncate">
-                      {latestUser.verificationDocumentName || (latestUser as any).proofDocumentName || 'Proof_Document.pdf'}
-                    </span>
-                    <Badge variant="emerald" size="sm">
-                      On file
-                    </Badge>
-                    {latestUser.verificationDocumentUrl && (
-                      <a
-                        href={latestUser.verificationDocumentUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-[#0A0A0A] hover:underline"
-                        title="View document"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#6B7280] italic">No document on file</span>
-                    {!isNeedsClarification && (
-                      <label className="cursor-pointer">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          className="pointer-events-none"
-                        >
-                          Attach document
-                        </Button>
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          onChange={async e => {
-                            if (e.target.files && e.target.files[0]) {
-                              const file = e.target.files[0];
-                              try {
-                                const res = await uploadProofDocument(file, latestUser.id);
-                                resubmitUserVerification(latestUser.id, file.name, res.url);
-                                updateCurrentUserState({
-                                  ...latestUser,
-                                  verificationStatus: 'Pending Verification',
-                                  proofDocumentName: file.name,
-                                  verificationDocumentUrl: res.url
-                                });
-                                showToast('Document attached successfully.', 'success');
-                              } catch {
-                                showToast('Failed to upload file.', 'error');
-                              }
-                            }
-                          }}
-                          className="hidden"
-                        />
-                      </label>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+        {derivedState === 'verified' && (
+          <div className="w-full">
+            <button
+              type="button"
+              onClick={() => setActiveTab?.('dashboard')}
+              className="w-full h-12 rounded-lg bg-[#059669] text-[#FFFFFF] text-sm font-medium hover:bg-[#047857] transition-colors inline-flex items-center justify-center gap-2 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-[#059669]"
+            >
+              <span>Enter portal</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
-        </motion.div>
+        )}
+      </div>
 
-        {/* Action Controls */}
-        <motion.div variants={itemVariants} className="pt-2 flex flex-col items-center gap-3 text-center">
-          <Button
-            onClick={handleCheckStatus}
-            variant="primary"
-            size="lg"
-            className="w-full sm:w-auto"
+      {/* 5. Your Details Section */}
+      <DetailsList
+        user={currentUser}
+        canEdit={canEditDetails}
+        onEditClick={() => setEditSheetOpen(true)}
+      />
+
+      {/* 6. Activity Timeline (3-5 items with IST timestamps) */}
+      <ActivityList activity={effectiveState.activity} />
+
+      {/* 7. Security Note */}
+      <div className="p-3.5 rounded-lg border border-[#E5E7EB] bg-[#FAFAFA] text-xs text-[#6B7280] text-left">
+        <p>
+          Until you're verified, the directory, mentorship, and messaging stay locked.
+        </p>
+      </div>
+
+      {/* 8. Footer */}
+      <div className="pt-4 border-t border-[#E5E7EB] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#6B7280]">
+        <span>
+          Questions?{' '}
+          <a
+            href="mailto:alumni@vit.edu.in?subject=NexaLink%20Verification%20Support"
+            className="text-[#0A0A0A] hover:underline font-medium"
           >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            <span>Check verification status</span>
-          </Button>
+            Contact alumni@vit.edu.in
+          </a>
+        </span>
 
+        <button
+          type="button"
+          onClick={() => logout()}
+          className="text-[#0A0A0A] hover:underline font-medium focus:outline-none focus:ring-2 focus:ring-[#0A0A0A] rounded p-1"
+        >
+          Sign out
+        </button>
+      </div>
+
+      {/* Sticky Mobile Bottom Bar for Needs Document State */}
+      {derivedState === 'needs_document' && (
+        <div className="sm:hidden sticky bottom-0 left-0 right-0 p-3 bg-[#FFFFFF] border-t border-[#E5E7EB] z-30 pb-safe">
           <button
-            onClick={handleLogout}
-            className="text-xs font-medium text-[#6B7280] hover:text-[#0A0A0A] underline transition cursor-pointer flex items-center gap-1.5 touch-target-44"
+            type="button"
+            onClick={() => setUploadModalOpen(true)}
+            className="w-full h-11 rounded-lg bg-[#0A0A0A] text-[#FFFFFF] text-xs font-medium inline-flex items-center justify-center gap-2"
           >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Sign out / Return to login</span>
+            <Upload className="w-4 h-4" />
+            <span>Upload proof document</span>
           </button>
-        </motion.div>
+        </div>
+      )}
 
-        {/* Expected Timeline */}
-        <motion.div variants={itemVariants} className="pt-4 border-t border-[#E5E7EB] text-center space-y-1 text-xs text-[#6B7280]">
-          <p>
-            Expected timeline: Typically reviewed within 1–2 business days by institutional administration.
-          </p>
-          <p>
-            Questions? Contact{' '}
-            <a href="mailto:alumni@vit.edu.in" className="font-medium text-[#0A0A0A] underline">
-              alumni@vit.edu.in
-            </a>
-          </p>
-        </motion.div>
+      {/* Modals & Bottom Sheets */}
+      <UploadDocumentModal
+        isOpen={uploadModalOpen}
+        onClose={() => setUploadModalOpen(false)}
+        role={currentUser.role as UserRole}
+        onUpload={async (file) => {
+          const res = await replaceDocument(file);
+          if (res.ok) await refresh();
+          return res;
+        }}
+      />
 
-      </motion.div>
+      <VerifyRecoveryModal
+        isOpen={recoveryModalOpen}
+        onClose={() => setRecoveryModalOpen(false)}
+        emailMasked={effectiveState.recoveryEmailMasked}
+        onVerified={() => refresh()}
+      />
+
+      <EditDetailsSheet
+        isOpen={editSheetOpen}
+        onClose={() => setEditSheetOpen(false)}
+        user={currentUser}
+        onSave={async (patch) => {
+          const res = await updateDetails(patch);
+          if (res.ok) {
+            updateCurrentUserState({
+              ...currentUser,
+              name: patch.name || currentUser.name,
+              department: patch.department || currentUser.department,
+              enrollmentNo: patch.enrollmentNo || currentUser.enrollmentNo,
+              employeeId: patch.employeeId || currentUser.employeeId
+            });
+            await refresh();
+          }
+          return res;
+        }}
+      />
+
+      {/* Dev-only State Switcher Popover */}
+      <DevStateSwitcher
+        currentState={derivedState}
+        onStateSelect={(forced) => setDevStateOverride(forced)}
+      />
     </div>
   );
 };

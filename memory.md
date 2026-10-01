@@ -15,8 +15,9 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
 ### Design System & Visual Guidelines
 - **Color Palette:** Pure white (`#FFFFFF`) canvas, near-black (`#0A0A0A`) primary text & buttons, `#6B7280` muted text, `#E5E7EB` 1px hairline borders. No soft fuzzy drop shadows.
 - **Sanctioned Semantic Accents:** Strictly adheres to the obsidian, white, and hairline gray visual system. The four semantic status accents defined in PRD Section 2.1 (Verified Emerald `#065F46`, Actionable Amber `#B45309`, Governance Rose `#991B1B`, Academic Indigo `#3730A3`) are the only sanctioned exceptions, reserved exclusively for their defined semantic meaning — no other colors, decorative gradients, or ad hoc accent usage are permitted.
-- **Logomark:** Geometric "N" Monogram with 2 connected circular network nodes forming a diagonal bridge.
+- **Logomark:** Geometric "N-Link" Monogram built from two interlocking halves with precision 45-degree chamfers and one central connecting nexus core node (orange ring `#FD9C03` with white inner dot).
 - **Motion System & Micro-Interactions:** 
+  - **One-Time Logo Intro Animation (`IntroOverlay.tsx`):** Plays once per browser session at `/` (`sessionStorage: nexalink:intro:v1`). 4-slice geometric assembly (S1..S4 with 1px overlap), central node ignition pop, and seamless FLIP translation/scale flight into the header logo with mid-flight color handoff.
   - Framer Motion spring physics (`stiffness: 400, damping: 17`, `whileHover={{ scale: 1.03 }}`, `whileTap={{ scale: 0.95 }}`).
   - Sliding background pills via `layoutId` across tabs and mode selectors.
   - Real SVG path length checkmark animations for approvals (`AnimatedCheckIcon`).
@@ -130,11 +131,11 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
 
 ## 3. Technology Stack
 
-- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, Framer Motion, Lucide React icons
-- **State Management:** React Context API (`AuthContext`, `DataContext`)
-- **Export Capabilities:** `jspdf`, `jspdf-autotable`, `xlsx`, `html2canvas`
-- **Backend (Phase 4 Ready):** Node.js, Express.js (`backend/server.js`)
-- **Database (Phase 4 Ready):** SQLite (`backend/database/db.js`)
+- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, Framer Motion, Lucide React icons
+- **State Management:** React Context API (`AuthContext`, `DataContext`) with optimistic RPC integration
+- **Export Capabilities:** `jspdf`, `jspdf-autotable`, `xlsx`, `papaparse`
+- **Backend & Cloud:** Supabase Hosted PostgreSQL (17 Relational Tables), GoTrue Auth, Realtime WebSockets, Supabase Edge Functions (`auth-login-guard`, `accept-admin-invite`)
+- **Security:** `FORCE ROW LEVEL SECURITY`, `private` schema helper RPCs, append-only SHA-256 hash-chained `audit_logs`, server-side brute-force lockout, 60s signed storage URLs
 
 ---
 
@@ -143,6 +144,7 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
 - [x] **Phase 1: Requirement Analysis** (SIH25017 problem scope & roles defined)
 - [x] **Phase 2: System Design & Branding** (Rebranded to NexaLink/NexaChats, monochrome design system)
 - [x] **Phase 3: Frontend Architecture & Governance** (Identity verification, admin handoff, reported messages queue, accreditation analytics, motion system, mobile responsiveness, Opportunities unified navigation, verification gate redesign, session security)
-- [x] **Phase 4: Backend & Database Foundations** (Express server structure & SQLite schema in `backend/`)
-- [x] **Phase 5: Production Deployment & E2E Integration Testing** (Vercel deployment, Supabase Auth/DB, Custom Domain integration, tree-shaking optimization)
+- [x] **Phase 4: Backend Hardening & Privileged RPC Architecture** (FORCE RLS, security definer stored procedures, cryptographic audit trail, server-side lockout, storage hardening)
+- [x] **Phase 5: "Open Canvas" Redesign & Design System Linting** (Unbordered whitespace architecture, AppShell, TopBar, SidebarNav, PageHeader, StatStrip, ListRow, FocusPanel, MasterDetail, RightRail, UnderlineTabs, zero design lint warnings)
+- [x] **v3.0 Release:** Unified institutional platform with 4 fluid responsive tiers, verified graduation safeguards, and production security guards
 

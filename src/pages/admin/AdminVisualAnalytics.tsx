@@ -439,14 +439,14 @@ export const AdminVisualAnalytics: React.FC = () => {
               </p>
             </div>
 
-            <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider">
+            <div className="flex items-center gap-3 text-xs font-medium">
               <span className="flex items-center gap-1.5 text-[#0A0A0A]">
                 <span className="w-2.5 h-2.5 rounded-xs bg-[#0A0A0A] inline-block" /> Alumni
               </span>
               <span className="flex items-center gap-1.5 text-[#6B7280]">
                 <span className="w-2.5 h-2.5 rounded-xs bg-[#6B7280] inline-block" /> Students
               </span>
-              <span className="flex items-center gap-1.5 text-[#9CA3AF]">
+              <span className="flex items-center gap-1.5 text-[#4B5563]">
                 <span className="w-2.5 h-2.5 rounded-xs bg-[#9CA3AF] inline-block" /> Faculty
               </span>
             </div>

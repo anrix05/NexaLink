@@ -129,7 +129,7 @@ export const CampusSpotlightCarousel: React.FC = () => {
           Eliminates squished multi-card slivers on small screens
           ───────────────────────────────────────────────────────────── */}
       <div className="block md:hidden w-full">
-        <div className="relative w-full h-[260px] sm:h-[320px] rounded-2xl p-1.5 bg-white border border-[#E5E7EB] shadow-lg overflow-hidden select-none touch-pan-y">
+        <div className="relative w-full h-[260px] sm:h-[320px] rounded-2xl p-1.5 bg-white border border-[#E5E7EB] overflow-hidden select-none touch-pan-y">
           <AnimatePresence initial={false} custom={direction} mode="popLayout">
             <motion.div
               key={currentPhoto.id}
@@ -171,9 +171,9 @@ export const CampusSpotlightCarousel: React.FC = () => {
               <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/80 via-black/35 to-transparent pointer-events-none" />
 
               {/* Mobile Spotlight Caption */}
-              <div className="absolute bottom-2.5 left-2.5 right-2.5 bg-[#0A0A0A]/90 backdrop-blur-md text-white text-[11px] font-display font-bold px-3 py-2 rounded-xl uppercase tracking-wider flex items-center justify-between border border-white/15 shadow-xl pointer-events-none">
+              <div className="absolute bottom-2.5 left-2.5 right-2.5 bg-[#0A0A0A]/90 backdrop-blur-md text-white text-[11px] font-sans font-medium px-3 py-2 rounded-xl flex items-center justify-between border border-white/15 pointer-events-none">
                 <span className="truncate mr-2">{currentPhoto.title}</span>
-                <span className="font-mono text-neutral-400 text-[10px] shrink-0">
+                <span className="text-neutral-400 text-[10px] shrink-0 font-sans">
                   {currentPhoto.location}
                 </span>
               </div>
@@ -280,11 +280,11 @@ export const CampusSpotlightCarousel: React.FC = () => {
       <div className="flex items-center justify-between px-2 sm:px-4 pt-1 w-full max-w-full">
         {/* Slide Counter & Location Hint */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <span className="text-[11px] font-mono font-bold text-slate-950">
+          <span className="text-[11px] font-sans font-bold tabular-nums text-slate-950">
             0{activeIndex + 1}
           </span>
-          <span className="text-[11px] font-mono text-slate-400">/</span>
-          <span className="text-[11px] font-mono text-slate-400">
+          <span className="text-[11px] font-sans tabular-nums text-slate-400">/</span>
+          <span className="text-[11px] font-sans tabular-nums text-slate-400">
             0{CAMPUS_PHOTOS.length}
           </span>
           <span className="text-xs font-sans text-slate-500 hidden sm:inline ml-2 border-l border-slate-200 pl-3 truncate max-w-[200px]">
@@ -315,14 +315,14 @@ export const CampusSpotlightCarousel: React.FC = () => {
           <button
             onClick={handlePrev}
             aria-label="Previous campus photo"
-            className="w-8 h-8 rounded-lg border border-[#E5E7EB] bg-white hover:bg-slate-100 text-slate-800 flex items-center justify-center transition active:scale-95 cursor-pointer shadow-2xs"
+            className="w-8 h-8 rounded-lg border border-[#E5E7EB] bg-white hover:bg-slate-100 text-slate-800 flex items-center justify-center transition active:scale-95 cursor-pointer"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={handleNext}
             aria-label="Next campus photo"
-            className="w-8 h-8 rounded-lg border border-[#E5E7EB] bg-white hover:bg-slate-100 text-slate-800 flex items-center justify-center transition active:scale-95 cursor-pointer shadow-2xs"
+            className="w-8 h-8 rounded-lg border border-[#E5E7EB] bg-white hover:bg-slate-100 text-slate-800 flex items-center justify-center transition active:scale-95 cursor-pointer"
           >
             <ChevronRight className="w-4 h-4" />
           </button>

@@ -13,7 +13,8 @@ import {
   Check,
   Download,
   Star,
-  RefreshCw
+  RefreshCw,
+  Filter
 } from 'lucide-react';
 import { RoleGate } from '../../components/common/RoleGate';
 import {
@@ -203,37 +204,60 @@ export const EventsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Category Tabs */}
-      <div className="overflow-x-auto pb-1 scrollbar-none">
-        <SegmentedTabs
-          options={categoryOptions}
-          activeTab={activeCategory}
-          onChange={(cat) => setActiveCategory(cat)}
-        />
+      {/* B6: Category Tabs with Horizontal Scroll & Gradient Edge Fade */}
+      <div className="relative w-full">
+        <div className="overflow-x-auto pb-1 scrollbar-none flex">
+          <SegmentedTabs
+            options={categoryOptions}
+            activeTab={activeCategory}
+            onChange={(cat) => setActiveCategory(cat)}
+          />
+        </div>
+        <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-8 bg-gradient-to-l from-white to-transparent hidden sm:block" />
       </div>
 
-      {/* Events Grid */}
+      {/* Events Grid (P2: Dual empty state) */}
       {isDataLoading ? (
         <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#0A0A0A] border-t-transparent"></div>
           <p className="text-[#6B7280] text-xs">Loading events...</p>
         </div>
       ) : filteredEvents.length === 0 ? (
-        <EmptyState
-          icon={<Calendar className="w-6 h-6" />}
-          title="No events found"
-          description="There are currently no events matching this category."
-          action={
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => setActiveCategory('All')}
-              icon={<RefreshCw className="w-3.5 h-3.5" />}
-            >
-              Reset filters
-            </Button>
-          }
-        />
+        eventsList.length === 0 ? (
+          <EmptyState
+            icon={<Calendar className="w-8 h-8 text-[#0A0A0A]" />}
+            title="No campus events scheduled yet"
+            description="Institutional masterclasses, workshops, and placement talks will appear here once announced."
+            action={
+              (currentUser.role === 'faculty' || currentUser.role === 'admin') ? (
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => setShowAddEventModal(true)}
+                  icon={<Plus className="w-4 h-4" />}
+                >
+                  Organize an event
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <EmptyState
+            icon={<Filter className="w-8 h-8 text-[#6B7280]" />}
+            title="No results match your filters"
+            description="There are currently no events matching the selected category."
+            action={
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setActiveCategory('All')}
+                icon={<RefreshCw className="w-3.5 h-3.5" />}
+              >
+                Clear filters
+              </Button>
+            }
+          />
+        )
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredEvents.map((evt, index) => {

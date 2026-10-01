@@ -453,7 +453,7 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
       {viewMode === 'table' && (
         <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-x-auto text-xs shadow-none">
           <table className="w-full text-left">
-            <thead className="bg-[#FAFAFA] font-display font-bold text-[10px] uppercase tracking-wider text-[#0A0A0A] border-b border-[#E5E7EB]">
+            <thead className="bg-[#FAFAFA] text-xs font-semibold text-[#0A0A0A] border-b border-[#E5E7EB]">
               <tr>
                 <th className="p-3.5">Member</th>
                 <th className="p-3.5">Role</th>

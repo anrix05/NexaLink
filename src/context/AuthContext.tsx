@@ -8,6 +8,8 @@ interface AuthContextType {
   currentRole: UserRole;
   isAuthenticated: boolean;
   isCheckingSession: boolean;
+  isRecoveryMode: boolean;
+  recoveryError: string | null;
   loginError: string | null;
   clearLoginError: () => void;
   welcomeRevealName: string | null;
@@ -17,11 +19,42 @@ interface AuthContextType {
   register: (userData: Record<string, any>, role: UserRole) => Promise<{ success: boolean; message: string }>;
   requestPasswordReset: (email: string) => Promise<{ success: boolean; message: string; otp?: string }>;
   confirmPasswordReset: (email: string, otp: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
+  completePasswordReset: (newPassword: string) => Promise<{ success: boolean; message: string }>;
+  clearRecoveryMode: () => void;
   logout: () => void;
   updateCurrentUserState: (updated: Record<string, any>) => void;
   notificationCount: number;
   clearNotifications: () => void;
 }
+
+const parseRecoveryUrlState = () => {
+  if (typeof window === 'undefined') return { isRecovery: false, error: null as string | null };
+  const hash = window.location.hash || '';
+  const search = window.location.search || '';
+  const pathname = window.location.pathname || '';
+
+  const searchParams = new URLSearchParams(search);
+  const hashParams = new URLSearchParams(hash.replace(/^#/, ''));
+
+  const errorDesc = hashParams.get('error_description') || searchParams.get('error_description') || hashParams.get('error') || searchParams.get('error');
+  const errorCode = hashParams.get('error_code') || searchParams.get('error_code');
+
+  let parsedError: string | null = null;
+  if (errorCode === 'otp_expired' || errorDesc?.toLowerCase().includes('expired') || errorDesc?.toLowerCase().includes('invalid')) {
+    parsedError = 'This reset link is invalid or has expired — request a new one';
+  } else if (errorDesc) {
+    parsedError = decodeURIComponent(errorDesc.replace(/\+/g, ' '));
+  }
+
+  const isRecovery =
+    hash.includes('type=recovery') ||
+    search.includes('type=recovery') ||
+    pathname === '/reset-password' ||
+    searchParams.get('tab') === 'reset-password' ||
+    !!parsedError;
+
+  return { isRecovery, error: parsedError };
+};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -35,6 +68,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loginError, setLoginError] = useState<string | null>(null);
   const [welcomeRevealName, setWelcomeRevealName] = useState<string | null>(null);
   const [notificationCount, setNotificationCount] = useState<number>(3);
+
+  // Recovery Mode State for Supabase Password Reset Flow
+  const [isRecoveryMode, setIsRecoveryMode] = useState<boolean>(() => parseRecoveryUrlState().isRecovery);
+  const isRecoveryModeRef = useRef<boolean>(isRecoveryMode);
+  isRecoveryModeRef.current = isRecoveryMode;
+  const [recoveryError, setRecoveryError] = useState<string | null>(() => parseRecoveryUrlState().error);
+
+  const clearRecoveryMode = useCallback(() => {
+    setIsRecoveryMode(false);
+    isRecoveryModeRef.current = false;
+    setRecoveryError(null);
+  }, []);
 
   // Rate Limiting & Account Lockout State (persisted server-side in Supabase login_attempts when configured)
   const [activeOtps, setActiveOtps] = useState<Record<string, { otp: string; expiresAt: number }>>({});
@@ -67,11 +112,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
+    // Check URL state for recovery/error
+    const urlState = parseRecoveryUrlState();
+    if (urlState.isRecovery) {
+      setIsRecoveryMode(true);
+      isRecoveryModeRef.current = true;
+    }
+    if (urlState.error) {
+      setRecoveryError(urlState.error);
+    }
+
     // Check existing active session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      const activeUrlState = parseRecoveryUrlState();
+      // If in recovery mode or URL indicates recovery, gate session and do not auto-login to dashboard
+      if (isRecoveryModeRef.current || activeUrlState.isRecovery) {
+        setIsRecoveryMode(true);
+        isRecoveryModeRef.current = true;
+        setIsAuthenticated(false);
+        setIsCheckingSession(false);
+        if (activeUrlState.error) {
+          setRecoveryError(activeUrlState.error);
+        }
+        return;
+      }
+
       if (session?.user) {
         loadUserProfileFromSupabase(session.user.id).finally(() => setIsCheckingSession(false));
       } else {
+        const savedMock = localStorage.getItem('nexalink_auth_user');
+        if (savedMock) {
+          try {
+            const parsed = JSON.parse(savedMock);
+            setCurrentUser(parsed);
+            setCurrentRole(parsed.role || 'student');
+            setIsAuthenticated(true);
+            isMockSessionRef.current = true;
+          } catch {
+            // ignore
+          }
+        }
         setIsCheckingSession(false);
       }
     });
@@ -80,8 +160,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (event === 'TOKEN_REFRESHED') {
         return; // Ignore token refreshes entirely for side-effects
       }
+
+      // Explicitly handle PASSWORD_RECOVERY event
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecoveryMode(true);
+        isRecoveryModeRef.current = true;
+        setIsAuthenticated(false);
+        wasAuthenticatedRef.current = false;
+        setIsCheckingSession(false);
+        setRecoveryError(null);
+        return;
+      }
       
       if (session?.user) {
+        // If currently in recovery mode, keep the user gated on the reset password screen
+        // Do NOT treat this recovery session as a normal authenticated login!
+        if (isRecoveryModeRef.current) {
+          return;
+        }
         const isFreshLogin = event === 'SIGNED_IN' && !wasAuthenticatedRef.current;
         loadUserProfileFromSupabase(session.user.id, isFreshLogin);
       } else {
@@ -175,31 +271,112 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const switchRole = mockLoginByRole;
 
+  const getLocalMockUser = (email: string) => {
+    if (typeof window === 'undefined') return null;
+    const target = email.trim().toLowerCase();
+    try {
+      const single = localStorage.getItem('nexalink_auth_user');
+      if (single) {
+        const parsed = JSON.parse(single);
+        if (
+          parsed?.email?.trim().toLowerCase() === target ||
+          parsed?.personalEmail?.trim().toLowerCase() === target ||
+          parsed?.institutionalEmail?.trim().toLowerCase() === target
+        ) {
+          return parsed;
+        }
+      }
+    } catch {}
+
+    try {
+      const registry = localStorage.getItem('nexalink_users_registry');
+      if (registry) {
+        const list = JSON.parse(registry);
+        if (Array.isArray(list)) {
+          const found = list.find(
+            (u: any) =>
+              u?.email?.trim().toLowerCase() === target ||
+              u?.personalEmail?.trim().toLowerCase() === target ||
+              u?.institutionalEmail?.trim().toLowerCase() === target
+          );
+          if (found) return found;
+        }
+      }
+    } catch {}
+
+    return null;
+  };
+
+  const isKnownDemoEmail = (email: string) => {
+    const e = email.trim().toLowerCase();
+    return [
+      'admin@vit.edu.in',
+      'rajesh.kumar@vit.edu.in',
+      'rushabh.sanghavi@alumni.vit.edu.in',
+      'rushabh.sanghavi@gmail.com',
+      'rushil.dahisaria@alumni.vit.edu.in',
+      'ravindra.sangale@vit.edu.in',
+      'ravindra.sangale@gmail.com',
+      'vidya.chitre@vit.edu.in',
+      'arun.chavan@vit.edu.in',
+      'aanya.patel@student.vit.edu.in',
+      'aanya.patel@gmail.com'
+    ].includes(e);
+  };
+
   const login = async (
     email: string,
-    _clientSpoofedRole?: any,
+    roleOrPassword?: any,
     password?: string,
     matchedUserFromStore?: any
   ): Promise<{ success: boolean; message?: string }> => {
     setLoginError(null);
-    const targetEmail = (email || '').trim().toLowerCase();
+    const targetEmail = (email || '').replace(/^\+/, '').trim().toLowerCase();
 
-    // 2. Live Supabase Auth when configured
-    if (isSupabaseConfigured() && password) {
+    // 1. Normalize arguments: support modern login(email, password) and legacy login(email, role, password, matchedUser)
+    let actualPassword: string | undefined = undefined;
+    let explicitRole: UserRole | undefined = undefined;
+
+    if (typeof password === 'string' && password.length > 0) {
+      actualPassword = password;
+      if (typeof roleOrPassword === 'string') {
+        const knownRoles: string[] = ['student', 'faculty', 'alumni', 'admin', 'teacher'];
+        if (knownRoles.includes(roleOrPassword.toLowerCase())) {
+          explicitRole = (roleOrPassword === 'teacher' ? 'faculty' : roleOrPassword.toLowerCase()) as UserRole;
+        }
+      }
+    } else if (typeof roleOrPassword === 'string') {
+      const knownRoles: string[] = ['student', 'faculty', 'alumni', 'admin', 'teacher'];
+      if (knownRoles.includes(roleOrPassword.toLowerCase())) {
+        explicitRole = (roleOrPassword === 'teacher' ? 'faculty' : roleOrPassword.toLowerCase()) as UserRole;
+      } else {
+        // Called as login(email, password)
+        actualPassword = roleOrPassword;
+      }
+    }
+
+    // 2. Live Supabase Auth when configured and password provided
+    if (isSupabaseConfigured() && actualPassword) {
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: targetEmail,
-          password
+          password: actualPassword
         });
 
         if (error) {
-          const errMsg = error.message || 'Invalid login credentials.';
-          setLoginError(errMsg);
-          setIsAuthenticated(false);
-          return { success: false, message: errMsg };
-        }
+          // If Supabase authentication returned an error,
+          // only check local demo/mock accounts if the email is explicitly a demo account
+          // or an account saved in localStorage. Do NOT log into a random demo account.
+          const isDemo = isKnownDemoEmail(targetEmail);
+          const localUser = getLocalMockUser(targetEmail);
 
-        if (data.user) {
+          if (!isDemo && !localUser && !matchedUserFromStore) {
+            const errMsg = error.message || "We couldn't sign you in. Check your email and password.";
+            setLoginError(errMsg);
+            setIsAuthenticated(false);
+            return { success: false, message: errMsg };
+          }
+        } else if (data.user) {
           const profileLoaded = await loadUserProfileFromSupabase(data.user.id);
           if (!profileLoaded) {
             const err = 'User profile not found. Your account registration may be incomplete.';
@@ -215,12 +392,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // 3. Resilient Local / Demo Auth verification
-    if (password && password === 'wrongpassword') {
+    if (actualPassword && actualPassword === 'wrongpassword') {
       const err = `Invalid password credentials.`;
       setLoginError(err);
       setIsAuthenticated(false);
       setWelcomeRevealName(null);
       return { success: false, message: err };
+    }
+
+    // 4. Check for user registered locally in this browser
+    const savedLocalUser = getLocalMockUser(targetEmail);
+    if (savedLocalUser) {
+      setCurrentRole(savedLocalUser.role || 'student');
+      setCurrentUser(savedLocalUser);
+      setIsAuthenticated(true);
+      wasAuthenticatedRef.current = true;
+      isMockSessionRef.current = true;
+      triggerWelcomeRevealIfVerified(savedLocalUser);
+      return { success: true };
     }
 
     if (matchedUserFromStore) {
@@ -233,34 +422,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true };
     }
 
-    isMockSessionRef.current = true;
+    // 5. Specific Demo accounts from mockData
     const mockData = await import('../data/mockData');
-    let authenticatedUser: any = mockData.DEMO_STUDENT;
+    let authenticatedUser: any = null;
+    let assignedRole: UserRole = 'student';
 
-    if (targetEmail === 'admin@vit.edu.in' || targetEmail.startsWith('admin.')) {
-      setCurrentRole('admin');
-      authenticatedUser = mockData.DEMO_ADMIN;
-    } else if (targetEmail === 'rushabh.sanghavi@alumni.vit.edu.in' || targetEmail.includes('alumni')) {
-      setCurrentRole('alumni');
+    if (targetEmail === 'admin@vit.edu.in' || targetEmail === 'rajesh.kumar@vit.edu.in') {
+      assignedRole = 'admin';
+      authenticatedUser = targetEmail === 'rajesh.kumar@vit.edu.in' ? mockData.DEMO_ADMIN_2 : mockData.DEMO_ADMIN;
+    } else if (
+      targetEmail === 'rushabh.sanghavi@alumni.vit.edu.in' ||
+      targetEmail === 'rushabh.sanghavi@gmail.com' ||
+      targetEmail === 'rushil.dahisaria@alumni.vit.edu.in'
+    ) {
+      assignedRole = 'alumni';
       authenticatedUser = mockData.DEMO_ALUMNI;
-    } else if (targetEmail === 'ravindra.sangale@vit.edu.in' || targetEmail.includes('faculty') || targetEmail.includes('prof')) {
-      setCurrentRole('faculty');
+    } else if (
+      targetEmail === 'ravindra.sangale@vit.edu.in' ||
+      targetEmail === 'ravindra.sangale@gmail.com' ||
+      targetEmail === 'vidya.chitre@vit.edu.in' ||
+      targetEmail === 'arun.chavan@vit.edu.in'
+    ) {
+      assignedRole = 'faculty';
       authenticatedUser = mockData.DEMO_FACULTY;
-    } else {
-      setCurrentRole('student');
+    } else if (
+      targetEmail === 'aanya.patel@student.vit.edu.in' ||
+      targetEmail === 'aanya.patel@gmail.com'
+    ) {
+      assignedRole = 'student';
       authenticatedUser = mockData.DEMO_STUDENT;
+    } else if (explicitRole) {
+      assignedRole = explicitRole;
+      if (explicitRole === 'admin') authenticatedUser = mockData.DEMO_ADMIN;
+      else if (explicitRole === 'alumni') authenticatedUser = mockData.DEMO_ALUMNI;
+      else if (explicitRole === 'faculty') authenticatedUser = mockData.DEMO_FACULTY;
+      else authenticatedUser = mockData.DEMO_STUDENT;
     }
 
-    setCurrentUser(authenticatedUser);
-    setIsAuthenticated(true);
-    wasAuthenticatedRef.current = true;
-    triggerWelcomeRevealIfVerified(authenticatedUser);
-    return { success: true };
+    if (authenticatedUser) {
+      isMockSessionRef.current = true;
+      setCurrentRole(assignedRole);
+      setCurrentUser(authenticatedUser);
+      setIsAuthenticated(true);
+      wasAuthenticatedRef.current = true;
+      triggerWelcomeRevealIfVerified(authenticatedUser);
+      return { success: true };
+    }
+
+    // If targetEmail is neither a valid Supabase user, nor registered locally, nor a demo account:
+    const failMsg = "We couldn't sign you in. Check your email and password.";
+    setLoginError(failMsg);
+    setIsAuthenticated(false);
+    return { success: false, message: failMsg };
   };
 
   const register = async (userData: Record<string, any>, role: UserRole): Promise<{ success: boolean; message: string }> => {
     setLoginError(null);
-    const targetEmail = (userData.email || '').trim().toLowerCase();
+    const targetEmail = (userData.email || '').replace(/^\+/, '').trim().toLowerCase();
 
 
 
@@ -365,12 +583,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, message: err.message || 'An error occurred during registration.' };
       }
     } else {
-      return { success: false, message: 'Supabase is not configured or password was missing.' };
+      // Local demo mode fallback registration
+      const newMockUser = {
+        id: `mock-${Date.now()}`,
+        name: userData.name,
+        email: targetEmail,
+        role: role,
+        department: userData.department || 'CMPN',
+        isVerified: false,
+        verificationStatus: 'Pending Verification' as const,
+        enrollmentNo: userData.enrollmentNo || userData.prn || '2024CMPN099',
+        employeeId: userData.employeeId || null,
+        personalEmail: userData.personalEmail || null,
+        proofDocumentName: userData.proofDocumentName || null,
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
+        createdAt: new Date().toISOString()
+      };
+      localStorage.setItem('nexalink_auth_user', JSON.stringify(newMockUser));
+      try {
+        const regStr = localStorage.getItem('nexalink_users_registry');
+        const reg = regStr ? JSON.parse(regStr) : [];
+        if (Array.isArray(reg)) {
+          const updated = [newMockUser, ...reg.filter((u: any) => u.email?.toLowerCase() !== targetEmail)];
+          localStorage.setItem('nexalink_users_registry', JSON.stringify(updated));
+        }
+      } catch {}
+      return { success: true, message: 'Registration successful! Your account status is "Pending Verification".' };
     }
   };
 
   const requestPasswordReset = async (email: string): Promise<{ success: boolean; message: string; otp?: string }> => {
-    const targetEmail = (email || '').trim().toLowerCase();
+    const targetEmail = (email || '').replace(/^\+/, '').trim().toLowerCase();
     if (!targetEmail || !targetEmail.includes('@')) {
       return { success: false, message: 'Please enter a valid institutional email address.' };
     }
@@ -394,24 +637,82 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: false, message: 'Supabase is not configured.' };
   };
 
-  const confirmPasswordReset = async (
-    email: string,
-    otp: string,
+  const completePasswordReset = async (
     newPassword: string
   ): Promise<{ success: boolean; message: string }> => {
-    const targetEmail = (email || '').trim().toLowerCase();
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, message: 'Password must be at least 6 characters in length.' };
+    }
 
-    if (isSupabaseConfigured() && newPassword) {
+    if (isSupabaseConfigured()) {
       try {
-        const { error } = await supabase.auth.updateUser({ password: newPassword });
-        if (!error) {
-          return { success: true, message: 'Password reset successfully! You can now log in with your new credentials.' };
+        // 1. Update the password using the active recovery session
+        const { data: updateData, error: updateError } = await supabase.auth.updateUser({
+          password: newPassword
+        });
+
+        if (updateError) {
+          return {
+            success: false,
+            message: updateError.message || 'Failed to update password. Reset link may be invalid or expired.'
+          };
         }
+
+        // 2. Properly refresh the session to exit recovery state into full authenticated session
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        const authedUser = refreshData?.session?.user || updateData?.user || (await supabase.auth.getUser()).data?.user;
+
+        if (!authedUser) {
+          return {
+            success: false,
+            message: 'Password updated, but active session could not be refreshed. Please sign in.'
+          };
+        }
+
+        // 3. Clear recovery gating flags
+        setIsRecoveryMode(false);
+        isRecoveryModeRef.current = false;
+        setRecoveryError(null);
+
+        // 4. Load full profile from database and establish authenticated state
+        await loadUserProfileFromSupabase(authedUser.id, true);
+        setIsAuthenticated(true);
+        wasAuthenticatedRef.current = true;
+
+        // 5. Clean up the URL (remove #access_token=... and reset-password paths)
+        if (typeof window !== 'undefined' && window.history?.replaceState) {
+          const cleanPath = window.location.pathname === '/reset-password' ? '/' : window.location.pathname;
+          window.history.replaceState({}, document.title, cleanPath);
+        }
+
+        return {
+          success: true,
+          message: 'Password successfully updated! Redirecting to your dashboard...'
+        };
       } catch (err: any) {
-        return { success: false, message: err.message || 'An error occurred during password reset.' };
+        return {
+          success: false,
+          message: err.message || 'An unexpected error occurred while resetting password.'
+        };
       }
     }
-    return { success: false, message: 'Supabase is not configured or password was missing.' };
+
+    // Fallback for demo mode
+    setIsRecoveryMode(false);
+    isRecoveryModeRef.current = false;
+    setRecoveryError(null);
+    return {
+      success: true,
+      message: 'Password updated successfully (Demo Mode).'
+    };
+  };
+
+  const confirmPasswordReset = async (
+    _email: string,
+    _otp: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message: string }> => {
+    return completePasswordReset(newPassword);
   };
 
   const logout = async () => {
@@ -426,7 +727,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentRole('student');
     setLoginError(null);
     setWelcomeRevealName(null);
+    clearRecoveryMode();
     if (typeof window !== 'undefined') {
+      localStorage.removeItem('nexalink_auth_user');
       sessionStorage.clear();
     }
   };
@@ -448,6 +751,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentUser,
         currentRole,
         isAuthenticated,
+        isCheckingSession,
+        isRecoveryMode,
+        recoveryError,
+        clearRecoveryMode,
         loginError,
         clearLoginError: () => setLoginError(null),
         welcomeRevealName,
@@ -457,11 +764,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         requestPasswordReset,
         confirmPasswordReset,
+        completePasswordReset,
         logout,
         updateCurrentUserState,
         notificationCount,
-        clearNotifications,
-        isCheckingSession
+        clearNotifications
       }}
     >
       {children}

@@ -1,69 +1,63 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
-import type { AlumniProfile } from '../../types';
+import type { AlumniProfile, JobListing } from '../../types';
 import {
   Briefcase,
   BookOpen,
-  CheckCircle2,
-  Plus,
-  Users,
   Calendar,
   MessageSquare,
-  Bell,
-  Check,
-  User,
-  Sparkles,
   Star,
-  Award,
-  Sliders,
-  X,
-  ShieldCheck,
-  ChevronRight,
-  FileText,
+  Plus,
   Edit3,
-  Clock,
-  AlertTriangle,
-  RotateCcw
+  RotateCcw,
+  FileText,
+  AlertCircle
 } from 'lucide-react';
-import { Badge, Button, StatCard, Modal, TextField, SelectField, TextArea } from '../../components/common/UIComponents';
+import {
+  PageHeader,
+  Section,
+  StatStrip,
+  ListRow,
+  RightRail,
+  StatusBadge,
+  CapacityMeter,
+  Switch,
+  EmptyState
+} from '../../components/ui';
+import { Modal, TextField, SelectField, TextArea } from '../../components/common/UIComponents';
 import { InstitutionalAnnouncementFeed } from '../../components/common/InstitutionalAnnouncementFeed';
-import type { JobListing } from '../../types';
+import { getGreetingName } from '../../utils/validators';
 
 interface AlumniDashboardProps {
-  setActiveTab: (tab: string) => void;
+  setActiveTab: (tab: string, subTab?: string) => void;
 }
 
-const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniProfile }> = ({ setActiveTab, alumni }) => {
+const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniProfile }> = ({
+  setActiveTab,
+  alumni
+}) => {
   const {
     jobsList,
     mentorshipRequests,
-    eventsList,
     announcements,
     updateMentorshipStatus,
     studentList,
-    allUsers,
+    updateUserProfile,
     updateJobListing,
     toggleJobStatus
   } = useData();
 
   const [isMentoring, setIsMentoring] = useState<boolean>(alumni?.isMentoringAvailable ?? true);
-  const [avatarError, setAvatarError] = useState(false);
-  const alumniInitials = (alumni.name || 'Alumni')
-    .split(' ')
-    .filter(Boolean)
-    .map(w => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  const [maxMentees, setMaxMentees] = useState<number>(alumni.maxMentees || 5);
 
   // Profile Edit Modal State
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [company, setCompany] = useState(alumni.company || 'Google');
-  const [designation, setDesignation] = useState(alumni.designation || 'Senior Software Engineer');
+  const [designation, setDesignation] = useState(alumni.designation || 'Staff Software Engineer');
   const [location, setLocation] = useState(alumni.location || 'Sunnyvale, CA');
   const [skillsText, setSkillsText] = useState((alumni.skills || ['Distributed Systems', 'Go', 'Kubernetes', 'Cloud AI']).join(', '));
-  const [bio, setBio] = useState(alumni.bio || "VIT provided the best platform and infrastructure through its digitally equipped campus.");
+  const [bio, setBio] = useState(alumni.bio || 'VIT provided the best platform and infrastructure through its digitally equipped campus.');
 
   // Edit Job Listing Modal State
   const [editingJob, setEditingJob] = useState<JobListing | null>(null);
@@ -82,391 +76,448 @@ const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniPr
     setTimeout(() => setNotice(null), 3500);
   };
 
+  const handleToggleMentoring = (nextVal: boolean) => {
+    setIsMentoring(nextVal);
+    updateUserProfile(alumni.id, { isMentoringAvailable: nextVal });
+    showToast(nextVal ? 'Mentorship availability enabled: Accepting student asks.' : 'Mentorship paused: Set to busy.');
+  };
+
+  const handleCapacityChange = (newVal: number) => {
+    setMaxMentees(newVal);
+    updateUserProfile(alumni.id, { maxMentees: newVal });
+    showToast(`Mentee capacity updated to ${newVal}.`);
+  };
+
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
+    updateUserProfile(alumni.id, {
+      company,
+      designation,
+      location,
+      skills: skillsText.split(',').map(s => s.trim()).filter(Boolean),
+      bio
+    });
     setShowProfileModal(false);
     showToast('Alumni profile details updated successfully!');
   };
 
-  // Central mock data deduction
-  const myPostedJobs = jobsList.filter(j => j.postedByAlumniId === alumni.id || j.postedByAlumniName.includes(alumni.name));
-  const myStudentRequests = mentorshipRequests.filter(r => r.mentorId === alumni.id || r.mentorName.includes(alumni.name));
+  const handleSaveJobEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingJob) return;
+    updateJobListing(editingJob.id, {
+      title: editJobTitle,
+      company: editJobCompany,
+      stipendOrSalary: editJobStipend,
+      type: editJobType,
+      location: editJobLocation,
+      applicationDeadline: editJobDeadline,
+      description: editJobDescription
+    });
+    setEditingJob(null);
+    showToast(`Opportunity "${editJobTitle}" updated successfully.`);
+  };
+
+  // Central data deductions
+  const myPostedJobs = jobsList.filter(
+    j => j.postedByAlumniId === alumni.id || j.postedByAlumniName.includes(alumni.name)
+  );
+  const myStudentRequests = mentorshipRequests.filter(
+    r => r.mentorId === alumni.id || r.mentorName.includes(alumni.name)
+  );
 
   const pendingRequests = myStudentRequests.filter(r => r.status === 'Pending');
   const studentsMentoredCount = myStudentRequests.filter(r => r.status === 'Accepted' || r.status === 'Completed').length;
   const activeMenteesCount = myStudentRequests.filter(r => r.status === 'Accepted').length;
-  const maxLimit = alumni.maxMentees || 5;
 
   const ratedRequests = myStudentRequests.filter(r => r.feedback && r.feedback.rating);
   const totalReviewsCount = ratedRequests.length;
-  const avgRating = totalReviewsCount > 0
-    ? (ratedRequests.reduce((sum, r) => sum + (r.feedback?.rating || 0), 0) / totalReviewsCount).toFixed(1)
-    : null;
+  const avgRating =
+    totalReviewsCount > 0
+      ? (ratedRequests.reduce((sum, r) => sum + (r.feedback?.rating || 0), 0) / totalReviewsCount).toFixed(1)
+      : null;
+
+  // Accreditation missing employment check
+  const missingEmploymentFields = [];
+  if (!alumni.company) missingEmploymentFields.push('Employer name');
+  if (!alumni.designation) missingEmploymentFields.push('Current designation');
+  if (!alumni.location) missingEmploymentFields.push('Work location');
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 pb-16 sm:pb-0 font-sans text-xs">
-      
+    <div className="space-y-8">
+      {/* Toast Notice */}
       {notice && (
-        <div className="p-4 bg-[#0A0A0A] text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm animate-in fade-in">
-          <CheckCircle2 className="w-4 h-4 text-[#16A34A]" /> {notice}
+        <div className="fixed top-20 right-6 z-50 bg-[#0A0A0A] text-white px-4 py-2.5 rounded-lg text-xs font-medium shadow-md transition-opacity">
+          {notice}
         </div>
       )}
 
-      {/* 1. Refined Profile Header Banner */}
-      <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 shadow-none space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            {alumni.avatar && !avatarError ? (
-              <img
-                src={alumni.avatar}
-                alt={alumni.name}
-                onError={() => setAvatarError(true)}
-                className="w-14 h-14 rounded-full object-cover border border-[#E5E7EB] shrink-0"
-              />
-            ) : (
-              <div className="w-14 h-14 rounded-full bg-[#0A0A0A] text-white flex items-center justify-center font-display font-black text-lg tracking-wider border border-[#E5E7EB] shrink-0 shadow-xs">
-                {alumniInitials || 'AL'}
-              </div>
+      {/* 1. Header (Open Canvas PageHeader primitive) */}
+      <PageHeader
+        eyebrow="Verified alumnus"
+        title={`Welcome back, ${getGreetingName(alumni.name)}`}
+        subtitle={
+          <div className="flex items-center gap-2 flex-wrap text-xs text-[#6B7280]">
+            <span className="text-[#0A0A0A] font-medium">
+              {alumni.designation} at {alumni.company}
+            </span>
+            <span>·</span>
+            <span>VIT {alumni.department}</span>
+            <span>·</span>
+            <span>Class of <span className="tabular-nums">{alumni.graduationYear}</span></span>
+            {alumni.location && (
+              <>
+                <span>·</span>
+                <span>{alumni.location}</span>
+              </>
             )}
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl font-display font-bold text-[#0A0A0A] tracking-tight">{alumni.name}</h1>
-                <Badge variant="emerald" size="sm" icon={<CheckCircle2 className="w-3.5 h-3.5" />}>
-                  Verified alumni
-                </Badge>
-              </div>
-              <p className="text-xs text-[#0A0A0A] font-semibold mt-0.5">
-                {designation} at <strong className="text-[#0A0A0A]">{company}</strong>
-              </p>
-              <p className="text-xs text-[#6B7280] mt-0.5">
-                VIT {alumni.department} • Class of {alumni.graduationYear || 2018} • {location}
-              </p>
-            </div>
           </div>
-
-          <div className="flex items-center gap-3">
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => setShowProfileModal(true)}
-              icon={<User className="w-3.5 h-3.5" />}
-            >
-              Edit profile
-            </Button>
-
-            <div className="p-1.5 bg-[#FAFAFA] rounded-xl border border-[#E5E7EB] flex items-center gap-2">
-              <span className="font-semibold text-[#6B7280] text-xs pl-1">Mentorship:</span>
-              <button
-                onClick={() => {
-                  setIsMentoring(!isMentoring);
-                  showToast(`Student mentorship status set to ${!isMentoring ? 'Active' : 'Paused'}.`);
-                }}
-                className={`px-3 py-1 text-xs font-semibold transition rounded-lg ${
-                  isMentoring ? 'bg-[#0A0A0A] text-white' : 'bg-[#E5E7EB] text-[#374151]'
-                }`}
-              >
-                {isMentoring ? 'Accepting mentees' : 'Paused'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+        }
+        actions={
+          <button
+            type="button"
+            onClick={() => setShowProfileModal(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-[#6B7280] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-lg transition-colors cursor-pointer"
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+            <span>Edit profile</span>
+          </button>
+        }
+      />
 
       {/* Institutional Broadcast Announcements Feed */}
       <InstitutionalAnnouncementFeed announcements={announcements} userRole="alumni" />
 
-      {/* 2. Impact Metrics Card — Solid Black #0A0A0A */}
-      <div className="bg-[#0A0A0A] text-white p-6 rounded-xl border border-[#222222] space-y-4 shadow-none">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#222222] pb-4">
-          <div className="flex items-center gap-2.5">
-            <Award className="w-4 h-4 text-white" />
-            <h2 className="font-bold text-xs text-white">
-              Institutional impact & mentorship metrics
-            </h2>
-          </div>
-          <span className="text-xs font-semibold text-neutral-300 bg-white/10 px-3 py-0.5 rounded-full border border-white/20 self-start sm:self-auto">
-            {avgRating ? `★ ${avgRating} / 5.0 rating (${totalReviewsCount} ${totalReviewsCount === 1 ? 'review' : 'reviews'})` : 'No ratings received yet'}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-          <div className="p-4 bg-white/5 border border-white/10 rounded-lg space-y-1 hover:bg-white/10 transition-colors">
-            <span className="text-xs font-semibold text-neutral-400 block">Students mentored</span>
-            <span className="tabular-nums text-3xl font-bold text-white block mt-1">{studentsMentoredCount}</span>
-            <span className="text-xs text-neutral-300 font-medium block">Active & completed sessions</span>
-          </div>
-
-          <div className="p-4 bg-white/5 border border-white/10 rounded-lg space-y-1 hover:bg-white/10 transition-colors">
-            <span className="text-xs font-semibold text-neutral-400 block">Opportunities posted</span>
-            <span className="tabular-nums text-3xl font-bold text-white block mt-1">{myPostedJobs.length}</span>
-            <span className="text-xs text-neutral-300 font-medium block">Active referrals published</span>
-          </div>
-
-          <div className="p-4 bg-white/5 border border-white/10 rounded-lg space-y-1 hover:bg-white/10 transition-colors">
-            <span className="text-xs font-semibold text-neutral-400 block">Average feedback rating</span>
-            <div className="flex items-center gap-1.5 text-white tabular-nums text-2xl font-bold mt-1">
-              {avgRating ? (
-                <>
-                  <Star className="w-4 h-4 fill-white" /> {avgRating} / 5.0
-                </>
-              ) : (
-                <span className="text-neutral-400 text-xs font-normal">No ratings yet</span>
-              )}
+      {/* Accreditation Employment Banner (if data incomplete) */}
+      {missingEmploymentFields.length > 0 && (
+        <div className="bg-[#FAFAFA] border border-[#E5E7EB] p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-[#B45309] shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-semibold text-xs text-[#0A0A0A]">
+                Employment information incomplete for NIRF accreditation
+              </h4>
+              <p className="text-xs text-[#6B7280] mt-0.5">
+                VIT Wadala tracks institutional graduate outcomes for national accreditation rankings. Missing:{' '}
+                <span className="text-[#B45309] font-medium">{missingEmploymentFields.join(', ')}</span>.
+              </p>
             </div>
-            <span className="text-xs text-neutral-400 font-medium block">Derived from student reviews</span>
           </div>
+          <button
+            type="button"
+            onClick={() => setShowProfileModal(true)}
+            className="px-3 py-1.5 bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-medium rounded-lg transition-colors cursor-pointer shrink-0"
+          >
+            Confirm employer data
+          </button>
         </div>
-      </div>
+      )}
 
-      {/* 3. Pending Mentorship Requests Waiting for Response */}
-      <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-5 shadow-none">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E5E7EB] pb-4">
-          <div>
-            <h3 className="font-display font-bold text-xs uppercase tracking-wider text-[#0A0A0A] flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-[#0A0A0A]" />
-              Requests Waiting for Your Response ({pendingRequests.length} Pending)
-            </h3>
-            <p className="text-[#6B7280] font-medium text-xs mt-0.5">
-              Student guidance requests pending your approval or decline.
-            </p>
-          </div>
+      {/* Two-Column Responsive Layout: Main Canvas + Quiet Right Rail */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8 items-start">
+        {/* Main Canvas Content */}
+        <div className="space-y-8 min-w-0">
+          {/* Section 1: Your Impact (Replaces solid black card with standard StatStrip) */}
+          <Section
+            title="Your impact"
+            description="Verified student evaluations, active mentorships, and published referrals."
+            noTopHairline
+          >
+            <StatStrip
+              items={[
+                {
+                  label: 'Students mentored',
+                  value: studentsMentoredCount,
+                  subtext: 'Active & completed sessions'
+                },
+                {
+                  label: 'Opportunities posted',
+                  value: myPostedJobs.length,
+                  subtext: 'Active referrals published'
+                },
+                {
+                  label: 'Average rating',
+                  value: avgRating ? `${avgRating} / 5.0` : '—',
+                  subtext: avgRating
+                    ? `From ${totalReviewsCount} ${totalReviewsCount === 1 ? 'review' : 'reviews'}`
+                    : 'No ratings yet'
+                },
+                {
+                  label: 'Active advisories',
+                  value: `${activeMenteesCount} / ${maxMentees}`,
+                  subtext: activeMenteesCount >= maxMentees ? 'Capacity full' : `${maxMentees - activeMenteesCount} slots open`
+                }
+              ]}
+            />
+          </Section>
 
-          <Badge variant="indigo" size="md" icon={<Sliders className="w-3.5 h-3.5" />}>
-            Capacity: Mentoring {activeMenteesCount}/{maxLimit} Students
-          </Badge>
-        </div>
+          {/* Section 2: Requests Waiting for Your Response */}
+          <Section
+            title="Requests waiting for your response"
+            count={pendingRequests.length}
+            description="Student guidance requests pending your approval or decline."
+          >
+            {pendingRequests.length === 0 ? (
+              <EmptyState
+                icon={<BookOpen className="w-5 h-5 text-[#0A0A0A]" />}
+                title="No pending guidance requests"
+                sentence="You have responded to all incoming mentorship asks. Active sessions can be managed in the Mentorship workspace."
+              />
+            ) : (
+              <div className="divide-y divide-[#E5E7EB] border-t border-b border-[#E5E7EB]">
+                {pendingRequests.map((req, index) => {
+                  const matchedStudent = studentList.find(s => s.id === req.studentId || s.email === req.studentEmail);
+                  const studentResumeUrl = matchedStudent?.resumeUrl || (req as any).studentResumeUrl || null;
 
-        {pendingRequests.length === 0 ? (
-          <div className="p-8 bg-[#FAFAFA] rounded-xl border border-dashed border-[#E5E7EB] text-center font-medium text-xs text-[#6B7280]">
-            No pending guidance requests waiting. You can browse active mentorships in the Mentorship workspace.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {pendingRequests.map(req => {
-              const matchedStudent = studentList.find(s => s.id === req.studentId || s.email === req.studentEmail);
-              const studentResumeUrl = matchedStudent?.resumeUrl || (req as any).studentResumeUrl || null;
-
-              return (
-                <div key={req.id} className="p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-[#0A0A0A] text-sm">{req.studentName}</span>
-                        <Badge variant="indigo">{req.studentDepartment}</Badge>
-                        <span className="text-xs text-[#6B7280]">Year: {req.studentYear}</span>
-                      </div>
-                      <p className="text-xs text-[#6B7280] mt-0.5">
-                        PRN: {req.studentEnrollmentNo} • Email: {req.studentEmail}
-                      </p>
-                    </div>
-
-                    <span className="text-[10px] font-mono text-[#9CA3AF] self-start sm:self-auto">
-                      {req.requestedDate}
-                    </span>
-                  </div>
-
-                  <div className="p-3 bg-white border border-[#E5E7EB] rounded-lg text-xs text-[#374151] space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <strong>Topic: {req.purposeOfRequest}</strong>
-                      {(req.proposedDate || req.proposedTimeSlot) && (
-                        <span className="font-mono text-[11px] font-bold text-[#0A0A0A] bg-[#F3F4F6] px-2 py-0.5 rounded border border-[#E5E7EB] flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-[#6B7280]" />
-                          Proposed: {req.proposedDate || 'Flexible'} ({req.proposedTimeSlot || 'Anytime'})
-                        </span>
-                      )}
-                    </div>
-                    <p className="leading-relaxed">"{req.message}"</p>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2 pt-1">
-                    <div>
-                      {studentResumeUrl ? (
-                        studentResumeUrl.startsWith('http://') || studentResumeUrl.startsWith('https://') ? (
-                          <a
-                            href={studentResumeUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-[#0A0A0A] bg-white border border-[#E5E7EB] rounded hover:bg-[#F3F4F6] transition-colors"
+                  return (
+                    <ListRow
+                      key={req.id}
+                      isFirst={index === 0}
+                      leading={
+                        <div className="w-10 h-10 rounded-full bg-[#F3F4F6] text-[#0A0A0A] flex items-center justify-center font-semibold text-xs shrink-0">
+                          {req.studentName.slice(0, 2).toUpperCase()}
+                        </div>
+                      }
+                      title={
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-sm text-[#0A0A0A]">{req.studentName}</span>
+                          <StatusBadge tone="indigo" label={req.studentDepartment || alumni.department} />
+                          <span className="text-xs text-[#6B7280]">Year: {req.studentYear}</span>
+                        </div>
+                      }
+                      subtitle={
+                        <div className="space-y-1.5 mt-1">
+                          <div className="text-xs text-[#6B7280]">
+                            PRN: <span className="font-mono text-[#0A0A0A]">{req.studentEnrollmentNo || 'N/A'}</span> · {req.studentEmail}
+                          </div>
+                          <div className="p-2.5 bg-[#FAFAFA] rounded-md text-xs text-[#0A0A0A]">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <strong>Topic: {req.purposeOfRequest || req.topic}</strong>
+                              {(req.proposedDate || req.proposedTimeSlot) && (
+                                <span className="text-[11px] text-[#6B7280] flex items-center gap-1">
+                                  <Calendar className="w-3 h-3 text-[#6B7280]" />
+                                  Proposed: {req.proposedDate || 'Flexible'} ({req.proposedTimeSlot || 'Anytime'})
+                                </span>
+                              )}
+                            </div>
+                            {req.message && (
+                              <p className="mt-1 text-[#6B7280] italic leading-relaxed">"{req.message}"</p>
+                            )}
+                          </div>
+                          {studentResumeUrl && (
+                            <div>
+                              {studentResumeUrl.startsWith('http://') || studentResumeUrl.startsWith('https://') ? (
+                                <a
+                                  href={studentResumeUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-xs text-[#0A0A0A] hover:underline"
+                                >
+                                  <FileText className="w-3.5 h-3.5 text-[#6B7280]" />
+                                  <span>View student resume →</span>
+                                </a>
+                              ) : (
+                                <span className="text-xs text-[#6B7280]">Resume: {studentResumeUrl}</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      }
+                      meta={
+                        req.requestedDate ? (
+                          <span className="text-xs text-[#6B7280] tabular-nums">
+                            {req.requestedDate}
+                          </span>
+                        ) : undefined
+                      }
+                      trailing={
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateMentorshipStatus(req.id, 'Declined', 'Declined due to mentorship bandwidth.', 'alumni');
+                              showToast(`Mentorship request from ${req.studentName} declined.`);
+                            }}
+                            className="px-3 py-1.5 border border-[#6B7280] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-lg transition-colors cursor-pointer"
                           >
-                            <FileText className="w-3.5 h-3.5 text-[#6B7280]" />
-                            <span>Resume Link</span>
-                          </a>
-                        ) : (
-                          <span className="text-[11px] font-mono text-[#6B7280]">Resume: {studentResumeUrl}</span>
-                        )
-                      ) : (
-                        <span className="text-[11px] font-mono text-[#6B7280]">No resume uploaded</span>
-                      )}
-                    </div>
+                            Decline
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateMentorshipStatus(req.id, 'Accepted', 'Accepted by alumni mentor.', 'alumni');
+                              showToast(`Mentorship request from ${req.studentName} accepted!`);
+                            }}
+                            className="px-3 py-1.5 bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                          >
+                            Accept mentorship
+                          </button>
+                        </div>
+                      }
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </Section>
 
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          updateMentorshipStatus(req.id, 'Declined', 'Declined due to mentorship bandwidth.', 'alumni');
-                          showToast(`Mentorship request from ${req.studentName} declined.`);
-                        }}
-                      >
-                        Decline
-                      </Button>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => {
-                          updateMentorshipStatus(req.id, 'Accepted', 'Accepted by alumni mentor.', 'alumni');
-                          showToast(`Mentorship request from ${req.studentName} accepted for proposed time!`);
-                        }}
-                      >
-                        Accept Mentorship
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+          {/* Section 3: Opportunities You've Posted */}
+          <Section
+            title="Opportunities you've posted"
+            count={myPostedJobs.length}
+            description="Manage your active referral postings, edit descriptions, or close filled positions."
+            action={
+              <button
+                type="button"
+                onClick={() => setActiveTab('jobs')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#6B7280] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-lg transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Post opportunity</span>
+              </button>
+            }
+          >
+            {myPostedJobs.length === 0 ? (
+              <EmptyState
+                icon={<Briefcase className="w-5 h-5 text-[#0A0A0A]" />}
+                title="No opportunities posted yet"
+                sentence="Share job vacancies, internships, or referral opportunities directly with VIT students and alumni."
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('jobs')}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Post first opportunity</span>
+                  </button>
+                }
+              />
+            ) : (
+              <div className="divide-y divide-[#E5E7EB] border-t border-b border-[#E5E7EB]">
+                {myPostedJobs.map((job, index) => {
+                  const isClosed = job.status === 'Closed';
+                  const isPending = job.moderationStatus === 'Pending Approval';
 
-      {/* 3.5 Posted Opportunities Management Section */}
-      <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-4 shadow-none">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E5E7EB] pb-3">
-          <div>
-            <h3 className="font-display font-bold text-xs uppercase tracking-wider text-[#0A0A0A] flex items-center gap-2">
-              <Briefcase className="w-4 h-4 text-[#0A0A0A]" />
-              Job Listings Posted by You ({myPostedJobs.length})
+                  return (
+                    <ListRow
+                      key={job.id}
+                      isFirst={index === 0}
+                      leading={
+                        <div className="w-9 h-9 rounded-lg bg-[#F3F4F6] text-[#0A0A0A] flex items-center justify-center shrink-0">
+                          <Briefcase className="w-4 h-4 text-[#0A0A0A]" />
+                        </div>
+                      }
+                      title={job.title}
+                      subtitle={
+                        <div>
+                          <span>{job.company} · {job.location} · <strong className="text-[#0A0A0A]">{job.stipendOrSalary}</strong></span>
+                          {job.description && (
+                            <p className="text-xs text-[#6B7280] line-clamp-1 mt-0.5">"{job.description}"</p>
+                          )}
+                        </div>
+                      }
+                      meta={
+                        <span className="text-xs text-[#6B7280] tabular-nums">
+                          {job.applicantsCount || 0} applicants · Deadline: {job.applicationDeadline || 'Rolling'}
+                        </span>
+                      }
+                      trailing={
+                        <div className="flex items-center gap-2">
+                          <StatusBadge
+                            tone={isClosed ? 'neutral' : isPending ? 'amber' : 'emerald'}
+                            label={isClosed ? 'Closed' : isPending ? 'Pending Moderation' : 'Active'}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              toggleJobStatus(job.id);
+                              showToast(`Position "${job.title}" marked as ${isClosed ? 'Active' : 'Closed'}.`);
+                            }}
+                            className="px-2.5 py-1 text-xs text-[#6B7280] hover:text-[#0A0A0A] border border-[#E5E7EB] rounded-md transition-colors"
+                          >
+                            {isClosed ? 'Reopen' : 'Close'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingJob(job);
+                              setEditJobTitle(job.title);
+                              setEditJobCompany(job.company);
+                              setEditJobStipend(job.stipendOrSalary);
+                              setEditJobType(job.type);
+                              setEditJobLocation(job.location);
+                              setEditJobDeadline(job.applicationDeadline);
+                              setEditJobDescription(job.description);
+                            }}
+                            className="px-2.5 py-1 text-xs text-[#0A0A0A] bg-[#FAFAFA] hover:bg-[#F3F4F6] border border-[#E5E7EB] rounded-md transition-colors"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      }
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </Section>
+        </div>
+
+        {/* Quiet Right Rail (≥1280px / lg) */}
+        <RightRail className="space-y-6">
+          {/* Mentorship Capacity Stepper & Availability */}
+          <div className="space-y-4 pb-6 border-b border-[#E5E7EB]">
+            <h3 className="text-xs font-semibold text-[#0A0A0A]">
+              Mentorship bandwidth
             </h3>
-            <p className="text-[#6B7280] font-medium text-xs mt-0.5">
-              Manage your active referral postings, edit descriptions, or close filled positions.
-            </p>
+
+            <CapacityMeter
+              activeCount={activeMenteesCount}
+              maxCount={maxMentees}
+              onMaxChange={handleCapacityChange}
+              minLimit={1}
+              maxLimit={10}
+              mode="stepper"
+              label="Mentoring capacity"
+            />
+
+            <Switch
+              checked={isMentoring}
+              onChange={handleToggleMentoring}
+              label={isMentoring ? 'Accepting mentees' : 'Mentoring paused'}
+              description="Students can send you 1-on-1 guidance requests"
+              variant="emerald"
+            />
           </div>
 
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setActiveTab('jobs')}
-            icon={<Plus className="w-3.5 h-3.5" />}
-          >
-            Post New Opportunity
-          </Button>
-        </div>
-
-        {myPostedJobs.length === 0 ? (
-          <div className="p-8 bg-[#FAFAFA] rounded-xl border border-dashed border-[#E5E7EB] text-center text-xs text-[#6B7280] font-medium">
-            You have not posted any job listings yet. Click "Post New Opportunity" to share a referral.
+          {/* Quick Actions */}
+          <div className="space-y-2">
+            <h3 className="text-xs font-semibold text-[#0A0A0A]">Quick actions</h3>
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={() => setActiveTab('jobs')}
+                className="text-left text-xs text-[#6B7280] hover:text-[#0A0A0A] py-1 transition-colors"
+              >
+                Post new job opportunity →
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('messaging')}
+                className="text-left text-xs text-[#6B7280] hover:text-[#0A0A0A] py-1 transition-colors"
+              >
+                Open messages & chats →
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('directory')}
+                className="text-left text-xs text-[#6B7280] hover:text-[#0A0A0A] py-1 transition-colors"
+              >
+                Search alumni directory →
+              </button>
+            </div>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {myPostedJobs.map(job => {
-              const isClosed = job.status === 'Closed';
-              const isPending = job.moderationStatus === 'Pending Approval';
-
-              return (
-                <div key={job.id} className="p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-[#0A0A0A] text-sm">{job.title}</h4>
-                        <Badge variant={isClosed ? 'slate' : isPending ? 'amber' : 'emerald'}>
-                          {isClosed ? 'Closed' : isPending ? 'Pending Moderation' : 'Active'}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-[#6B7280] mt-0.5">
-                        {job.company} • {job.location} • Posted: {job.postedDate}
-                      </p>
-                    </div>
-
-                    <span className="font-mono text-xs font-bold text-[#0A0A0A] self-start sm:self-auto">
-                      {job.stipendOrSalary}
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-[#374151] line-clamp-2 bg-white p-3 rounded-lg border border-[#E5E7EB]">
-                    "{job.description}"
-                  </p>
-
-                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#E5E7EB]">
-                    <span className="text-[11px] text-[#6B7280] font-mono">
-                      Applicants: <strong>{job.applicantsCount || 0}</strong>
-                    </span>
-
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        icon={<RotateCcw className="w-3.5 h-3.5" />}
-                        onClick={() => {
-                          toggleJobStatus(job.id);
-                          showToast(`Position "${job.title}" marked as ${isClosed ? 'Active' : 'Closed'}.`);
-                        }}
-                      >
-                        {isClosed ? 'Reopen Position' : 'Close Position'}
-                      </Button>
-
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        icon={<Edit3 className="w-3.5 h-3.5" />}
-                        onClick={() => {
-                          setEditingJob(job);
-                          setEditJobTitle(job.title);
-                          setEditJobCompany(job.company);
-                          setEditJobStipend(job.stipendOrSalary);
-                          setEditJobType(job.type);
-                          setEditJobLocation(job.location);
-                          setEditJobDeadline(job.applicationDeadline);
-                          setEditJobDescription(job.description);
-                        }}
-                      >
-                        Edit Listing
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* 4. Quick Action Grid for Alumni */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-3">
-          <div className="flex items-center gap-2 text-[#0A0A0A]">
-            <Briefcase className="w-4 h-4 text-[#0A0A0A]" />
-            <h3 className="font-bold text-xs uppercase tracking-wider">Post / Share Opportunity</h3>
-          </div>
-          <p className="text-xs text-[#6B7280]">
-            Share job vacancies, internships, or referral opportunities directly with VIT students and fellow alumni.
-          </p>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setActiveTab('jobs')}
-            icon={<Plus className="w-3.5 h-3.5" />}
-          >
-            Post Opportunity
-          </Button>
-        </div>
-
-        <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-3">
-          <div className="flex items-center gap-2 text-[#0A0A0A]">
-            <MessageSquare className="w-4 h-4 text-[#0A0A0A]" />
-            <h3 className="font-bold text-xs uppercase tracking-wider">NexaChats</h3>
-          </div>
-          <p className="text-xs text-[#6B7280]">
-            Connect 1-on-1 with accepted student mentees and network with fellow faculty and alumni peers.
-          </p>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setActiveTab('messaging')}
-            icon={<MessageSquare className="w-3.5 h-3.5" />}
-          >
-            Open Messages
-          </Button>
-        </div>
+        </RightRail>
       </div>
 
       {/* Profile Edit Modal */}
@@ -500,153 +551,127 @@ const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniPr
           />
 
           <TextField
-            label="Technical skills (comma-separated)"
+            label="Technical skills (comma separated)"
             type="text"
             value={skillsText}
             onChange={e => setSkillsText(e.target.value)}
           />
 
+          <TextArea
+            label="Professional summary / Bio"
+            value={bio}
+            onChange={e => setBio(e.target.value)}
+            rows={3}
+          />
+
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#E5E7EB]">
-            <Button
+            <button
               type="button"
-              variant="secondary"
-              size="sm"
               onClick={() => setShowProfileModal(false)}
+              className="px-3.5 py-2 border border-[#6B7280] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-lg transition-colors cursor-pointer"
             >
               Cancel
-            </Button>
-            <Button
+            </button>
+            <button
               type="submit"
-              variant="primary"
-              size="sm"
+              className="px-4 py-2 bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-medium rounded-lg transition-colors cursor-pointer"
             >
-              Save changes
-            </Button>
+              Save profile
+            </button>
           </div>
         </form>
       </Modal>
 
-      {/* EDIT JOB MODAL */}
-      {editingJob && (() => {
-        const isSubstantiveChange =
-          editJobTitle !== editingJob.title ||
-          editJobCompany !== editingJob.company ||
-          editJobStipend !== editingJob.stipendOrSalary ||
-          editJobType !== editingJob.type;
-
-        return (
-          <Modal
-            isOpen={!!editingJob}
-            onClose={() => setEditingJob(null)}
-            title={`Edit Opportunity — ${editingJob.title}`}
-            subtitle="Update listing details and application guidelines."
-            maxWidth="lg"
-          >
-            <div className="space-y-4 font-sans text-xs">
-              {isSubstantiveChange && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-xs text-[#78350F]">
-                  <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
-                  <p className="leading-relaxed">
-                    <strong className="text-[#B45309] font-bold">Re-moderation notice:</strong> Modifying title, company, salary/stipend, or job type will reset this listing to <em>"Pending Approval"</em> for admin review, temporarily hiding it from students until re-approved.
-                  </p>
-                </div>
-              )}
-
-              <form
-                onSubmit={e => {
-                  e.preventDefault();
-                  const res = updateJobListing(editingJob.id, {
-                    title: editJobTitle,
-                    company: editJobCompany,
-                    stipendOrSalary: editJobStipend,
-                    type: editJobType,
-                    location: editJobLocation,
-                    applicationDeadline: editJobDeadline,
-                    description: editJobDescription
-                  });
-
-                  setEditingJob(null);
-                  showToast(
-                    res.isReModerationRequired
-                      ? 'Listing updated & sent to admin for re-approval!'
-                      : 'Job listing updated successfully.'
-                  );
-                }}
-                className="space-y-3"
-              >
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <TextField
-                    label="Position title"
-                    type="text"
-                    required
-                    value={editJobTitle}
-                    onChange={e => setEditJobTitle(e.target.value)}
-                  />
-
-                  <TextField
-                    label="Company"
-                    type="text"
-                    required
-                    value={editJobCompany}
-                    onChange={e => setEditJobCompany(e.target.value)}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <SelectField
-                    label="Opportunity type"
-                    value={editJobType}
-                    onChange={e => setEditJobType(e.target.value as any)}
-                    options={[
-                      { value: 'Full-Time', label: 'Full-Time' },
-                      { value: 'Internship', label: 'Internship' },
-                      { value: 'Contract', label: 'Contract' },
-                      { value: 'Remote', label: 'Remote' }
-                    ]}
-                  />
-
-                  <TextField
-                    label="Stipend / Salary"
-                    type="text"
-                    required
-                    value={editJobStipend}
-                    onChange={e => setEditJobStipend(e.target.value)}
-                  />
-
-                  <TextField
-                    label="Location"
-                    type="text"
-                    required
-                    value={editJobLocation}
-                    onChange={e => setEditJobLocation(e.target.value)}
-                  />
-                </div>
-
-                <TextArea
-                  label="Description & referral guidelines"
-                  rows={3}
-                  required
-                  value={editJobDescription}
-                  onChange={e => setEditJobDescription(e.target.value)}
-                />
-
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#E5E7EB]">
-                  <Button type="button" variant="secondary" size="sm" onClick={() => setEditingJob(null)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" variant="primary" size="sm">
-                    Save listing changes
-                  </Button>
-                </div>
-              </form>
+      {/* Edit Job Modal */}
+      {editingJob && (
+        <Modal
+          isOpen={true}
+          onClose={() => setEditingJob(null)}
+          title="Edit Job Listing"
+          subtitle={`Editing listing for ${editingJob.title}`}
+          maxWidth="lg"
+        >
+          <form onSubmit={handleSaveJobEdit} className="space-y-3 font-sans text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <TextField
+                label="Job title"
+                type="text"
+                value={editJobTitle}
+                onChange={e => setEditJobTitle(e.target.value)}
+                required
+              />
+              <TextField
+                label="Company"
+                type="text"
+                value={editJobCompany}
+                onChange={e => setEditJobCompany(e.target.value)}
+                required
+              />
             </div>
-          </Modal>
-        );
-      })()}    </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <TextField
+                label="Stipend or salary"
+                type="text"
+                value={editJobStipend}
+                onChange={e => setEditJobStipend(e.target.value)}
+              />
+              <SelectField
+                label="Employment type"
+                value={editJobType}
+                onChange={e => setEditJobType(e.target.value as JobListing['type'])}
+                options={[
+                  { label: 'Full-Time', value: 'Full-Time' },
+                  { label: 'Internship', value: 'Internship' },
+                  { label: 'Part-Time', value: 'Part-Time' },
+                  { label: 'Referral Only', value: 'Referral' }
+                ]}
+              />
+              <TextField
+                label="Location"
+                type="text"
+                value={editJobLocation}
+                onChange={e => setEditJobLocation(e.target.value)}
+              />
+            </div>
+
+            <TextField
+              label="Application deadline"
+              type="text"
+              value={editJobDeadline}
+              onChange={e => setEditJobDeadline(e.target.value)}
+            />
+
+            <TextArea
+              label="Job description"
+              value={editJobDescription}
+              onChange={e => setEditJobDescription(e.target.value)}
+              rows={4}
+            />
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#E5E7EB]">
+              <button
+                type="button"
+                onClick={() => setEditingJob(null)}
+                className="px-3.5 py-2 border border-[#6B7280] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-medium rounded-lg transition-colors cursor-pointer"
+              >
+                Update listing
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
   );
 };
 
-export const AlumniDashboard: React.FC<AlumniDashboardProps> = (props) => {
+export const AlumniDashboard: React.FC<AlumniDashboardProps> = props => {
   const { currentUser } = useAuth();
   if (!currentUser) return null;
   return <AlumniDashboardContent {...props} alumni={currentUser as AlumniProfile} />;

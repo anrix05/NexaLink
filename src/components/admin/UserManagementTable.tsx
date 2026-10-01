@@ -26,7 +26,8 @@ import {
   Building2,
   GraduationCap,
   Briefcase,
-  Trash2
+  Trash2,
+  ChevronDown
 } from 'lucide-react';
 import { Badge, Button } from '../common/UIComponents';
 
@@ -52,8 +53,15 @@ export const UserManagementTable: React.FC = () => {
   ];
 
   // Filters & Search
+  const ALL_ROSTER_ROLES: { id: string; label: string }[] = [
+    { id: 'student', label: 'Student' },
+    { id: 'alumni', label: 'Alumni' },
+    { id: 'faculty', label: 'Faculty' },
+    { id: 'admin', label: 'Administrator' }
+  ];
   const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<string>('All');
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(['student', 'alumni', 'faculty', 'admin']);
+  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [deptFilter, setDeptFilter] = useState<string>('All');
 
@@ -72,7 +80,8 @@ export const UserManagementTable: React.FC = () => {
 
   // Filtered Roster
   const filteredUsers = allRosterUsers.filter(u => {
-    if (roleFilter !== 'All' && u.role !== roleFilter) return false;
+    if (selectedRoles.length > 0 && selectedRoles.length < 4 && !selectedRoles.includes(u.role)) return false;
+    if (selectedRoles.length === 0) return false;
     if (deptFilter !== 'All' && u.department !== deptFilter) return false;
     
     if (statusFilter !== 'All') {
@@ -94,6 +103,14 @@ export const UserManagementTable: React.FC = () => {
     }
     return true;
   });
+
+  const roleSummaryText = selectedRoles.length === 4
+    ? 'All roles'
+    : selectedRoles.length === 0
+      ? 'No roles selected'
+      : selectedRoles.length === 1
+        ? `Role: ${ALL_ROSTER_ROLES.find(r => r.id === selectedRoles[0])?.label}`
+        : `Roles: ${selectedRoles.length} selected`;
 
   const legacyUnbackfilledCount = alumniList.filter(a => a.loginRecoveryNeeded).length;
 
@@ -117,7 +134,7 @@ export const UserManagementTable: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={() => { setRoleFilter('alumni'); setSearchQuery(''); }}
+              onClick={() => { setSelectedRoles(['alumni']); setSearchQuery(''); }}
               className="px-3 py-1.5 bg-[#B45309] text-white rounded-lg font-bold text-[11px] hover:bg-[#92400E] transition-colors shrink-0"
             >
               Review Legacy Accounts
@@ -146,7 +163,7 @@ export const UserManagementTable: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 font-semibold">
             {/* Search Input */}
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-[#9CA3AF]" />
+              <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-[#6B7280]" />
               <input
                 type="text"
                 value={searchQuery}
@@ -156,19 +173,61 @@ export const UserManagementTable: React.FC = () => {
               />
             </div>
 
-            {/* Role Filter */}
-            <div>
-              <select
-                value={roleFilter}
-                onChange={e => setRoleFilter(e.target.value)}
-                className="w-full bg-[#FAFAFA] border border-[#E5E7EB] px-3 py-2 rounded-lg text-xs font-bold text-[#0A0A0A]"
+            {/* B7: Multi-Select Role Filter with Visible Selected Count Summary */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
+                className="w-full bg-[#FAFAFA] border border-[#E5E7EB] px-3 py-2 rounded-lg text-xs font-bold text-[#0A0A0A] flex items-center justify-between gap-2 hover:bg-[#F3F4F6] transition-colors"
+                title={roleSummaryText}
               >
-                <option value="All">All Roles (Student, Alumni, Faculty, Admin)</option>
-                <option value="student">Student Role</option>
-                <option value="alumni">Alumni Role</option>
-                <option value="faculty">Faculty Role</option>
-                <option value="admin">Administrator Role</option>
-              </select>
+                <span className="truncate">{roleSummaryText}</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-[#6B7280] shrink-0 transition-transform ${isRoleDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isRoleDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setIsRoleDropdownOpen(false)} />
+                  <div className="absolute left-0 right-0 mt-1 bg-white border border-[#E5E7EB] rounded-lg shadow-none z-30 p-2 space-y-1">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-[#E5E7EB] mb-1">
+                      <span className="text-xs font-semibold text-[#0A0A0A]">Roles</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedRoles.length === ALL_ROSTER_ROLES.length) setSelectedRoles([]);
+                          else setSelectedRoles(ALL_ROSTER_ROLES.map(r => r.id));
+                        }}
+                        className="text-[10px] text-[#0A0A0A] hover:underline font-bold"
+                      >
+                        {selectedRoles.length === ALL_ROSTER_ROLES.length ? 'Deselect all' : 'Select all'}
+                      </button>
+                    </div>
+                    {ALL_ROSTER_ROLES.map(role => {
+                      const checked = selectedRoles.includes(role.id);
+                      return (
+                        <label
+                          key={role.id}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[#F3F4F6] cursor-pointer text-xs font-semibold text-[#0A0A0A]"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              if (checked) {
+                                setSelectedRoles(selectedRoles.filter(r => r !== role.id));
+                              } else {
+                                setSelectedRoles([...selectedRoles, role.id]);
+                              }
+                            }}
+                            className="rounded border-[#E5E7EB] text-[#0A0A0A] focus:ring-0"
+                          />
+                          <span>{role.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Status Filter */}
@@ -208,7 +267,7 @@ export const UserManagementTable: React.FC = () => {
         <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-none">
           <div className="overflow-x-auto">
             <table className="w-full text-left font-sans text-xs">
-              <thead className="bg-[#FAFAFA] border-b border-[#E5E7EB] text-[10px] uppercase font-bold tracking-wider text-[#0A0A0A] whitespace-nowrap">
+              <thead className="bg-[#FAFAFA] border-b border-[#E5E7EB] text-xs font-semibold text-[#0A0A0A] whitespace-nowrap">
                 <tr>
                   <th className="p-3.5">User Member</th>
                   <th className="p-3.5">Role</th>
@@ -358,7 +417,7 @@ export const UserManagementTable: React.FC = () => {
                             <button
                               onClick={() => setDeleteUserCandidate(user)}
                               title="Delete Account Record"
-                              className="p-1.5 text-[#9CA3AF] hover:text-[#DC2626] hover:bg-rose-50 rounded-lg transition"
+                              className="p-1.5 text-[#6B7280] hover:text-[#DC2626] hover:bg-rose-50 rounded-lg transition"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -391,7 +450,7 @@ export const UserManagementTable: React.FC = () => {
                     <p className="text-[11px] text-[#6B7280] font-mono">{selectedUserDetail.email}</p>
                   </div>
                 </div>
-                <button onClick={() => setSelectedUserDetail(null)} className="text-[#9CA3AF] hover:text-[#0A0A0A] font-bold">
+                <button onClick={() => setSelectedUserDetail(null)} className="text-[#6B7280] hover:text-[#0A0A0A] font-bold">
                   ✕
                 </button>
               </div>
@@ -415,7 +474,7 @@ export const UserManagementTable: React.FC = () => {
                 <div className="grid grid-cols-2 gap-3 bg-[#FAFAFA] p-3 rounded-lg border border-[#E5E7EB]">
                   <div>
                     <span className="app-label text-[#0A0A0A] font-bold">Account Role</span>
-                    <p className="font-bold text-[#0A0A0A] uppercase">{selectedUserDetail.role}</p>
+                    <p className="font-semibold text-[#0A0A0A] capitalize">{selectedUserDetail.role}</p>
                   </div>
                   <div>
                     <span className="app-label text-[#0A0A0A] font-bold">Department</span>
@@ -462,7 +521,7 @@ export const UserManagementTable: React.FC = () => {
                   <Edit3 className="w-4 h-4 text-[#0A0A0A]" />
                   Edit User Credentials & Role
                 </h3>
-                <button onClick={() => setRoleMutateUser(null)} className="text-[#9CA3AF] hover:text-[#0A0A0A] font-bold">
+                <button onClick={() => setRoleMutateUser(null)} className="text-[#6B7280] hover:text-[#0A0A0A] font-bold">
                   ✕
                 </button>
               </div>
@@ -560,7 +619,7 @@ export const UserManagementTable: React.FC = () => {
               <div className="p-3 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl space-y-1">
                 <div className="font-bold text-[#0A0A0A]">{deleteUserCandidate.name}</div>
                 <div className="text-[#6B7280] font-mono text-[11px]">{deleteUserCandidate.email}</div>
-                <div className="text-[10px] text-[#9CA3AF] uppercase font-bold tracking-wider">{deleteUserCandidate.role || deleteUserCandidate.userCategory} • {deleteUserCandidate.department}</div>
+                <div className="text-xs text-[#6B7280] font-medium capitalize">{deleteUserCandidate.role || deleteUserCandidate.userCategory} · {deleteUserCandidate.department}</div>
               </div>
 
               <p className="text-[#4B5563] text-xs leading-relaxed">

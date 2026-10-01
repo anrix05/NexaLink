@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import type {
   AlumniProfile,
@@ -18,9 +18,40 @@ import type {
   RoleTransitionRequest,
   AdminInvite
 } from '../types';
-// Removed static import of mockData for production tree-shaking
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { subscribeToChatMessages, subscribeToNotifications } from '../lib/realtime';
+import { parseAnnouncementMeta, serializeAnnouncementContent } from '../components/common/InstitutionalAnnouncementFeed';
+import { INITIAL_ANNOUNCEMENTS } from '../data/mockData';
+
+const generateUUID = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
+const getDeletedAnnouncementIds = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem('nexalink_deleted_announcement_ids');
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return new Set(arr);
+    }
+  } catch {}
+  return new Set();
+};
+
+const addDeletedAnnouncementId = (id: string) => {
+  try {
+    const current = getDeletedAnnouncementIds();
+    current.add(id);
+    localStorage.setItem('nexalink_deleted_announcement_ids', JSON.stringify(Array.from(current)));
+  } catch {}
+};
 
 interface DataContextType {
   alumniList: AlumniProfile[];
@@ -50,6 +81,7 @@ interface DataContextType {
   reactivateUser: (userId: string) => void;
   mutateUserRole: (userId: string, newRole: UserRole) => void;
   reopenVerification: (userId: string) => void;
+  deleteUser: (userId: string) => Promise<void>;
   addJob: (job: Omit<JobListing, 'id' | 'postedDate' | 'applicantsCount' | 'status'>, callerRole?: string) => { success: boolean; statusCode?: number; error?: string; job?: JobListing };
   moderateOpportunity: (jobId: string, moderationStatus: 'Approved' | 'Rejected', reason?: string) => void;
   addEvent: (event: Omit<EventItem, 'id' | 'rsvpsCount' | 'registeredUserIds' | 'status'>) => void;
@@ -65,8 +97,11 @@ interface DataContextType {
   toggleReaction: (messageId: string, emoji: string) => void;
   retryFailedMessage: (messageId: string) => void;
   markThreadAsRead: (contactId: string) => void;
-  graduateStudentToAlumni: (studentId: string, company?: string, designation?: string) => void;
-  addAnnouncement: (anc: Omit<Announcement, 'id' | 'date'>) => void;
+  addAnnouncement: (anc: Omit<Announcement, 'id' | 'date'>) => Promise<void> | void;
+  updateAnnouncement: (announcementId: string, updates: Partial<Announcement>) => Promise<void> | void;
+  deleteAnnouncement: (announcementId: string) => Promise<void> | void;
+  togglePinAnnouncement: (announcementId: string) => Promise<void> | void;
+  graduateStudentToAlumni: (studentId: string, customCompany?: string, customDesignation?: string) => void;
   applyForJob: (jobId: string) => void;
   registerUserInDatabase: (userProfile: StudentProfile | AlumniProfile | FacultyProfile) => void;
   markNotificationRead: (id: string) => void;
@@ -124,7 +159,7 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser, updateCurrentUserState } = useAuth();
+  const { currentUser, updateCurrentUserState, isCheckingSession } = useAuth();
   const [adminList, setAdminList] = useState<User[]>([]);
   const [adminInvites, setAdminInvites] = useState<AdminInvite[]>([]);
   const [alumniList, setAlumniList] = useState<AlumniProfile[]>([]);
@@ -133,7 +168,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [jobsList, setJobsList] = useState<JobListing[]>([]);
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
   const [mentorshipRequests, setMentorshipRequests] = useState<MentorshipRequest[]>([]);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>(() => {
+    try {
+      const deleted = getDeletedAnnouncementIds();
+      const cached = localStorage.getItem('nexalink_announcements_cache');
+      if (cached !== null) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((a: any) => !deleted.has(a.id) && a.id !== 'ann-1' && !a.title?.includes('NAAC Grade A+'));
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return INITIAL_ANNOUNCEMENTS;
+  });
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [roleTransitionRequests, setRoleTransitionRequests] = useState<RoleTransitionRequest[]>([]);
@@ -153,40 +202,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   ]);
 
-  // Load live data from Supabase if configured
-  useEffect(() => {
-    if (!isSupabaseConfigured()) {
-      if (import.meta.env.DEV) {
-        setIsDataLoading(true);
-        import('../data/mockData').then((mockData) => {
-          setAdminList([mockData.DEMO_ADMIN, mockData.DEMO_ADMIN_2]);
-          setAdminInvites(mockData.INITIAL_ADMIN_INVITES);
-          setAlumniList(mockData.INITIAL_ALUMNI);
-          setStudentList(mockData.INITIAL_STUDENTS);
-          setFacultyList(mockData.INITIAL_TEACHERS);
-          setJobsList(mockData.INITIAL_JOBS);
-          setEventsList(mockData.INITIAL_EVENTS);
-          setMentorshipRequests(mockData.INITIAL_MENTORSHIP_REQUESTS);
-          setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
-          setNotifications(mockData.INITIAL_NOTIFICATIONS);
-          setMessages(mockData.INITIAL_MESSAGES);
-        }).finally(() => {
-          setIsDataLoading(false);
-        });
+  // Core Supabase Data Loader
+  const loadSupabaseData = useCallback(async () => {
+    setIsDataLoading(true);
+    try {
+      // 1. Fetch Users + Profile Tables
+      const columns = currentUser?.role === 'admin'
+        ? '*'
+        : 'id, name, email, role, avatar_url, department, phone, is_verified, verification_status, rejection_reason, clarification_requested, is_active, enrollment_no, employee_id, bio, privacy_settings, personal_email, proof_document_name, verification_document_url';
+
+      const { data: usersData, error: uErr } = await supabase.from('users').select(columns);
+      if (uErr) {
+        console.error('[DataContext] Error fetching users from Supabase:', uErr);
       }
-      return;
-    }
 
-    const loadSupabaseData = async () => {
-      setIsDataLoading(true);
-      try {
-        // 1. Fetch Users + Profile Tables
-        const columns = currentUser?.role === 'admin'
-          ? '*'
-          : 'id, name, email, role, avatar_url, department, phone, is_verified, verification_status, rejection_reason, clarification_requested, is_active, enrollment_no, employee_id, bio, privacy_settings, personal_email';
-
-        const { data: usersData, error: uErr } = await supabase.from('users').select(columns);
-        if (!uErr && usersData && usersData.length > 0) {
+      if (!uErr && usersData) {
+        if (usersData.length === 0) {
+          setStudentList([]);
+          setAlumniList([]);
+          setFacultyList([]);
+          setAdminList([]);
+        } else {
           const [studentsRes, alumniRes, facultyRes, notificationsRes] = await Promise.all([
             supabase.from('student_profiles').select('*'),
             supabase.from('alumni_profiles').select('*'),
@@ -210,10 +246,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const loadedAdmins: User[] = [];
 
           usersData.forEach((u: any) => {
+            // Self-heal corrupted emails in database if leading '+' is detected
+            if (u.email && typeof u.email === 'string' && u.email.startsWith('+')) {
+              const cleaned = u.email.replace(/^\+/, '').trim();
+              u.email = cleaned;
+              supabase
+                .from('users')
+                .update({ email: cleaned })
+                .eq('id', u.id)
+                .then(({ error }: { error: any }) => {
+                  if (error) {
+                    console.warn('[DataContext] Could not auto-heal email in Supabase:', error.message);
+                  } else {
+                    console.log(`[DataContext] Auto-healed corrupted email for user ${u.id}: ${cleaned}`);
+                  }
+                });
+            }
+            if (u.personal_email && typeof u.personal_email === 'string' && u.personal_email.startsWith('+')) {
+              const cleanedPersonal = u.personal_email.replace(/^\+/, '').trim();
+              u.personal_email = cleanedPersonal;
+              supabase
+                .from('users')
+                .update({ personal_email: cleanedPersonal })
+                .eq('id', u.id)
+                .then();
+            }
+
             const baseUser: User = {
               id: u.id,
               name: u.name,
-              email: u.email,
+              email: (u.email || '').replace(/^\+/, '').trim(),
               role: u.role,
               avatar: u.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
               department: u.department,
@@ -229,7 +291,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               employeeId: u.employee_id || undefined,
               bio: u.bio || undefined,
               privacySettings: u.privacy_settings || undefined,
-              personalEmail: u.personal_email
+              personalEmail: u.personal_email,
+              createdAt: u.created_at || (u as any).createdAt || undefined
             };
 
             if (u.role === 'student') {
@@ -312,6 +375,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setFacultyList(loadedFaculty);
           setAdminList(loadedAdmins);
         }
+      }
 
         // 2. Fetch Jobs
         const { data: jobsData, error: jErr } = await supabase.from('jobs').select('*').order('posted_date', { ascending: false });
@@ -402,17 +466,50 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // 5. Fetch Announcements
         const { data: ancData, error: aErr } = await supabase.from('announcements').select('*').eq('is_retracted', false).order('date', { ascending: false });
-        if (!aErr && ancData) {
-          setAnnouncements(ancData.map((a: any) => ({
-            id: a.id,
-            title: a.title,
-            category: a.category,
-            author: a.author,
-            date: a.date,
-            content: a.content,
-            isImportant: a.is_important,
-            targetAudience: a.target_audience
-          })));
+        const deletedAncIds = getDeletedAnnouncementIds();
+
+        if (!aErr && ancData && ancData.length > 0) {
+          const loaded = ancData
+            .filter((a: any) => !deletedAncIds.has(a.id) && a.id !== 'ann-1' && !a.title?.includes('NAAC Grade A+'))
+            .map((a: any) => {
+              const { cleanContent, meta } = parseAnnouncementMeta(a.content || '');
+              const severity = (a.severity || meta?.severity || (a.is_important ? 'governance' : 'standard')) as any;
+              const expiresAt = a.expires_at || meta?.expiresAt || undefined;
+              const isPinned = a.is_pinned !== undefined && a.is_pinned !== null ? a.is_pinned : (meta?.isPinned ?? false);
+
+              return {
+                id: a.id,
+                title: a.title,
+                category: a.category,
+                author: a.author,
+                date: a.date,
+                content: cleanContent,
+                isImportant: a.is_important,
+                targetAudience: a.target_audience,
+                severity,
+                expiresAt,
+                isPinned,
+                isRetracted: a.is_retracted || false,
+                retractedAt: a.retracted_at || undefined
+              };
+            });
+          setAnnouncements(loaded);
+          try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(loaded)); } catch {}
+        } else {
+          // If Supabase returned 0 rows, check local cache only (do NOT resurrect deleted announcements)
+          try {
+            const cached = localStorage.getItem('nexalink_announcements_cache');
+            if (cached !== null) {
+              const parsed = JSON.parse(cached);
+              if (Array.isArray(parsed)) {
+                const active = parsed.filter((a: any) => !deletedAncIds.has(a.id) && a.id !== 'ann-1' && !a.title?.includes('NAAC Grade A+'));
+                setAnnouncements(active);
+                try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(active)); } catch {}
+                return;
+              }
+            }
+          } catch {}
+          setAnnouncements([]);
         }
 
         // 6. Fetch Chat Messages (now using supabase-chat helper)
@@ -520,10 +617,37 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } finally {
         setIsDataLoading(false);
       }
-    };
+    }, [currentUser?.id, currentUser?.role]);
 
-    loadSupabaseData();
-  }, []);
+    // Load live data from Supabase whenever auth session settles or user changes
+    useEffect(() => {
+      if (!isSupabaseConfigured()) {
+        if (import.meta.env.DEV) {
+          setIsDataLoading(true);
+          import('../data/mockData').then((mockData) => {
+            setAdminList([mockData.DEMO_ADMIN, mockData.DEMO_ADMIN_2]);
+            setAdminInvites(mockData.INITIAL_ADMIN_INVITES);
+            setAlumniList(mockData.INITIAL_ALUMNI);
+            setStudentList(mockData.INITIAL_STUDENTS);
+            setFacultyList(mockData.INITIAL_TEACHERS);
+            setJobsList(mockData.INITIAL_JOBS);
+            setEventsList(mockData.INITIAL_EVENTS);
+            setMentorshipRequests(mockData.INITIAL_MENTORSHIP_REQUESTS);
+            setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
+            setNotifications(mockData.INITIAL_NOTIFICATIONS);
+            setMessages(mockData.INITIAL_MESSAGES);
+          }).finally(() => {
+            setIsDataLoading(false);
+          });
+        }
+        return;
+      }
+
+      // Wait until AuthContext finishes checking existing session
+      if (isCheckingSession) return;
+
+      loadSupabaseData();
+    }, [isCheckingSession, loadSupabaseData]);
 
   // Supabase Realtime Subscription for Chat Messages
   useEffect(() => {
@@ -570,6 +694,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .channel('admin_dashboard_updates')
       .on(
         'postgres_changes',
+        { event: '*', schema: 'public', table: 'users' },
+        (payload) => {
+          console.log('[DataContext] Realtime user change detected:', payload.eventType);
+          loadSupabaseData();
+        }
+      )
+      .on(
+        'postgres_changes',
         { event: '*', schema: 'public', table: 'admin_invites' },
         (payload) => {
           if (payload.eventType === 'INSERT') {
@@ -601,7 +733,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       supabase.removeChannel(adminChannel);
     };
-  }, [currentUser?.role]);
+  }, [currentUser?.role, loadSupabaseData]);
 
   const handleRealtimeMessageEvent = (payload: any) => {
     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
@@ -646,7 +778,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const allUsers = [...adminList, ...alumniList, ...studentList, ...facultyList];
   const pendingUsersList = allUsers.filter(
-    u => u.isVerified === false || u.verificationStatus === 'Pending Verification' || u.verificationStatus === 'Needs Clarification'
+    u =>
+      u.verificationStatus !== 'Rejected' &&
+      u.verificationStatus !== 'Deactivated' &&
+      u.verificationStatus !== 'Verified' &&
+      !u.isVerified &&
+      (u.verificationStatus === 'Pending Verification' || u.verificationStatus === 'Needs Clarification' || !u.verificationStatus)
   ) as (StudentProfile | AlumniProfile | FacultyProfile)[];
 
   const addAuditLog = (action: string, performedBy: string, details: string, target: string = 'System', isBulkAction: boolean = false, bulkMetadata: any = null) => {
@@ -690,7 +827,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       prev.map(f => (f.id === userId ? { ...f, isVerified: true, verificationStatus: 'Verified' } : f))
     );
 
-    addAuditLog('USER_VERIFIED', 'Administrator (Dr. Sunita Rawat)', `Approved user account verification for ID: ${userId}`, userId);
+    addAuditLog('USER_VERIFIED', currentUser?.name || 'Administrator', `Approved user account verification for ID: ${userId}`, userId);
 
     const newNotif: NotificationItem = {
       id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `notif-${Date.now()}`,
@@ -878,6 +1015,30 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }).eq('id', userId).then(({ error }) => {
         if (error) console.error('[Supabase reopenVerification error]', error);
       });
+    }
+  };
+
+  const deleteUser = async (userId: string) => {
+    setAlumniList(prev => prev.filter(a => a.id !== userId));
+    setStudentList(prev => prev.filter(s => s.id !== userId));
+    setFacultyList(prev => prev.filter(f => f.id !== userId));
+    setAdminList(prev => prev.filter(u => u.id !== userId));
+
+    addAuditLog('USER_DELETED', 'Administrator', `Deleted account record for user ID ${userId}`, userId);
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('notifications').delete().eq('user_id', userId);
+        await supabase.from('student_profiles').delete().eq('user_id', userId);
+        await supabase.from('alumni_profiles').delete().eq('user_id', userId);
+        await supabase.from('faculty_profiles').delete().eq('user_id', userId);
+        await supabase.from('users').update({
+          is_active: false,
+          verification_status: 'Deactivated'
+        }).eq('id', userId);
+      } catch (err) {
+        console.error('[Supabase deleteUser error]', err);
+      }
     }
   };
 
@@ -1172,17 +1333,41 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const studentsToGraduate = studentList.filter(s => studentIds.includes(s.id));
     if (studentsToGraduate.length === 0) return { count: 0, missingEmailCount: 0 };
 
+    // Graduation lockout safeguard: require verified personal email
+    const eligibleStudents: StudentProfile[] = [];
+    const skippedStudents: { id: string; name: string; reason: string }[] = [];
+
+    studentsToGraduate.forEach(student => {
+      const personalMail = student.personalEmail || options?.personalEmailMap?.[student.id];
+      const hasPersonalEmail = personalMail && !personalMail.endsWith('@student.vit.edu.in');
+      const isInstitutionalOnly = student.email?.endsWith('@student.vit.edu.in') && !hasPersonalEmail;
+
+      if (isInstitutionalOnly) {
+        skippedStudents.push({
+          id: student.id,
+          name: student.name,
+          reason: 'Missing verified personal recovery email.'
+        });
+      } else {
+        eligibleStudents.push(student);
+      }
+    });
+
+    if (eligibleStudents.length === 0) {
+      return { count: 0, missingEmailCount: skippedStudents.length, skippedStudents };
+    }
+
     const isProvisional = !options?.company && !options?.designation;
 
     const studentNames: string[] = [];
     const newAlumniList: AlumniProfile[] = [];
     const graduatedStudentIds = new Set<string>();
 
-    studentsToGraduate.forEach(student => {
+    eligibleStudents.forEach(student => {
       graduatedStudentIds.add(student.id);
       studentNames.push(student.name);
 
-      const loginMail = student.email || (student as any).personalEmail || `${student.name.toLowerCase().replace(/\s+/g, '.')}@gmail.com`;
+      const loginMail = student.personalEmail || options?.personalEmailMap?.[student.id] || student.email;
 
       const convertedAlumni: AlumniProfile = {
         ...student,
@@ -1245,18 +1430,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog(
       'BULK_GRADUATION_PROVISIONAL',
       options?.adminId || 'Administrator',
-      `Provisional graduation executed for ${studentsToGraduate.length} students.`,
-      `Batch Cohort (${studentsToGraduate.length} Students)`,
+      `Provisional graduation executed for ${eligibleStudents.length} students. (${skippedStudents.length} skipped due to missing personal email)`,
+      `Batch Cohort (${eligibleStudents.length} Students)`,
       true,
       {
-        affectedCount: studentsToGraduate.length,
-        missingEmailCount: 0,
+        affectedCount: eligibleStudents.length,
+        missingEmailCount: skippedStudents.length,
         studentNames,
-        affectedUserIds: studentsToGraduate.map(s => s.id)
+        affectedUserIds: eligibleStudents.map(s => s.id)
       }
     );
 
-    return { count: studentsToGraduate.length, missingEmailCount: 0 };
+    return { count: eligibleStudents.length, missingEmailCount: skippedStudents.length, skippedStudents };
   };
 
   const backfillLegacyEmails = (emailMap: Record<string, string>) => {
@@ -1323,7 +1508,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const retractAnnouncement = (announcementId: string) => {
-    setAnnouncements(prev => prev.filter(a => a.id !== announcementId));
+    addDeletedAnnouncementId(announcementId);
+    setAnnouncements(prev => {
+      const next = prev.filter(a => a.id !== announcementId);
+      try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(next)); } catch {}
+      return next;
+    });
     addAuditLog('ANNOUNCEMENT_RETRACTED', 'Administrator', `Removed announcement with ID: ${announcementId}`);
 
     if (isSupabaseConfigured()) {
@@ -1850,29 +2040,123 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const addAnnouncement = (ancData: Omit<Announcement, 'id' | 'date'>) => {
+  const addAnnouncement = async (ancData: Omit<Announcement, 'id' | 'date'>) => {
     const newAnc: Announcement = {
       ...ancData,
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `anc-${Date.now()}`,
-      date: new Date().toISOString().split('T')[0]
+      id: generateUUID(),
+      date: new Date().toISOString()
     };
-    setAnnouncements([newAnc, ...announcements]);
+    setAnnouncements(prev => {
+      const next = [newAnc, ...prev.filter(x => x.id !== newAnc.id)];
+      try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(next)); } catch {}
+      return next;
+    });
+    addAuditLog('ANNOUNCEMENT_PUBLISHED', 'Administrator', `Published institutional announcement: "${newAnc.title}"`);
 
     if (isSupabaseConfigured()) {
-      supabase.from('announcements').insert({
+      const serializedContent = serializeAnnouncementContent(newAnc.content, {
+        severity: newAnc.severity || 'standard',
+        expiresAt: newAnc.expiresAt,
+        isPinned: newAnc.isPinned || false
+      });
+
+      const nativePayload: any = {
         id: newAnc.id,
         title: newAnc.title,
         category: newAnc.category,
         author: newAnc.author,
         date: newAnc.date,
-        content: newAnc.content,
-        is_important: newAnc.isImportant,
+        content: serializedContent,
+        is_important: newAnc.severity === 'governance' || !!newAnc.isImportant,
         target_audience: newAnc.targetAudience,
-        is_retracted: false
-      }).then(({ error }) => {
-        if (error) console.error('[Supabase addAnnouncement error]', error);
-      });
+        is_retracted: false,
+        severity: newAnc.severity || 'standard',
+        expires_at: newAnc.expiresAt || null,
+        is_pinned: newAnc.isPinned || false
+      };
+
+      const { error } = await supabase.from('announcements').insert(nativePayload);
+      if (error) {
+        if (error.code === '42703' || error.message?.includes('does not exist')) {
+          const { id, title, category, author, date, content, is_important, target_audience, is_retracted } = nativePayload;
+          const { error: fallbackErr } = await supabase.from('announcements').insert({
+            id, title, category, author, date, content, is_important, target_audience, is_retracted
+          });
+          if (fallbackErr) console.warn('[Supabase addAnnouncement fallback error]', fallbackErr);
+        } else {
+          console.warn('[Supabase addAnnouncement error]', error);
+        }
+      }
     }
+  };
+
+  const updateAnnouncement = async (announcementId: string, updates: Partial<Announcement>) => {
+    setAnnouncements(prev => {
+      const next = prev.map(a => a.id === announcementId ? { ...a, ...updates } : a);
+      try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(next)); } catch {}
+      return next;
+    });
+    addAuditLog('ANNOUNCEMENT_UPDATED', 'Administrator', `Updated institutional announcement: "${updates.title || announcementId}"`);
+
+    if (isSupabaseConfigured()) {
+      const current = announcements.find(a => a.id === announcementId);
+      const merged = { ...current, ...updates };
+
+      const serializedContent = serializeAnnouncementContent(merged.content || '', {
+        severity: merged.severity || 'standard',
+        expiresAt: merged.expiresAt,
+        isPinned: merged.isPinned || false
+      });
+
+      const nativePayload: any = {
+        title: merged.title,
+        category: merged.category,
+        content: serializedContent,
+        is_important: merged.severity === 'governance' || !!merged.isImportant,
+        target_audience: merged.targetAudience,
+        severity: merged.severity || 'standard',
+        expires_at: merged.expiresAt || null,
+        is_pinned: merged.isPinned || false
+      };
+
+      const { error } = await supabase.from('announcements').update(nativePayload).eq('id', announcementId);
+      if (error && (error.code === '42703' || error.message?.includes('does not exist'))) {
+        const { title, category, content, is_important, target_audience } = nativePayload;
+        const { error: fallbackErr } = await supabase.from('announcements').update({
+          title, category, content, is_important, target_audience
+        }).eq('id', announcementId);
+        if (fallbackErr) console.warn('[Supabase updateAnnouncement fallback error]', fallbackErr);
+      }
+    }
+  };
+
+  const deleteAnnouncement = async (announcementId: string) => {
+    addDeletedAnnouncementId(announcementId);
+    const target = announcements.find(a => a.id === announcementId);
+    setAnnouncements(prev => {
+      const next = prev.filter(a => a.id !== announcementId);
+      try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(next)); } catch {}
+      return next;
+    });
+    addAuditLog('ANNOUNCEMENT_DELETED', 'Administrator', `Deleted announcement: "${target?.title || announcementId}"`);
+
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase.from('announcements').delete().eq('id', announcementId);
+      if (error) {
+        console.warn('[Supabase deleteAnnouncement failed, attempting soft retract]', error);
+        await supabase.from('announcements').update({
+          is_retracted: true,
+          retracted_at: new Date().toISOString()
+        }).eq('id', announcementId);
+      }
+    }
+  };
+
+  const togglePinAnnouncement = async (announcementId: string) => {
+    const target = announcements.find(a => a.id === announcementId);
+    if (!target) return;
+    const newPinned = !target.isPinned;
+    await updateAnnouncement(announcementId, { isPinned: newPinned });
   };
 
   const applyForJob = (jobId: string) => {
@@ -2427,6 +2711,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         reactivateUser,
         mutateUserRole,
         reopenVerification,
+        deleteUser,
         addJob,
         moderateOpportunity,
         addEvent,
@@ -2439,6 +2724,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         reportMessage,
         graduateStudentToAlumni,
         addAnnouncement,
+        updateAnnouncement,
+        deleteAnnouncement,
+        togglePinAnnouncement,
+        retractAnnouncement,
         applyForJob,
         registerUserInDatabase,
         markNotificationRead,
@@ -2458,7 +2747,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         getReportedMessages,
         dismissMessageReport,
         actionMessageReport,
-        retractAnnouncement,
         bulkGraduateStudents,
         updateJobListing,
         toggleJobStatus,

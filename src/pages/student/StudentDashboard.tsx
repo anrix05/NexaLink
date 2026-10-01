@@ -8,30 +8,31 @@ import {
   getRecommendedOpportunities
 } from '../../utils/recommendationEngine';
 import {
-  Users,
-  Bookmark,
   Calendar,
-  Sparkles,
-  Building2,
-  ChevronRight,
   GraduationCap,
   CheckCircle2,
   ArrowRight,
   Briefcase,
-  Check,
-  ShieldCheck,
-  Lightbulb,
-  ExternalLink,
-  GraduationCap as GradCapIcon,
-  X,
-  Clock,
   AlertCircle,
   Upload,
-  FileText
+  FileText,
+  Clock,
+  Sparkles,
+  X
 } from 'lucide-react';
-import { Badge, Button, StatCard, TextField, SelectField, Modal } from '../../components/common/UIComponents';
+import {
+  PageHeader,
+  Section,
+  StatStrip,
+  ListRow,
+  FocusPanel,
+  RightRail,
+  StatusBadge
+} from '../../components/ui';
+import { Button, TextField, Modal } from '../../components/common/UIComponents';
 import { uploadProofDocument } from '../../lib/storage';
 import { InstitutionalAnnouncementFeed } from '../../components/common/InstitutionalAnnouncementFeed';
+import { getGreetingName } from '../../utils/validators';
 
 interface StudentDashboardProps {
   setActiveTab: (tab: string, subTab?: string) => void;
@@ -39,7 +40,17 @@ interface StudentDashboardProps {
 
 const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile: StudentProfile }> = ({ setActiveTab, studentProfile }) => {
   const currentUser = studentProfile;
-  const { alumniList, facultyList, jobsList, eventsList, mentorshipRequests, roleTransitionRequests, submitRoleTransitionRequest, resubmitUserVerification, isDataLoading, announcements } = useData();
+  const {
+    alumniList,
+    facultyList,
+    jobsList,
+    eventsList,
+    mentorshipRequests,
+    roleTransitionRequests,
+    submitRoleTransitionRequest,
+    resubmitUserVerification,
+    announcements
+  } = useData();
 
   // Run Smart Recommendation Engine
   const recommendedAlumniMatches = getRecommendedAlumniMentors(studentProfile, alumniList);
@@ -48,14 +59,15 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
 
   // Role Transition State
   const gradYear = studentProfile.expectedGraduationYear || studentProfile.graduationYear || 0;
-  
-  // Only trigger graduation if they are in their final semester (Semester 8/BE) AND the grad year has passed,
-  // OR if they genuinely have a valid graduation year in the past.
   const isFinalSemester = studentProfile.semester === 'Semester 8' || studentProfile.semester === 'BE';
   const isPastGraduation = gradYear > 2000 && gradYear <= new Date().getFullYear() && isFinalSemester;
   
-  const pendingOrApprovedRequest = roleTransitionRequests.find(r => r.userId === studentProfile.id && (r.status === 'pending' || r.status === 'approved'));
-  const rejectedRequest = roleTransitionRequests.find(r => r.userId === studentProfile.id && r.status === 'rejected');
+  const pendingOrApprovedRequest = roleTransitionRequests.find(
+    r => r.userId === studentProfile.id && (r.status === 'pending' || r.status === 'approved')
+  );
+  const rejectedRequest = roleTransitionRequests.find(
+    r => r.userId === studentProfile.id && r.status === 'rejected'
+  );
   
   const [hideBannerSession, setHideBannerSession] = useState(() => sessionStorage.getItem('grad_banner_dismissed') === 'true');
   const [showTransitionModal, setShowTransitionModal] = useState(false);
@@ -64,12 +76,14 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
   const [transDesignation, setTransDesignation] = useState('');
   const [transUniversity, setTransUniversity] = useState('');
   const [transDegree, setTransDegree] = useState('M.S. in Computer Science');
-  const [transDept, setTransDept] = useState(studentProfile.department || 'CMPN');
+  const [transDept] = useState(studentProfile.department || 'CMPN');
   const [transMentoring, setTransMentoring] = useState(true);
   const [isSubmittingTransition, setIsSubmittingTransition] = useState(false);
 
-  // New personal email & document upload states
-  const [transPersonalEmail, setTransPersonalEmail] = useState(studentProfile.email ? studentProfile.email.replace('@student.vit.edu.in', '@gmail.com') : '');
+  // Personal email & document upload states
+  const [transPersonalEmail, setTransPersonalEmail] = useState(
+    studentProfile.email ? studentProfile.email.replace('@student.vit.edu.in', '@gmail.com') : ''
+  );
   const [transDocName, setTransDocName] = useState('');
   const [transDocUrl, setTransDocUrl] = useState('');
 
@@ -108,7 +122,7 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
 
   // Calculate Profile Completion Percentage
   const calculateProfileCompletion = () => {
-    let completed = 40; // Base details
+    let completed = 40;
     if (studentProfile.skills && studentProfile.skills.length > 0) completed += 15;
     if (studentProfile.areasOfInterest && studentProfile.areasOfInterest.length > 0) completed += 15;
     if (studentProfile.careerGoal) completed += 15;
@@ -118,56 +132,73 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
 
   const profileCompletionPct = calculateProfileCompletion();
 
-  // Metric Calculations for 4 Stat Cards
-  const myStudentRequests = mentorshipRequests.filter(
-    r => r.studentId === studentProfile.id
-  );
+  // Metrics for Stat Strip
+  const myStudentRequests = mentorshipRequests.filter(r => r.studentId === studentProfile.id);
   const activeStudentRequests = myStudentRequests.filter(r => r.status === 'Pending' || r.status === 'Accepted');
-  const activePct = myStudentRequests.length > 0
-    ? Math.round((activeStudentRequests.length / myStudentRequests.length) * 100)
-    : 100;
-
   const totalSmartMatches = recommendedAlumniMatches.length + recommendedFacultyMatches.length;
-  const topMatchScore = Math.max(
-    ...recommendedAlumniMatches.map(m => m.score),
-    ...recommendedFacultyMatches.map(m => m.score),
-    0
-  );
-
   const publishedJobs = jobsList.filter(
     j => j.status !== 'Closed' && (j.moderationStatus === 'Approved' || j.postedByRole === 'admin')
   );
-  const recentJobsCount = publishedJobs.filter(j => {
-    const postTime = new Date(j.postedDate).getTime();
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    return !isNaN(postTime) ? postTime >= thirtyDaysAgo : true;
-  }).length;
-  const validNewJobsBadgeCount = Math.min(recentJobsCount, publishedJobs.length);
+  const upcomingEvents = eventsList.filter(e => {
+    const eventTime = new Date(`${e.date} ${e.time || '00:00'}`).getTime();
+    return !isNaN(eventTime) ? eventTime >= Date.now() - 86400000 : true;
+  });
 
-  const upcomingEvents = eventsList.filter(
-    e => e.status === 'Upcoming' || (e.date && new Date(e.date).getTime() >= new Date('2026-08-01').getTime())
-  );
-  const rsvpdEventsCount = upcomingEvents.filter(e => e.registeredUserIds?.includes(studentProfile.id)).length;
+  // Next Step Action Resolution (Section 5.2 rules)
+  const getNextStep = () => {
+    if (profileCompletionPct < 100) {
+      return {
+        title: 'Complete your profile',
+        sentence: 'Add your technical skills and resume to receive smart match recommendations with verified alumni.',
+        buttonLabel: 'Edit profile',
+        action: () => setActiveTab('settings')
+      };
+    }
+    if (myStudentRequests.length === 0) {
+      return {
+        title: 'Request your first mentor',
+        sentence: 'Connect with verified alumni in your domain for 1:1 project guidance, mock interviews, and career advice.',
+        buttonLabel: 'Find a mentor',
+        action: () => setActiveTab('mentorship')
+      };
+    }
+    if (publishedJobs.length > 0) {
+      return {
+        title: 'Explore corporate referrals',
+        sentence: 'Verified alumni have published open internship and job referral listings matching your department.',
+        buttonLabel: 'Browse opportunities',
+        action: () => setActiveTab('opportunities')
+      };
+    }
+    return {
+      title: 'RSVP to an upcoming campus event',
+      sentence: 'Attend upcoming alumni masterclasses, technical webinars, and departmental career panels.',
+      buttonLabel: 'View events',
+      action: () => setActiveTab('events')
+    };
+  };
+
+  const nextStep = getNextStep();
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 pb-16 sm:pb-0 font-sans text-xs">
-
+    <div className="space-y-10 animate-in fade-in duration-300 font-sans text-xs">
+      
       {/* Clarification Required Callout */}
       {(studentProfile.clarificationRequested || studentProfile.verificationStatus === 'Needs Clarification') && (
-        <div className="bg-amber-50 border border-amber-300 p-4 rounded-xl space-y-3 font-sans shadow-2xs">
+        <div className="bg-[#FEF3C7] border border-[#FDE68A] p-4 rounded-xl space-y-3 font-sans">
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shrink-0">
               <AlertCircle className="w-4 h-4 text-[#B45309]" />
             </div>
             <div>
-              <h4 className="font-bold text-[#0A0A0A] text-sm">Action Required: Verification Clarification Request</h4>
-              <p className="text-[#374151] text-xs mt-1 font-medium leading-relaxed">
+              <h4 className="font-semibold text-[#0A0A0A] text-sm">Action required: Verification clarification</h4>
+              <p className="text-[#6B7280] text-xs mt-1 leading-relaxed">
                 {studentProfile.clarificationRequested?.text || studentProfile.clarificationRequest || 'Please upload a scanned copy of your College Admit Card or Institutional ID for verification.'}
               </p>
             </div>
           </div>
 
-          <div className="pt-2 border-t border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="pt-2 border-t border-[#FDE68A] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <input
                 type="file"
@@ -190,296 +221,369 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
               />
               <label
                 htmlFor="student-clarification-upload"
-                className="px-3 py-1.5 bg-white border border-[#E5E7EB] hover:bg-[#FAFAFA] rounded-lg cursor-pointer text-xs font-bold text-[#0A0A0A] flex items-center gap-1.5 shadow-2xs"
+                className="px-3 py-1.5 bg-white border border-[#E5E7EB] hover:bg-[#FAFAFA] rounded-lg cursor-pointer text-xs font-medium text-[#0A0A0A] flex items-center gap-1.5"
               >
                 <Upload className="w-3.5 h-3.5 text-[#0A0A0A]" />
-                {resubmitDocName ? resubmitDocName : 'Choose Proof File (ID Card / Admit Card)'}
+                {resubmitDocName ? resubmitDocName : 'Choose proof document (ID / Fee receipt)'}
               </label>
-              {resubmitDocName && <span className="text-[10px] text-emerald-700 font-bold">✓ Attached: {resubmitDocName}</span>}
+              {resubmitDocName && <span className="text-[11px] text-[#065F46] font-medium">✓ Attached: {resubmitDocName}</span>}
             </div>
 
             {resubmitDocName && (
-              <Button
-                variant="primary"
-                size="sm"
+              <button
+                type="button"
                 onClick={() => {
                   resubmitUserVerification(studentProfile.id, resubmitDocName, resubmitDocUrl);
                   setResubmitDocName('');
                   setResubmitDocUrl('');
                 }}
+                className="px-3.5 py-1.5 bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-medium rounded-lg transition-colors cursor-pointer"
               >
-                Submit Updated Proof to Admin
-              </Button>
+                Submit updated proof
+              </button>
             )}
           </div>
         </div>
       )}
 
-      {/* 0. Role Transition Banner */}
+      {/* Graduation Transition Banner */}
       {isPastGraduation && !pendingOrApprovedRequest && !hideBannerSession && (
-        <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="bg-[#EEF2FF] border border-[#C7D2FE] p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
-              <GradCapIcon className="w-4 h-4 text-indigo-700" />
+            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shrink-0">
+              <GraduationCap className="w-4 h-4 text-[#3730A3]" />
             </div>
             <div>
-              <h4 className="font-bold text-indigo-950 text-sm">Looks like you've graduated</h4>
-              <p className="text-indigo-800 text-xs mt-0.5">Update your profile to Alumni status to access alumni networking & mentorship features?</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button onClick={handleDismissBanner} className="px-3 py-1.5 text-indigo-700 hover:bg-indigo-100 font-medium rounded-lg transition-colors">
-              Remind me later
-            </button>
-            <Button variant="primary" size="sm" onClick={() => setShowTransitionModal(true)}>
-              Update to Alumni
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {rejectedRequest && !pendingOrApprovedRequest && (
-        <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
-              <X className="w-4 h-4 text-rose-700" />
-            </div>
-            <div>
-              <h4 className="font-bold text-rose-950 text-sm">Alumni Transition Request Rejected</h4>
-              <p className="text-rose-800 text-xs mt-0.5">Reason: "{rejectedRequest.rejectionReason || 'Details mismatch'}". You may update your information and submit a new request.</p>
-            </div>
-          </div>
-          <div className="shrink-0">
-            <Button variant="primary" size="sm" onClick={() => setShowTransitionModal(true)}>
-              Submit New Request
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {pendingOrApprovedRequest?.status === 'pending' && (
-        <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex items-center gap-2 text-amber-800 font-medium text-xs">
-          <Clock className="w-4 h-4" />
-          Alumni status update pending admin verification.
-        </div>
-      )}
-
-      {/* 1. Header Title */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E7EB] pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <Badge variant="indigo" size="sm">Student workspace</Badge>
-            <span className="text-[11px] font-mono text-[#6B7280]">PRN: {studentProfile.enrollmentNo || studentProfile.prn || '23101A0042'}</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-display font-bold text-[#0A0A0A] tracking-tight mt-1">
-            Welcome back, {currentUser.name.split(' ')[0]}
-          </h1>
-          <p className="text-xs sm:text-sm text-[#6B7280] font-medium mt-1">
-            Personalized guidance matches and career roadmaps powered by central Vidyalankar data.
-          </p>
-        </div>
-
-        {profileCompletionPct < 100 && (
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => setActiveTab('settings')}
-            icon={<Sparkles className="w-3.5 h-3.5" />}
-          >
-            Complete profile ({profileCompletionPct}%)
-          </Button>
-        )}
-      </div>
-
-      {/* Institutional Broadcast Announcements Feed */}
-      <InstitutionalAnnouncementFeed announcements={announcements} userRole="student" />
-
-      {/* 2. Profile Completion Status Card with Embedded Resume */}
-      <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 sm:p-6 shadow-none space-y-3.5">
-        <div className="flex items-center justify-between text-xs">
-          <span className="font-bold text-[#0A0A0A] flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-[#16A34A]" />
-            Profile completion: {profileCompletionPct}% complete
-          </span>
-          {profileCompletionPct < 100 ? (
-            <button
-              onClick={() => setActiveTab('settings')}
-              className="text-xs font-semibold text-[#0A0A0A] hover:underline flex items-center gap-1 transition"
-            >
-              Add skills & resume <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          ) : (
-            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-              Full access active
-            </span>
-          )}
-        </div>
-
-        <div className="w-full h-2 bg-[#F3F4F6] rounded-full overflow-hidden p-0.5 border border-[#E5E7EB]">
-          <div
-            className="h-full bg-[#0A0A0A] rounded-full transition-all duration-500"
-            style={{ width: `${profileCompletionPct}%` }}
-          />
-        </div>
-
-        {/* Embedded Resume Row */}
-        {studentProfile.resumeUrl ? (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2.5 border-t border-[#E5E7EB] text-xs">
-            <div className="flex items-center gap-2 text-[#374151] font-medium min-w-0">
-              <FileText className="w-3.5 h-3.5 text-[#0A0A0A] shrink-0" />
-              <span className="truncate">
-                Resume: <strong className="font-mono text-[#0A0A0A]">{studentProfile.resumeUrl.split('/').pop() || 'aanya_patel_vit.pdf'}</strong>
-              </span>
-              <span className="text-emerald-700 font-semibold text-[10px]">✓ On file</span>
-            </div>
-            {studentProfile.resumeUrl.startsWith('http') && (
-              <a
-                href={studentProfile.resumeUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-semibold text-[#0A0A0A] hover:underline flex items-center gap-1 shrink-0 self-start sm:self-auto"
-              >
-                View document <ExternalLink className="w-3 h-3" />
-              </a>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center justify-between pt-2.5 border-t border-[#E5E7EB] text-xs">
-            <span className="text-[#6B7280] font-medium">No resume document uploaded</span>
-            <button
-              onClick={() => setActiveTab('settings')}
-              className="text-xs font-semibold text-[#0A0A0A] hover:underline flex items-center gap-1"
-            >
-              Upload in settings <ArrowRight className="w-3 h-3" />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* 3. Top Metric Cards — Compact 2x2 Grid with Interactive Deep Links */}
-      {isDataLoading ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center space-y-3 bg-white border border-[#E5E7EB] rounded-xl">
-          <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-[#171717]"></div>
-          <p className="text-[#6B7280] font-sans text-xs font-semibold">Loading dashboard metrics...</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard
-          title="Active requests"
-          value={activeStudentRequests.length}
-          subtext="Guidance & research"
-          icon={<GraduationCap className="w-4 h-4 text-[#0A0A0A]" />}
-          trend={{ value: `${activePct}% active`, positive: true }}
-          onClick={() => setActiveTab('mentorship', 'my-sent')}
-        />
-
-        <StatCard
-          title="Smart matches"
-          value={totalSmartMatches}
-          subtext="Alumni & faculty"
-          icon={<Sparkles className="w-4 h-4 text-[#0A0A0A]" />}
-          trend={{ value: topMatchScore > 0 ? `${topMatchScore}% top match` : 'Curated', positive: true }}
-          onClick={() => setActiveTab('mentorship', 'find')}
-        />
-
-        <StatCard
-          title="Job openings"
-          value={publishedJobs.length}
-          subtext="Corporate referrals"
-          icon={<Briefcase className="w-4 h-4 text-[#0A0A0A]" />}
-          trend={{ value: `${validNewJobsBadgeCount} new`, positive: true }}
-          onClick={() => setActiveTab('jobs')}
-        />
-
-        <StatCard
-          title="Campus events"
-          value={upcomingEvents.length}
-          subtext="Masterclasses & talks"
-          icon={<Calendar className="w-4 h-4 text-[#0A0A0A]" />}
-          trend={{ value: rsvpdEventsCount > 0 ? `${rsvpdEventsCount} RSVP'd` : 'Upcoming', positive: true }}
-          onClick={() => setActiveTab('events')}
-        />
-      </div>
-      )}
-
-      {/* 5. Top Matches Preview Row */}
-      <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 sm:p-6 space-y-4 shadow-none">
-        <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-[#0A0A0A]" />
-            <div>
-              <h2 className="font-bold text-xs text-[#0A0A0A]">
-                Top recommended matches
-              </h2>
-              <p className="text-[11px] text-[#6B7280] font-medium">
-                Curated for {studentProfile.careerGoal || 'Software Engineering'}
+              <h4 className="font-semibold text-[#0A0A0A] text-sm">Graduation milestone reached</h4>
+              <p className="text-[#6B7280] text-xs mt-0.5">
+                Transition your account to verified alumni status to continue accessing alumni networking and mentoring.
               </p>
             </div>
           </div>
-
-          <button
-            onClick={() => setActiveTab('mentorship')}
-            className="text-xs font-semibold text-[#0A0A0A] hover:underline flex items-center gap-1 transition"
-          >
-            View all mentors <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* Horizontally Scrollable Preview Cards */}
-        <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar momentum-scroll snap-x snap-mandatory">
-          {recommendedAlumniMatches.slice(0, 3).map(match => (
-            <div
-              key={match.item.id}
-              onClick={() => setActiveTab('mentorship')}
-              className="min-w-[240px] sm:min-w-[260px] max-w-[280px] p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl hover:border-[#0A0A0A] hover:bg-white transition-all duration-150 cursor-pointer snap-start flex flex-col justify-between shrink-0 space-y-3"
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleDismissBanner}
+              className="px-3 py-1.5 text-xs text-[#6B7280] hover:text-[#0A0A0A] font-medium rounded-lg transition-colors"
             >
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between gap-1.5">
-                  <Badge variant="indigo" size="sm">
-                    {match.score}% Match
-                  </Badge>
-                  <Badge variant="emerald" size="sm" icon={<Check className="w-3 h-3" />}>
-                    Verified Alum
-                  </Badge>
-                </div>
-
-                <div className="flex items-center gap-2.5">
-                  <img
-                    src={match.item.avatar}
-                    alt={match.item.name}
-                    className="w-10 h-10 rounded-full object-cover border border-[#E5E7EB] shrink-0"
-                  />
-                  <div className="min-w-0">
-                    <h4 className="font-display font-bold text-[#0A0A0A] text-xs truncate">{match.item.name}</h4>
-                    <p className="text-[11px] text-[#6B7280] font-medium truncate">
-                      {match.item.designation} at <strong className="text-[#0A0A0A]">{match.item.company}</strong>
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-[#E5E7EB] flex items-center justify-between text-[11px] font-display font-bold text-[#0A0A0A]">
-                <span>Request Guidance</span>
-                <ArrowRight className="w-3 h-3 text-[#6B7280]" />
-              </div>
-            </div>
-          ))}
-
-          {/* End 'View All' Card */}
-          <div
-            onClick={() => setActiveTab('mentorship')}
-            className="min-w-[150px] p-4 bg-[#FAFAFA] border border-dashed border-[#E5E7EB] rounded-xl hover:border-[#0A0A0A] hover:bg-white transition-all duration-150 flex flex-col items-center justify-center text-center cursor-pointer shrink-0 snap-start space-y-2"
-          >
-            <div className="w-8 h-8 rounded-full bg-white border border-[#E5E7EB] flex items-center justify-center text-[#0A0A0A]">
-              <GraduationCap className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-xs font-display font-bold text-[#0A0A0A]">View All</p>
-              <p className="text-[10px] text-[#6B7280] font-medium">Alumni & Faculty</p>
-            </div>
-            <ArrowRight className="w-3.5 h-3.5 text-[#0A0A0A]" />
+              Remind me later
+            </button>
+            <button
+              onClick={() => setShowTransitionModal(true)}
+              className="px-3.5 py-1.5 bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-medium rounded-lg transition-colors"
+            >
+              Update to alumni
+            </button>
           </div>
         </div>
+      )}
+
+      {/* Pending transition note */}
+      {pendingOrApprovedRequest?.status === 'pending' && (
+        <div className="bg-[#FAFAFA] border border-[#E5E7EB] p-3 rounded-xl flex items-center gap-2 text-xs text-[#6B7280]">
+          <Clock className="w-4 h-4 text-[#6B7280]" />
+          <span>Alumni status transition is currently under review by the administration.</span>
+        </div>
+      )}
+
+      {/* 1. Header (No outer box, PageHeader primitive) */}
+      <PageHeader
+        eyebrow="Student"
+        title={`Welcome back, ${getGreetingName(currentUser.name)}`}
+        subtitle={
+          <div className="flex items-center gap-2 flex-wrap">
+            <span>PRN: <span className="font-mono text-[#0A0A0A]">{studentProfile.enrollmentNo || studentProfile.prn || '23101A0042'}</span></span>
+            <span>·</span>
+            <span>VIT {studentProfile.department}</span>
+            <span>·</span>
+            <span>{studentProfile.semester || 'Semester 6'}</span>
+            {profileCompletionPct === 100 && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-[#065F46] font-medium ml-2">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Profile complete
+              </span>
+            )}
+          </div>
+        }
+        actions={
+          <button
+            type="button"
+            onClick={() => setActiveTab('settings')}
+            className="px-3.5 py-2 border border-[#E5E7EB] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-lg transition-colors cursor-pointer"
+          >
+            Edit profile
+          </button>
+        }
+      >
+        {/* Slim 2px profile completion line under header (only while profile < 100%) */}
+        {profileCompletionPct < 100 && (
+          <div className="pt-2">
+            <div className="flex items-center justify-between text-[11px] text-[#6B7280] mb-1">
+              <span>Profile completion: <strong className="text-[#0A0A0A] tabular-nums">{profileCompletionPct}%</strong></span>
+              <button
+                onClick={() => setActiveTab('settings')}
+                className="text-[#0A0A0A] hover:underline"
+              >
+                Add resume & skills →
+              </button>
+            </div>
+            <div className="h-0.5 bg-[#E5E7EB] w-full rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[#0A0A0A] transition-all duration-300"
+                style={{ width: `${profileCompletionPct}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </PageHeader>
+
+      {/* 2. FocusPanel: Single Emphasis Surface per Viewport ("Your next step") */}
+      <FocusPanel
+        eyebrow="Next action"
+        title={nextStep.title}
+        action={
+          <button
+            type="button"
+            onClick={nextStep.action}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-medium rounded-lg transition-colors cursor-pointer"
+          >
+            <span>{nextStep.buttonLabel}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        }
+      >
+        <p className="text-xs sm:text-sm text-[#6B7280] leading-relaxed">
+          {nextStep.sentence}
+        </p>
+      </FocusPanel>
+
+      {/* 3. Stat Strip (One row, 4 figures, vertical hairlines, tabular-nums) */}
+      <StatStrip
+        hideIfAllZero
+        items={[
+          {
+            label: 'Active requests',
+            value: activeStudentRequests.length,
+            subtext: activeStudentRequests.length > 0 ? 'Guidance & research' : 'No requests yet',
+            onClick: () => setActiveTab('mentorship', 'my-sent'),
+            trend: activeStudentRequests.length > 0 ? { value: `${activeStudentRequests.length} active`, positive: true } : undefined
+          },
+          {
+            label: 'Mentor matches',
+            value: totalSmartMatches,
+            subtext: totalSmartMatches > 0 ? 'Alumni & faculty' : 'Compiling',
+            onClick: () => setActiveTab('mentorship', 'find')
+          },
+          {
+            label: 'Job openings',
+            value: publishedJobs.length,
+            subtext: publishedJobs.length > 0 ? 'Corporate referrals' : 'No listings',
+            onClick: () => setActiveTab('opportunities')
+          },
+          {
+            label: 'Campus events',
+            value: upcomingEvents.length,
+            subtext: upcomingEvents.length > 0 ? 'Masterclasses & talks' : 'None scheduled',
+            onClick: () => setActiveTab('events')
+          }
+        ]}
+        zeroFallback={
+          <div className="py-6 border-y border-[#E5E7EB] space-y-3">
+            <h4 className="text-xs font-semibold text-[#0A0A0A]">Getting started checklist</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div
+                onClick={() => setActiveTab('settings')}
+                className="p-3 bg-[#FAFAFA] rounded-lg flex items-center justify-between cursor-pointer hover:bg-[#F3F4F6]"
+              >
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className={`w-4 h-4 ${studentProfile.skills?.length ? 'text-[#065F46]' : 'text-[#6B7280]'}`} />
+                  <span>1. Add technical skills & interests</span>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-[#6B7280]" />
+              </div>
+              <div
+                onClick={() => setActiveTab('settings')}
+                className="p-3 bg-[#FAFAFA] rounded-lg flex items-center justify-between cursor-pointer hover:bg-[#F3F4F6]"
+              >
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className={`w-4 h-4 ${studentProfile.resumeUrl ? 'text-[#065F46]' : 'text-[#6B7280]'}`} />
+                  <span>2. Upload verified resume</span>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-[#6B7280]" />
+              </div>
+            </div>
+          </div>
+        }
+      />
+
+      {/* 4. Main Two-Column Layout (Main Content + Quiet Right Rail) */}
+      <div className="flex flex-col xl:flex-row gap-10 items-start">
+        
+        {/* Main Column */}
+        <div className="flex-1 min-w-0 space-y-10 w-full">
+          
+          {/* Institutional Announcements Feed */}
+          <InstitutionalAnnouncementFeed announcements={announcements} userRole="student" />
+
+          {/* Recommended Mentors Section (Rendered as ListRow rows, not cards) */}
+          <Section
+            title="Recommended mentors"
+            description={`Based on your goal: ${studentProfile.careerGoal || 'SDE-1, product companies'}`}
+            action={
+              <button
+                type="button"
+                onClick={() => setActiveTab('mentorship', 'find')}
+                className="text-xs font-medium text-[#0A0A0A] hover:underline flex items-center gap-1"
+              >
+                <span>See all mentors</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            }
+          >
+            {recommendedAlumniMatches.length === 0 ? (
+              <p className="text-xs text-[#6B7280] py-6">
+                No matching mentors found. Try updating your career goal in settings.
+              </p>
+            ) : (
+              <div className="divide-y divide-[#E5E7EB] border-y border-[#E5E7EB]">
+                {recommendedAlumniMatches.slice(0, 3).map((match, idx) => (
+                  <ListRow
+                    key={match.item.id}
+                    isFirst={idx === 0}
+                    leading={
+                      <img
+                        src={match.item.avatar}
+                        alt={match.item.name}
+                        className="w-10 h-10 rounded-full object-cover border border-[#E5E7EB]"
+                      />
+                    }
+                    title={match.item.name}
+                    meta={
+                      <StatusBadge
+                        label={`${match.score}% match`}
+                        tone="indigo"
+                        size="sm"
+                      />
+                    }
+                    subtitle={`${match.item.designation} at ${match.item.company} · VIT ${match.item.department} '${match.item.graduationYear || 2020}`}
+                    trailing={
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('mentorship', 'find')}
+                        className="px-3 py-1.5 bg-white border border-[#E5E7EB] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                      >
+                        Request
+                      </button>
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </Section>
+
+          {/* Departmental Opportunities Section */}
+          <Section
+            title="Opportunities & referrals"
+            description="Active corporate openings and research projects from alumni and faculty"
+            action={
+              <button
+                type="button"
+                onClick={() => setActiveTab('opportunities')}
+                className="text-xs font-medium text-[#0A0A0A] hover:underline flex items-center gap-1"
+              >
+                <span>View all openings</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            }
+          >
+            {publishedJobs.length === 0 ? (
+              <p className="text-xs text-[#6B7280] py-6">
+                No current job openings in your department.
+              </p>
+            ) : (
+              <div className="divide-y divide-[#E5E7EB] border-y border-[#E5E7EB]">
+                {publishedJobs.slice(0, 3).map((job, idx) => (
+                  <ListRow
+                    key={job.id}
+                    isFirst={idx === 0}
+                    leading={
+                      <div className="w-10 h-10 rounded-lg bg-[#F3F4F6] text-[#0A0A0A] flex items-center justify-center font-bold text-xs">
+                        {job.company.slice(0, 2).toUpperCase()}
+                      </div>
+                    }
+                    title={job.title}
+                    meta={<span className="text-xs font-mono text-[#0A0A0A]">{job.stipendOrSalary}</span>}
+                    subtitle={`${job.company} · ${job.location} · Posted: ${job.postedDate}`}
+                    trailing={
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('opportunities')}
+                        className="px-3 py-1.5 bg-white border border-[#E5E7EB] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                      >
+                        View
+                      </button>
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </Section>
+
+        </div>
+
+        {/* Quiet Right Rail (Secondary Information) */}
+        <RightRail>
+          {/* Upcoming Events */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-[#0A0A0A]">Upcoming events</h3>
+              <button
+                onClick={() => setActiveTab('events')}
+                className="text-xs text-[#6B7280] hover:text-[#0A0A0A]"
+              >
+                All events →
+              </button>
+            </div>
+
+            {upcomingEvents.length === 0 ? (
+              <p className="text-xs text-[#6B7280]">No upcoming events scheduled.</p>
+            ) : (
+              <div className="space-y-3">
+                {upcomingEvents.slice(0, 3).map(event => {
+                  const isRsvpd = event.registeredUserIds?.includes(studentProfile.id);
+                  return (
+                    <div
+                      key={event.id}
+                      onClick={() => setActiveTab('events')}
+                      className="p-3 rounded-lg border border-[#E5E7EB] hover:bg-[#FAFAFA] transition-colors cursor-pointer space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between text-[11px] text-[#6B7280]">
+                        <span className="font-mono">{event.date}</span>
+                        {isRsvpd && (
+                          <StatusBadge label="RSVP'd" tone="emerald" size="sm" />
+                        )}
+                      </div>
+                      <h4 className="text-xs font-semibold text-[#0A0A0A] line-clamp-1">
+                        {event.title}
+                      </h4>
+                      <p className="text-[11px] text-[#6B7280] line-clamp-1">
+                        {event.speakerName} · {event.speakerCompany}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Academic Deadlines / Notices */}
+          <div className="space-y-3 pt-6 border-t border-[#E5E7EB]">
+            <h3 className="text-sm font-semibold text-[#0A0A0A]">Important notices</h3>
+            <div className="space-y-2 text-xs text-[#6B7280] leading-relaxed">
+              <p>• Final semester project review submissions due by next Friday.</p>
+              <p>• Placement cell campus recruitment registration window open for Batch 2025.</p>
+            </div>
+          </div>
+        </RightRail>
+
       </div>
 
       {/* Role Transition Request Modal */}
@@ -491,7 +595,6 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
         maxWidth="md"
       >
         <form onSubmit={handleTransitionSubmit} className="space-y-4 text-xs font-sans">
-          {/* Path Type Selector */}
           <div>
             <label className="block text-[#0A0A0A] font-semibold text-xs mb-1.5">Current primary path</label>
             <div className="grid grid-cols-2 gap-2 bg-[#F3F4F6] p-1 rounded-xl border border-[#E5E7EB]">
@@ -515,7 +618,7 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
                     : 'text-[#6B7280] hover:text-[#0A0A0A]'
                 }`}
               >
-                <GradCapIcon className="w-3.5 h-3.5" /> Higher studies
+                <GraduationCap className="w-3.5 h-3.5" /> Higher studies
               </button>
             </div>
           </div>
@@ -592,16 +695,9 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
               className="w-full bg-[#FAFAFA] border border-[#E5E7EB] px-3 py-2 text-xs rounded-lg focus:outline-none focus:border-[#0A0A0A] cursor-pointer" 
             />
             {transDocName && (
-              <p className="text-[10px] text-emerald-700 font-semibold mt-1">✓ Attached: {transDocName}</p>
+              <p className="text-[10px] text-[#065F46] font-semibold mt-1">✓ Attached: {transDocName}</p>
             )}
           </div>
-
-          <TextField
-            label="VIT department"
-            type="text"
-            disabled
-            value={transDept}
-          />
 
           <div className="flex items-center gap-2 pt-2">
             <input 

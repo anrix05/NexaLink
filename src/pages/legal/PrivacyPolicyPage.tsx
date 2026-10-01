@@ -12,7 +12,7 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ setActiveT
       <div className="max-w-4xl mx-auto px-6">
         <button
           onClick={() => setActiveTab?.('landing')}
-          className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#6B7280] hover:text-[#0A0A0A] transition-colors mb-8"
+          className="inline-flex items-center gap-2 text-xs font-medium text-[#6B7280] hover:text-[#0A0A0A] transition-colors mb-8"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Home
@@ -36,7 +36,7 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ setActiveT
             <p className="text-sm md:text-base text-[#6B7280] max-w-2xl leading-relaxed">
               We respect your privacy and are committed to protecting it. This Privacy Policy explains how we collect, use, and safeguard your information within the NexaLink network.
             </p>
-            <p className="font-mono text-xs uppercase tracking-widest text-[#9CA3AF] pt-2">
+            <p className="text-xs text-[#6B7280] pt-2">
               Effective Date: {new Date().getFullYear()}-01-01 • Version 1.0
             </p>
           </header>
@@ -105,7 +105,7 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({ setActiveT
             {/* Sidebar Contact Area */}
             <div className="md:col-span-4 sticky top-6">
               <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 shadow-sm space-y-5">
-                <h3 className="font-display font-black text-sm uppercase tracking-widest text-[#0A0A0A]">
+                <h3 className="font-display font-bold text-sm text-[#0A0A0A]">
                   Privacy Office
                 </h3>
                 <div className="text-sm text-[#6B7280] space-y-3 leading-relaxed">

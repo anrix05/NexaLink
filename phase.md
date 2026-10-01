@@ -2,7 +2,7 @@
 
 ## Phase Overview
 
-The development of NexaLink is structured into 6 primary engineering phases. Phases 1 through 3 are complete, Phase 4 foundations are established in `backend/`, and Phase 5/6 preparations are underway.
+The development of NexaLink is structured across 6 primary engineering phases. The platform has progressed through full-stack Supabase PostgreSQL migration, security hardening, and the v3.0 "Open Canvas" redesign.
 
 ---
 
@@ -14,27 +14,31 @@ The development of NexaLink is structured into 6 primary engineering phases. Pha
 
 ### Phase 2: System Design & Branding (Completed)
 - Platform rebranded to **NexaLink** and messaging feature to **NexaChats**.
-- Monochromatic design system (`#0A0A0A` / `#FFFFFF` / `#6B7280` / 1px hairline borders / single reserved Amber `#B45309` accent) established.
-- Geometric "N" Monogram logomark and favicons generated (SVG, ICO, PNGs).
+- Monochromatic design system (`#0A0A0A` / `#FFFFFF` / `#6B7280` / 1px hairline borders / semantic status accents) established.
+- Geometric interlocking "N-Link" monogram logomark and favicons generated.
 
 ### Phase 3: Frontend Architecture & Administrative Governance (Completed)
-- Full React 18 / TypeScript frontend application built with Vite.
-- **Identity Verification:** Decoupled Alumni login from expired college email via `personalEmail`; implemented working proof-document upload and viewer (`URL.createObjectURL`); role-aware institutional match confidence evaluation.
-- **Clarification Flow:** Actionable user clarification resubmission workflow with urgent dashboard callouts and admin verification queue return.
-- **Admin System Features:** Single-Admin Invite handoff system, Reported Messages queue, Bulk Provisional Graduation tool with CSV safeguards, Bulk Approve/Reject modal actions, searchable/filterable Audit Logs, and Announcement retraction.
-- **Motion & Micro-Interactions:** Framer Motion spring physics (`stiffness: 400, damping: 17`), sliding pill indicators (`layoutId`), animated checkmark drawing (`AnimatedCheckIcon`), scroll-triggered animations (`useScrollReveal`), GPU-accelerated stat counters (`useCountUp`), hero stagger sequence, and `prefers-reduced-motion` compliance.
-- **Productivity & Search:** Role-scoped Command Palette (`Ctrl+K`) for rapid navigation and action execution.
-- **Auth Page Stabilization:** Top-aligned responsive layout (`items-start`), staggered form fields, and smooth height resizing.
-- **Mobile Native App Experience:** Fixed bottom navigation bar (`BottomNav.tsx`) for Student, Alumni, and Faculty on screens `<1024px`; slide-up bottom sheet Modals with drag handle; momentum touch scrolling; iOS 16px auto-zoom prevention; swipeable photo carousel; and a dedicated desktop-only governance interstitial with escape hatch for Admin.
+- React 19 / TypeScript / Tailwind CSS v4 frontend built with Vite.
+- Identity verification workflows, single-admin handoff, reported message moderation, and bulk graduation tools.
+- Framer Motion spring physics, FLIP layout pill animations, and `prefers-reduced-motion` compliance.
+- Cinematic one-time opening logo assembly and FLIP flight into navbar.
 
-### Phase 4: Backend & Database Foundations (Phase 4 Ready)
-- Node.js / Express REST API infrastructure established in `backend/server.js` and `backend/routes/`.
-- SQLite database schema defined in `backend/database/db.js`.
+### Phase 4: Backend Hardening & Supabase Security (Completed)
+- **Hosted PostgreSQL Architecture:** 17 relational tables with `ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL SECURITY`.
+- **Privileged RPC Procedures:** `security definer` functions in `private` schema for all sensitive state mutations (`approve_user_verification`, `reject_user_verification`, `bulk_graduate_students`, `report_message`).
+- **Cryptographic Audit Log:** Tamper-resistant append-only `audit_logs` table with SHA-256 hash chaining (`prev_hash`).
+- **Column-Level Update Protection:** Database trigger revoking unprivileged column modification (`role`, `is_verified`).
+- **Storage Security:** 60-second time-limited signed URLs for verification documents, scoped resume/chat storage policies.
+- **Server-Side Lockout:** `auth_attempts` table and `auth-login-guard` edge function enforcing 15-minute lockout on 5 consecutive failures.
 
-### Phase 5: Production Deployment & E2E Testing (Upcoming)
-- End-to-end REST API integration connecting React Context to SQLite database.
-- Comprehensive security audit of role isolation, rate limiting, and message moderation.
+### Phase 5: "Open Canvas" Redesign & Design System Linting (Completed)
+- Unbordered whitespace-first design system replacing card-within-card enclosures.
+- Core primitives: `AppShell`, `TopBar`, `SidebarNav`, `PageHeader`, `Section`, `StatStrip`, `ListRow`, `FocusPanel`, `EmptyState`, `MasterDetail`, `RightRail`, `UnderlineTabs`.
+- 4 fluid width tiers: `<640px` (Phone), `640–1023px` (Tablet), `1024–1279px` (Compact Desktop), `≥1280px` (Full Desktop with RightRail).
+- Automated design system linter (`scripts/lint-design-system.mjs`) ensuring 100% compliance with zero uppercase or contrast violations.
 
-### Phase 6: Final Documentation & Presentation (Upcoming)
-- Institutional project report, accreditation analytics export validation, and presentation deck.
-
+### Phase 6: Automated Verification, Production Guards & Delivery (In Progress)
+- CI production bundle scanner (`scripts/verify-prod-bundle.mjs`) ensuring zero OTP or mock credential leaks in `dist/`.
+- Cross-breakpoint automated visual verification across 390px, 768px, 1024px, 1440px.
+- Security headers and CSP enforcement in `vercel.json`.
+- Complete documentation delivery (`PRD.md`, `design.md`, `SECURITY.md`, `walkthrough.md`).
