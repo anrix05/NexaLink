@@ -8,18 +8,24 @@ import {
   Calendar,
   MapPin,
   Users,
-  Video,
   Plus,
   CheckCircle2,
-  X,
   Check,
-  Award,
   Download,
   Star,
-  MessageSquare
+  RefreshCw
 } from 'lucide-react';
 import { RoleGate } from '../../components/common/RoleGate';
-import { Badge, Button, SegmentedTabs, Modal, ToastNotice } from '../../components/common/UIComponents';
+import {
+  Badge,
+  Button,
+  SegmentedTabs,
+  Modal,
+  TextField,
+  SelectField,
+  TextArea,
+  EmptyState
+} from '../../components/common/UIComponents';
 
 export const EventsPage: React.FC = () => {
   const { eventsList, rsvpEvent, addEvent, submitEventFeedback, isDataLoading } = useData();
@@ -32,7 +38,7 @@ export const EventsPage: React.FC = () => {
   // Event Feedback Modal State
   const [feedbackEventId, setFeedbackEventId] = useState<string | null>(null);
   const [eventRating, setEventRating] = useState(5);
-  const [eventComment, setEventComment] = useState('Great event organized by VIT Wadala!');
+  const [eventComment, setEventComment] = useState('Great event organized by VIT Wadala.');
 
   // Form State
   const [title, setTitle] = useState('');
@@ -68,9 +74,9 @@ export const EventsPage: React.FC = () => {
     if (isRegistered || isWaitlisted) {
       setRsvpSuccessMsg('RSVP status updated.');
     } else if (evt.registeredUserIds.length >= limit) {
-      setRsvpSuccessMsg('Event seat capacity reached! You have been added to the Waitlist queue.');
+      setRsvpSuccessMsg('Event seat capacity reached. You have been added to the waitlist queue.');
     } else {
-      setRsvpSuccessMsg('Participation registered! RSVP notification sent.');
+      setRsvpSuccessMsg('Participation registered. RSVP notification sent.');
     }
     setTimeout(() => setRsvpSuccessMsg(null), 3500);
   };
@@ -106,7 +112,7 @@ export const EventsPage: React.FC = () => {
       doc.text(`has registered and participated in institutional event: "${evtTitle}"`, 148.5, 125, { align: 'center' });
 
       doc.save(`VIT_Event_Certificate_${currentUser.name.replace(/\s+/g, '_')}.pdf`);
-      setRsvpSuccessMsg('Official Event Certificate downloaded!');
+      setRsvpSuccessMsg('Official event certificate downloaded.');
       setTimeout(() => setRsvpSuccessMsg(null), 3500);
     } catch (err) {
       console.error(err);
@@ -134,39 +140,49 @@ export const EventsPage: React.FC = () => {
 
     setShowAddEventModal(false);
     setTitle('');
+    setLocation('');
+    setSpeaker('');
+    setDescription('');
+    setRsvpSuccessMsg('Institutional event organized successfully.');
+    setTimeout(() => setRsvpSuccessMsg(null), 3500);
   };
 
   const handleEventFeedbackSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (feedbackEventId) {
-      submitEventFeedback(feedbackEventId, currentUser.id, currentUser.name, eventRating, eventComment);
-      setFeedbackEventId(null);
-      setRsvpSuccessMsg('Event feedback submitted successfully! Analytics updated.');
-      setTimeout(() => setRsvpSuccessMsg(null), 3500);
-    }
+    if (!feedbackEventId) return;
+
+    submitEventFeedback(feedbackEventId, {
+      userId: currentUser.id,
+      userName: currentUser.name,
+      rating: eventRating,
+      comment: eventComment
+    });
+
+    setFeedbackEventId(null);
+    setRsvpSuccessMsg('Thank you for submitting event feedback.');
+    setTimeout(() => setRsvpSuccessMsg(null), 3500);
   };
 
-  const categoryTabOptions = [
-    { id: 'All', label: 'All Events', count: eventsList.length },
-    ...eventCategories.map(cat => ({ id: cat, label: cat, count: eventsList.filter(e => e.type === cat).length }))
+  const categoryOptions = [
+    { id: 'All', label: 'All events', count: eventsList.length },
+    ...eventCategories.map(c => ({ id: c, label: c, count: eventsList.filter(e => e.type === c).length }))
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 pb-16 sm:pb-0 font-sans text-xs">
+    <div className="space-y-5 font-sans text-xs">
       
-      {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E7EB] pb-5">
+      {/* Action Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#0A0A0A] tracking-tight flex items-center gap-2">
-            <Calendar className="w-7 h-7 text-[#0A0A0A]" />
-            Event Management & RSVPs
-          </h1>
-          <p className="text-sm text-[#6B7280] font-medium mt-1">
-            Alumni Meets, Guest Lectures, Workshops, Webinars, Placement Drives, & Research Seminars.
+          <h2 className="text-base font-semibold text-[#0A0A0A]">
+            Campus events & talks
+          </h2>
+          <p className="text-xs text-[#6B7280]">
+            Browse institutional workshops, alumni reunions, masterclasses, and placement seminars.
           </p>
         </div>
 
-        <RoleGate allow={['admin', 'faculty', 'alumni']}>
+        <RoleGate allow={['faculty', 'admin']}>
           <Button
             variant="primary"
             size="md"
@@ -174,22 +190,22 @@ export const EventsPage: React.FC = () => {
             icon={<Plus className="w-4 h-4" />}
             className="self-start sm:self-auto"
           >
-            Organize Event
+            Organize event
           </Button>
         </RoleGate>
       </div>
 
-      {/* Toast Notice */}
-      <ToastNotice
-        message={rsvpSuccessMsg}
-        onClose={() => setRsvpSuccessMsg(null)}
-        className="mb-4"
-      />
+      {rsvpSuccessMsg && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs font-medium rounded-lg flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+          <span>{rsvpSuccessMsg}</span>
+        </div>
+      )}
 
-      {/* Category Segmented Tabs */}
+      {/* Category Tabs */}
       <div className="overflow-x-auto pb-1 scrollbar-none">
         <SegmentedTabs
-          options={categoryTabOptions}
+          options={categoryOptions}
           activeTab={activeCategory}
           onChange={(cat) => setActiveCategory(cat)}
         />
@@ -197,227 +213,233 @@ export const EventsPage: React.FC = () => {
 
       {/* Events Grid */}
       {isDataLoading ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#171717]"></div>
-          <p className="text-[#6B7280] font-mono text-xs font-bold uppercase tracking-wider">Loading Events...</p>
+        <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#0A0A0A] border-t-transparent"></div>
+          <p className="text-[#6B7280] text-xs">Loading events...</p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEvents.map((evt, index) => {
-          const isRegistered = evt.registeredUserIds.includes(currentUser.id);
-          const isWaitlisted = (evt.waitlistUserIds || []).includes(currentUser.id);
-          const isCompleted = evt.status === 'Completed';
-          const limit = evt.capacityLimit || 50;
-          const isFull = evt.registeredUserIds.length >= limit;
-          const capacityPercent = Math.min(100, Math.round((evt.rsvpsCount / limit) * 100));
-
-          return (
-            <motion.div
-              key={evt.id}
-              layout
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.35) }}
-              whileHover={{ y: -2, borderColor: '#9CA3AF' }}
-              className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-none transition-colors duration-150 flex flex-col justify-between"
+      ) : filteredEvents.length === 0 ? (
+        <EmptyState
+          icon={<Calendar className="w-6 h-6" />}
+          title="No events found"
+          description="There are currently no events matching this category."
+          action={
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => setActiveCategory('All')}
+              icon={<RefreshCw className="w-3.5 h-3.5" />}
             >
-              {/* Banner Image with Badge */}
-              <div className="relative h-44 overflow-hidden">
-                <img
-                  src={evt.bannerImage}
-                  alt={evt.title}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                  <span className="px-3 py-1 bg-[#0A0A0A] text-white font-bold text-[10px] uppercase tracking-wider rounded-md">
-                    {evt.type}
-                  </span>
-                  {isFull && !isCompleted && (
-                    <span className="px-2.5 py-1 bg-[#F3F4F6] text-[#374151] font-bold text-[10px] uppercase rounded-md border border-[#E5E7EB]">
-                      Full ({evt.waitlistUserIds?.length || 0} Waitlist)
+              Reset filters
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredEvents.map((evt, index) => {
+            const isRegistered = evt.registeredUserIds.includes(currentUser.id);
+            const isWaitlisted = (evt.waitlistUserIds || []).includes(currentUser.id);
+            const isCompleted = evt.status === 'Completed';
+            const limit = evt.capacityLimit || 50;
+            const isFull = evt.registeredUserIds.length >= limit;
+            const capacityPercent = Math.min(100, Math.round((evt.rsvpsCount / limit) * 100));
+
+            return (
+              <motion.div
+                key={evt.id}
+                layout
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.18, delay: Math.min(index * 0.02, 0.2) }}
+                className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden flex flex-col justify-between hover:border-[#0A0A0A] transition-colors"
+              >
+                {/* Banner Image with Badge */}
+                <div className="relative h-40 overflow-hidden bg-[#FAFAFA]">
+                  <img
+                    src={evt.bannerImage}
+                    alt={evt.title}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                  <div className="absolute top-3 left-3 flex items-center gap-1.5">
+                    <span className="px-2.5 py-0.5 bg-[#0A0A0A] text-white text-[11px] font-medium rounded-md">
+                      {evt.type}
                     </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Content */}
-              <div className="p-6 space-y-4 flex-1 flex flex-col justify-between text-xs">
-                <div className="space-y-2">
-                  <h3 className="text-base font-bold text-[#0A0A0A] leading-snug">
-                    {evt.title}
-                  </h3>
-
-                  <p className="text-[#6B7280] font-medium leading-relaxed line-clamp-2">
-                    {evt.description}
-                  </p>
-                </div>
-
-                <div className="space-y-2 pt-3 border-t border-[#E5E7EB]">
-                  <p className="font-bold text-[#0A0A0A] flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-[#0A0A0A]" />
-                    <span>{evt.date} at {evt.time}</span>
-                  </p>
-                  <p className="text-[#6B7280] font-medium flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-[#9CA3AF]" />
-                    <span>{evt.locationOrUrl}</span>
-                  </p>
-                  <p className="text-[#6B7280] font-medium flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-[#9CA3AF]" />
-                    <span>Speaker: <strong className="text-[#0A0A0A]">{evt.speakerName}</strong> ({evt.speakerCompany})</span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Seat Capacity Progress Bar & Footer */}
-              <div className="p-5 bg-[#FAFAFA] border-t border-[#E5E7EB] space-y-3 font-sans text-xs">
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span className="text-[#6B7280]">Reserved Capacity</span>
-                    <span className="text-[#0A0A0A] font-mono">{evt.rsvpsCount} / {limit} Seats ({capacityPercent}%)</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-[#E5E7EB] rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[#0A0A0A] transition-all duration-300 rounded-full"
-                      style={{ width: `${capacityPercent}%` }}
-                    />
+                    {isFull && !isCompleted && (
+                      <span className="px-2 py-0.5 bg-white text-[#0A0A0A] text-[11px] font-medium rounded-md border border-[#E5E7EB]">
+                        Full ({evt.waitlistUserIds?.length || 0} waitlisted)
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-1">
-                  {isCompleted ? (
-                    <div className="flex items-center gap-2 w-full">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => setFeedbackEventId(evt.id)}
-                        icon={<Star className="w-3.5 h-3.5 fill-[#0A0A0A] text-[#0A0A0A]" />}
-                      >
-                        Feedback
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handleDownloadCertificate(evt.title)}
-                        icon={<Download className="w-3.5 h-3.5 text-[#0A0A0A]" />}
-                      >
-                        Certificate
-                      </Button>
+                {/* Content */}
+                <div className="p-5 space-y-3 flex-1 flex flex-col justify-between text-xs">
+                  <div className="space-y-1.5">
+                    <h3 className="text-base font-semibold text-[#0A0A0A] leading-snug">
+                      {evt.title}
+                    </h3>
+                    <p className="text-[#6B7280] leading-relaxed line-clamp-2">
+                      {evt.description}
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5 pt-3 border-t border-[#E5E7EB]">
+                    <p className="font-medium text-[#0A0A0A] flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-[#6B7280]" />
+                      <span>{evt.date} at {evt.time}</span>
+                    </p>
+                    <p className="text-[#6B7280] flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-[#6B7280]" />
+                      <span className="truncate">{evt.locationOrUrl}</span>
+                    </p>
+                    <p className="text-[#6B7280] flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-[#6B7280]" />
+                      <span className="truncate">Speaker: <strong className="text-[#0A0A0A] font-medium">{evt.speakerName}</strong> ({evt.speakerCompany})</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Capacity & Actions */}
+                <div className="p-4 bg-[#FAFAFA] border-t border-[#E5E7EB] space-y-2.5 font-sans text-xs">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px] text-[#6B7280]">
+                      <span>Reserved capacity</span>
+                      <span className="text-[#0A0A0A] tabular-nums font-medium">{evt.rsvpsCount} / {limit} ({capacityPercent}%)</span>
                     </div>
-                  ) : isRegistered ? (
-                    <Badge variant="emerald" icon={<Check className="w-3.5 h-3.5 text-[#065F46]" />}>
-                      ✓ REGISTERED
-                    </Badge>
-                  ) : isWaitlisted ? (
-                    <Badge variant="indigo">
-                      WAITLISTED
-                    </Badge>
-                  ) : (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => handleRsvp(evt)}
-                      className="w-full"
-                    >
-                      {isFull ? 'Join Waitlist' : 'RSVP / Register'}
-                    </Button>
-                  )}
-                </div>
-              </div>
+                    <div className="w-full h-1.5 bg-[#E5E7EB] rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#0A0A0A] transition-all duration-300 rounded-full"
+                        style={{ width: `${capacityPercent}%` }}
+                      />
+                    </div>
+                  </div>
 
-            </motion.div>
-          );
-        })}
-      </div>
+                  <div className="flex items-center justify-between pt-1">
+                    {isCompleted ? (
+                      <div className="flex items-center gap-2 w-full">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => setFeedbackEventId(evt.id)}
+                          icon={<Star className="w-3.5 h-3.5" />}
+                        >
+                          Feedback
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => handleDownloadCertificate(evt.title)}
+                          icon={<Download className="w-3.5 h-3.5" />}
+                        >
+                          Certificate
+                        </Button>
+                      </div>
+                    ) : isRegistered ? (
+                      <Badge variant="emerald" icon={<Check className="w-3.5 h-3.5 text-[#065F46]" />}>
+                        Registered
+                      </Badge>
+                    ) : isWaitlisted ? (
+                      <Badge variant="indigo">
+                        Waitlisted
+                      </Badge>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => handleRsvp(evt)}
+                        className="w-full"
+                      >
+                        {isFull ? 'Join waitlist' : 'RSVP / Register'}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+              </motion.div>
+            );
+          })}
+        </div>
       )}
 
       {/* Organize Event Modal */}
       <Modal
         isOpen={showAddEventModal}
         onClose={() => setShowAddEventModal(false)}
-        title="Organize Institutional Event"
-        icon={<Calendar className="w-5 h-5" />}
+        title="Organize campus event"
+        icon={<Calendar className="w-5 h-5 text-[#0A0A0A]" />}
       >
         <form onSubmit={handleAddEventSubmit} className="space-y-3 font-sans text-xs">
-          <div>
-            <label className="app-label text-[#0A0A0A] font-bold">Event Title</label>
-            <input
-              type="text"
+          <TextField
+            label="Event title"
+            required
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="e.g. Generative AI in Production Workshop"
+          />
+
+          <div className="grid grid-cols-2 gap-3">
+            <SelectField
+              label="Event type"
+              value={type}
+              onChange={e => setType(e.target.value as EventType)}
+              options={eventCategories.map(c => ({ value: c, label: c }))}
+            />
+
+            <TextField
+              label="Event date"
+              type="date"
               required
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="e.g. Distributed Cloud Architecture & Scalability Masterclass"
-              className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
+              value={date}
+              onChange={e => setDate(e.target.value)}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="app-label text-[#0A0A0A] font-bold">Event Type</label>
-              <select
-                value={type}
-                onChange={e => setType(e.target.value as EventType)}
-                className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-              >
-                {eventCategories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
+            <TextField
+              label="Event time"
+              value={time}
+              onChange={e => setTime(e.target.value)}
+              placeholder="e.g. 05:30 PM IST"
+            />
 
-            <div>
-              <label className="app-label text-[#0A0A0A] font-bold">Date</label>
-              <input
-                type="date"
-                required
-                value={date}
-                onChange={e => setDate(e.target.value)}
-                className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="app-label text-[#0A0A0A] font-bold">Location or Virtual Platform</label>
-            <input
-              type="text"
-              value={location}
-              onChange={e => setLocation(e.target.value)}
-              placeholder="e.g. Main Auditorium, VIT Wadala or Zoom Live Stream"
-              className="app-input w-full border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
+            <TextField
+              label="Seat capacity"
+              type="number"
+              value={capacityLimit}
+              onChange={e => setCapacityLimit(parseInt(e.target.value) || 50)}
             />
           </div>
 
-          <div>
-            <label className="app-label text-[#0A0A0A] font-bold">Keynote Speaker</label>
-            <input
-              type="text"
-              value={speaker}
-              onChange={e => setSpeaker(e.target.value)}
-              placeholder="e.g. Rushabh Sanghavi (Senior SWE, Google)"
-              className="app-input w-full border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-            />
-          </div>
+          <TextField
+            label="Location or meeting URL"
+            value={location}
+            onChange={e => setLocation(e.target.value)}
+            placeholder="e.g. Auditorium Hall, VIT Wadala / Zoom URL"
+          />
 
-          <div>
-            <label className="app-label text-[#0A0A0A] font-bold">Event Description</label>
-            <textarea
-              rows={3}
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Brief agenda and target student & alumni audience..."
-              className="app-input w-full border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-            />
-          </div>
+          <TextField
+            label="Keynote speaker"
+            value={speaker}
+            onChange={e => setSpeaker(e.target.value)}
+            placeholder="e.g. Dr. Ravindra Sangale (Google)"
+          />
+
+          <TextArea
+            label="Event description"
+            rows={3}
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="Detail event agenda and learning takeaways..."
+          />
 
           <div className="flex justify-end gap-2 pt-2 border-t border-[#E5E7EB]">
             <Button type="button" variant="secondary" size="md" onClick={() => setShowAddEventModal(false)}>
               Cancel
             </Button>
             <Button type="submit" variant="primary" size="md">
-              Publish Event
+              Publish event
             </Button>
           </div>
         </form>
@@ -427,41 +449,40 @@ export const EventsPage: React.FC = () => {
       <Modal
         isOpen={!!feedbackEventId}
         onClose={() => setFeedbackEventId(null)}
-        title="Event Participant Feedback"
+        title="Event feedback"
+        icon={<Star className="w-5 h-5 text-[#0A0A0A]" />}
       >
         <form onSubmit={handleEventFeedbackSubmit} className="space-y-4 font-sans text-xs">
           <div>
-            <label className="app-label text-[#0A0A0A] font-bold">Rating</label>
+            <label className="app-label">Rate your experience (1 to 5 stars)</label>
             <div className="flex items-center gap-2 pt-1">
-              {[1, 2, 3, 4, 5].map(star => (
+              {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
                   type="button"
                   onClick={() => setEventRating(star)}
-                  className="p-1 text-lg transition-transform hover:scale-110 cursor-pointer"
+                  className="p-1 cursor-pointer touch-target-44"
                 >
-                  <Star className={`w-6 h-6 ${star <= eventRating ? 'fill-[#0A0A0A] text-[#0A0A0A]' : 'text-[#E5E7EB]'}`} />
+                  <Star className={`w-5 h-5 ${star <= eventRating ? 'fill-[#0A0A0A] text-[#0A0A0A]' : 'text-[#D1D5DB]'}`} />
                 </button>
               ))}
             </div>
           </div>
 
-          <div>
-            <label className="app-label text-[#0A0A0A] font-bold">Comments & Suggestions</label>
-            <textarea
-              rows={3}
-              value={eventComment}
-              onChange={e => setEventComment(e.target.value)}
-              className="app-input w-full border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-            />
-          </div>
+          <TextArea
+            label="Comments & takeaways"
+            rows={3}
+            value={eventComment}
+            onChange={e => setEventComment(e.target.value)}
+            placeholder="Share feedback on speaker, content, and organization..."
+          />
 
           <div className="flex justify-end gap-2 pt-2 border-t border-[#E5E7EB]">
             <Button type="button" variant="secondary" size="md" onClick={() => setFeedbackEventId(null)}>
               Cancel
             </Button>
             <Button type="submit" variant="primary" size="md">
-              Submit Feedback
+              Submit feedback
             </Button>
           </div>
         </form>

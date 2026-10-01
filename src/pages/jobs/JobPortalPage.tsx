@@ -9,18 +9,25 @@ import {
   Search,
   Plus,
   CheckCircle2,
-  X,
-  Send,
   Building2,
   Bookmark,
   Sparkles,
-  ShieldAlert,
   Briefcase,
   Calendar,
   MapPin,
-  RefreshCw
+  RefreshCw,
+  Send
 } from 'lucide-react';
-import { Badge, Button, SegmentedTabs, Modal, ToastNotice } from '../../components/common/UIComponents';
+import {
+  Badge,
+  Button,
+  SegmentedTabs,
+  Modal,
+  TextField,
+  SelectField,
+  TextArea,
+  EmptyState
+} from '../../components/common/UIComponents';
 
 export const JobPortalPage: React.FC = () => {
   const { jobsList, addJob, applyForJob, isDataLoading } = useData();
@@ -73,7 +80,7 @@ export const JobPortalPage: React.FC = () => {
   const handleApply = (jobId: string) => {
     applyForJob(jobId);
     setAppliedJobIds(prev => [...prev, jobId]);
-    setApplySuccessMsg('Application & verified student profile transmitted to publisher!');
+    setApplySuccessMsg('Application and verified student profile transmitted to publisher.');
     setTimeout(() => setApplySuccessMsg(null), 4000);
     setSelectedJobModal(null);
   };
@@ -100,52 +107,54 @@ export const JobPortalPage: React.FC = () => {
       companyLogo: 'https://images.unsplash.com/photo-1549923746-c502d488b3ea?w=100&auto=format&fit=crop&q=80',
       location: newLocation || 'Mumbai / Remote',
       type: newType,
-      stipendOrSalary: newSalary || 'Stipend / Salary Provided',
+      stipendOrSalary: newSalary || 'Stipend / Salary provided',
       department: ['CMPN', 'INFT', 'EXTC'],
       skillsRequired: ['Problem Solving', 'Technical Skills'],
       postedByAlumniId: currentUser.id,
-      postedByAlumniName: `${currentUser.name} (${currentUser.role.toUpperCase()})`,
+      postedByAlumniName: `${currentUser.name} (${currentUser.role})`,
       postedByRole: currentUser.role as any,
       applicationDeadline: newDeadline || '2026-08-31',
       description: newDescription || 'Opportunity published by institutional member.',
-      requirements: ['Enrolled Student or Alumni of VIT Wadala'],
+      requirements: ['Enrolled student or alumni of VIT Wadala'],
       referralProvided: true
     }, currentRole);
 
     if (!res.success) {
-      alert(`Role Error: ${res.error}`);
+      alert(`Role error: ${res.error}`);
       return;
     }
 
     setShowPostJobModal(false);
     setNewTitle('');
     setNewCompany('');
+    setNewLocation('');
+    setNewSalary('');
+    setNewDescription('');
 
     if (isAdmin) {
-      setApplySuccessMsg('Opportunity published immediately to institutional feeds!');
+      setApplySuccessMsg('Opportunity published to institutional feeds.');
     } else {
-      setApplySuccessMsg('Opportunity submitted! It is currently in the Admin Moderation Queue before appearing on student feeds.');
+      setApplySuccessMsg('Opportunity submitted. It is now in the admin moderation queue before appearing on student feeds.');
     }
     setTimeout(() => setApplySuccessMsg(null), 4500);
   };
 
   const categoryTabOptions = [
-    { id: 'All', label: 'All Opportunities', count: publishedJobs.length },
+    { id: 'All', label: 'All opportunities', count: publishedJobs.length },
     ...opportunityTypes.map(t => ({ id: t, label: t, count: publishedJobs.filter(j => j.type === t).length }))
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 pb-16 sm:pb-0 font-sans text-xs">
+    <div className="space-y-5 font-sans text-xs">
       
-      {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E7EB] pb-5">
+      {/* Action Bar: Title, Context and Post Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#0A0A0A] tracking-tight flex items-center gap-2">
-            <Briefcase className="w-7 h-7 text-[#0A0A0A]" />
-            Opportunity Sharing Portal
-          </h1>
-          <p className="text-sm text-[#6B7280] font-medium mt-1">
-            Alumni & Faculty publishing Internships, Jobs, Research Projects, Scholarships, Training & Workshops.
+          <h2 className="text-base font-semibold text-[#0A0A0A]">
+            Jobs & internships
+          </h2>
+          <p className="text-xs text-[#6B7280]">
+            Explore career referrals, internships, and research opportunities published by alumni and faculty.
           </p>
         </div>
 
@@ -157,19 +166,19 @@ export const JobPortalPage: React.FC = () => {
             icon={<Plus className="w-4 h-4" />}
             className="self-start sm:self-auto"
           >
-            Publish Opportunity
+            Post an opportunity
           </Button>
         </RoleGate>
       </div>
 
       {applySuccessMsg && (
-        <div className="p-4 bg-[#0A0A0A] text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-sm animate-in fade-in">
-          <CheckCircle2 className="w-4 h-4 text-[#16A34A]" />
-          {applySuccessMsg}
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs font-medium rounded-lg flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+          <span>{applySuccessMsg}</span>
         </div>
       )}
 
-      {/* Horizontally Scrollable Category Tabs */}
+      {/* Category Tabs */}
       <div className="overflow-x-auto pb-1 scrollbar-none">
         <SegmentedTabs
           options={categoryTabOptions}
@@ -179,52 +188,37 @@ export const JobPortalPage: React.FC = () => {
       </div>
 
       {/* Search Input Bar */}
-      <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 shadow-none">
-        <div className="relative">
-          <Search className="w-4 h-4 text-[#9CA3AF] absolute left-4 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Search opportunities by title, company, location, or required skill..."
-            className="app-input w-full pl-11 border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-          />
-        </div>
+      <div className="bg-white border border-[#E5E7EB] rounded-xl p-3">
+        <TextField
+          placeholder="Search opportunities by title, company, location, or skill..."
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+          leadingIcon={<Search className="w-4 h-4" />}
+        />
       </div>
 
-      {/* Toast Notice */}
-      <ToastNotice
-        message={applySuccessMsg}
-        onClose={() => setApplySuccessMsg(null)}
-        className="mb-4"
-      />
-
-      {/* Opportunities List or Clean Empty State */}
+      {/* Opportunities List or Empty State */}
       {isDataLoading ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#171717]"></div>
-          <p className="text-[#6B7280] font-mono text-xs font-bold uppercase tracking-wider">Loading Opportunities...</p>
+        <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#0A0A0A] border-t-transparent"></div>
+          <p className="text-[#6B7280] text-xs">Loading opportunities...</p>
         </div>
       ) : filteredJobs.length === 0 ? (
-        <div className="bg-white border border-[#E5E7EB] rounded-xl p-12 text-center space-y-4 shadow-none font-sans">
-          <div className="w-12 h-12 rounded-xl bg-[#F3F4F6] border border-[#E5E7EB] flex items-center justify-center text-[#0A0A0A] mx-auto">
-            <Briefcase className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="font-bold text-[#0A0A0A] text-base">No Opportunities Found</h3>
-            <p className="text-xs text-[#6B7280] font-medium mt-1 max-w-md mx-auto">
-              No active listings match your selected category filter or search terms. Try resetting filters or check back soon for new postings.
-            </p>
-          </div>
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => { setActiveTypeFilter('All'); setSearchTerm(''); }}
-            icon={<RefreshCw className="w-3.5 h-3.5" />}
-          >
-            Reset Search Filters
-          </Button>
-        </div>
+        <EmptyState
+          icon={<Briefcase className="w-6 h-6" />}
+          title="No opportunities found"
+          description="No active listings match your selected category filter or search terms."
+          action={
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => { setActiveTypeFilter('All'); setSearchTerm(''); }}
+              icon={<RefreshCw className="w-3.5 h-3.5" />}
+            >
+              Reset filters
+            </Button>
+          }
+        />
       ) : (
         <div className="space-y-4">
           {filteredJobs.map((job, index) => {
@@ -236,55 +230,60 @@ export const JobPortalPage: React.FC = () => {
               <motion.div
                 key={job.id}
                 layout
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.35) }}
-                whileHover={{ y: -2, borderColor: '#9CA3AF' }}
-                className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-4 shadow-none transition-colors duration-150"
+                transition={{ duration: 0.18, delay: Math.min(index * 0.02, 0.2) }}
+                className="bg-white border border-[#E5E7EB] rounded-xl p-5 sm:p-6 space-y-4 hover:border-[#0A0A0A] transition-colors"
               >
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                   
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-[#F3F4F6] border border-[#E5E7EB] flex items-center justify-center text-[#0A0A0A] font-bold shrink-0">
-                      <Building2 className="w-6 h-6" />
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-lg bg-[#FAFAFA] border border-[#E5E7EB] flex items-center justify-center text-[#0A0A0A] font-medium shrink-0">
+                      <Building2 className="w-5 h-5 text-[#0A0A0A]" />
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <div className="flex items-center gap-2 flex-wrap text-xs">
                         <Badge variant="indigo">{job.type}</Badge>
                         {matchResult && (
                           <Badge variant="emerald" icon={<Sparkles className="w-3 h-3 text-[#065F46]" />}>
-                            {matchResult.score}% Smart Match
+                            {matchResult.score}% match
                           </Badge>
                         )}
                       </div>
 
-                      <h3 className="text-base font-bold text-[#0A0A0A]">
+                      <h3 className="text-base font-semibold text-[#0A0A0A]">
                         {job.title}
                       </h3>
-                      <p className="text-xs text-[#6B7280] font-medium">
-                        {job.company} • Posted by <strong className="text-[#0A0A0A]">{job.postedByAlumniName}</strong>
+                      <p className="text-xs text-[#6B7280]">
+                        {job.company} · Posted by <strong className="text-[#0A0A0A] font-medium">{job.postedByAlumniName}</strong>
                       </p>
 
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#6B7280] font-medium">
-                        <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-[#9CA3AF]" /> {job.location}</span>
-                        <span>•</span>
-                        <span className="font-mono font-bold text-[#0A0A0A]">💰 {job.stipendOrSalary}</span>
-                        <span>•</span>
-                        <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5 text-[#9CA3AF]" /> Deadline: {job.applicationDeadline}</span>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#6B7280]">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3.5 h-3.5 text-[#6B7280]" />
+                          {job.location}
+                        </span>
+                        <span>·</span>
+                        <span className="font-medium text-[#0A0A0A]">{job.stipendOrSalary}</span>
+                        <span>·</span>
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 text-[#6B7280]" />
+                          Deadline: {job.applicationDeadline}
+                        </span>
                       </div>
 
                       {matchResult && matchResult.matchReasons.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 pt-1">
                           {matchResult.matchReasons.map(r => (
-                            <span key={r} className="px-2.5 py-0.5 bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0] rounded-full text-[10px] font-bold">
+                            <span key={r} className="px-2 py-0.5 bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0] rounded-md text-[11px] font-medium">
                               ✓ {r}
                             </span>
                           ))}
                         </div>
                       )}
 
-                      <p className="text-xs text-[#374151] leading-relaxed line-clamp-2 font-medium">
+                      <p className="text-xs text-[#374151] leading-relaxed line-clamp-2">
                         {job.description}
                       </p>
                     </div>
@@ -292,11 +291,12 @@ export const JobPortalPage: React.FC = () => {
 
                   <div className="flex items-center gap-2 self-start shrink-0">
                     <button
+                      type="button"
                       onClick={e => handleToggleSaveJob(e, job.id)}
-                      className={`p-2.5 rounded-lg border transition-all cursor-pointer ${
-                        isSaved ? 'bg-[#FAFAFA] border-[#0A0A0A] text-[#0A0A0A]' : 'bg-white border-[#E5E7EB] text-[#9CA3AF] hover:text-[#0A0A0A]'
+                      className={`p-2 rounded-lg border transition-colors cursor-pointer touch-target-44 ${
+                        isSaved ? 'bg-[#FAFAFA] border-[#0A0A0A] text-[#0A0A0A]' : 'bg-white border-[#E5E7EB] text-[#6B7280] hover:text-[#0A0A0A]'
                       }`}
-                      title={isSaved ? 'Saved Opportunity' : 'Save Opportunity'}
+                      title={isSaved ? 'Saved opportunity' : 'Save opportunity'}
                     >
                       <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-[#0A0A0A]' : ''}`} />
                     </button>
@@ -306,7 +306,7 @@ export const JobPortalPage: React.FC = () => {
                       size="md"
                       onClick={() => setSelectedJobModal(job)}
                     >
-                      {isApplied ? 'Applied' : 'View & Apply'}
+                      {isApplied ? 'Applied' : 'View & apply'}
                     </Button>
                   </div>
 
@@ -322,7 +322,7 @@ export const JobPortalPage: React.FC = () => {
         isOpen={!!selectedJobModal}
         onClose={() => setSelectedJobModal(null)}
         title={selectedJobModal?.title}
-        subtitle={`${selectedJobModal?.company} • ${selectedJobModal?.location}`}
+        subtitle={`${selectedJobModal?.company} · ${selectedJobModal?.location}`}
       >
         {selectedJobModal && (
           <div className="space-y-4 font-sans text-xs">
@@ -330,15 +330,15 @@ export const JobPortalPage: React.FC = () => {
               <Badge variant="indigo">{selectedJobModal.type}</Badge>
             </div>
 
-            <div className="p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg space-y-2">
-              <span className="app-label text-[#0A0A0A] font-bold">Opportunity Overview</span>
-              <p className="text-xs text-[#374151] leading-relaxed font-medium">{selectedJobModal.description}</p>
+            <div className="p-3.5 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg space-y-1.5">
+              <span className="app-label text-[#0A0A0A]">Opportunity overview</span>
+              <p className="text-xs text-[#374151] leading-relaxed">{selectedJobModal.description}</p>
             </div>
 
             <div className="pt-3 border-t border-[#E5E7EB] flex items-center justify-between">
               <div>
-                <span className="app-label text-[#0A0A0A] font-bold">Stipend / Package</span>
-                <span className="font-mono font-bold text-[#0A0A0A] text-sm block">{selectedJobModal.stipendOrSalary}</span>
+                <span className="app-label text-[#0A0A0A]">Stipend / package</span>
+                <span className="font-medium text-[#0A0A0A] text-sm block">{selectedJobModal.stipendOrSalary}</span>
               </div>
 
               <Button
@@ -346,80 +346,86 @@ export const JobPortalPage: React.FC = () => {
                 size="md"
                 onClick={() => handleApply(selectedJobModal.id)}
                 disabled={appliedJobIds.includes(selectedJobModal.id)}
-                icon={<Send className="w-4 h-4" />}
+                icon={<Send className="w-3.5 h-3.5" />}
               >
-                {appliedJobIds.includes(selectedJobModal.id) ? 'Application Submitted' : 'Submit Application'}
+                {appliedJobIds.includes(selectedJobModal.id) ? 'Application submitted' : 'Submit application'}
               </Button>
             </div>
           </div>
         )}
       </Modal>
 
-      {/* Publish Modal */}
+      {/* Post Opportunity Modal */}
       <Modal
         isOpen={showPostJobModal}
         onClose={() => setShowPostJobModal(false)}
-        title="Publish Professional Opportunity"
-        subtitle="Postings undergo lightweight Admin Moderation before appearing on student feeds."
-        icon={<Briefcase className="w-5 h-5" />}
+        title="Post an opportunity"
+        subtitle="Opportunities undergo administrative moderation before appearing on student feeds."
+        icon={<Briefcase className="w-5 h-5 text-[#0A0A0A]" />}
       >
         <form onSubmit={handlePostJobSubmit} className="space-y-3 font-sans text-xs">
-          <div>
-            <label className="app-label text-[#0A0A0A] font-bold">Opportunity Type</label>
-            <select
-              value={newType}
-              onChange={e => setNewType(e.target.value as OpportunityType)}
-              className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-            >
-              {opportunityTypes.map(t => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </div>
+          <SelectField
+            label="Opportunity type"
+            value={newType}
+            onChange={e => setNewType(e.target.value as OpportunityType)}
+            options={opportunityTypes.map(t => ({ value: t, label: t }))}
+          />
 
-          <div>
-            <label className="app-label text-[#0A0A0A] font-bold">Opportunity Title</label>
-            <input
-              type="text"
+          <TextField
+            label="Opportunity title"
+            required
+            value={newTitle}
+            onChange={e => setNewTitle(e.target.value)}
+            placeholder="e.g. Cloud Systems & DevOps Intern"
+          />
+
+          <div className="grid grid-cols-2 gap-3">
+            <TextField
+              label="Organization / department"
               required
-              value={newTitle}
-              onChange={e => setNewTitle(e.target.value)}
-              placeholder="e.g. Cloud Systems & DevOps Intern"
-              className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
+              value={newCompany}
+              onChange={e => setNewCompany(e.target.value)}
+              placeholder="e.g. Google India / CMPN Lab"
+            />
+
+            <TextField
+              label="Location"
+              value={newLocation}
+              onChange={e => setNewLocation(e.target.value)}
+              placeholder="e.g. Mumbai / Hybrid"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="app-label text-[#0A0A0A] font-bold">Organization / Dept</label>
-              <input
-                type="text"
-                required
-                value={newCompany}
-                onChange={e => setNewCompany(e.target.value)}
-                placeholder="e.g. Google India / CMPN Lab"
-                className="app-input w-full border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-              />
-            </div>
+            <TextField
+              label="Stipend / package"
+              value={newSalary}
+              onChange={e => setNewSalary(e.target.value)}
+              placeholder="e.g. ₹25,000 / month"
+            />
 
-            <div>
-              <label className="app-label text-[#0A0A0A] font-bold">Location</label>
-              <input
-                type="text"
-                value={newLocation}
-                onChange={e => setNewLocation(e.target.value)}
-                placeholder="e.g. Mumbai / Hybrid"
-                className="app-input w-full border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-              />
-            </div>
+            <TextField
+              label="Application deadline"
+              type="date"
+              value={newDeadline}
+              onChange={e => setNewDeadline(e.target.value)}
+            />
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-[#E5E7EB] font-display text-xs">
+          <TextArea
+            label="Description"
+            rows={3}
+            value={newDescription}
+            onChange={e => setNewDescription(e.target.value)}
+            placeholder="Detail the opportunity responsibilities and candidate qualifications..."
+          />
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-[#E5E7EB]">
             <Button type="button" variant="secondary" size="md" onClick={() => setShowPostJobModal(false)}>
               Cancel
             </Button>
             <Button type="submit" variant="primary" size="md">
-              Submit for Moderation
+              Submit for moderation
             </Button>
           </div>
         </form>

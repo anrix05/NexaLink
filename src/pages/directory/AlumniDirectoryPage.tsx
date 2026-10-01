@@ -30,7 +30,7 @@ import {
 
 import { getRequestTypeConfig } from '../../utils/relationshipHelper';
 import { redactUserPrivacyFields } from '../../utils/privacyGuard';
-import { Badge, Button, SegmentedTabs, Modal } from '../../components/common/UIComponents';
+import { Badge, Button, SegmentedTabs, Modal, EmptyState, TextField, SelectField } from '../../components/common/UIComponents';
 
 interface AlumniDirectoryPageProps {
   setActiveTab: (tab: string) => void;
@@ -283,9 +283,9 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
   };
 
   const roleTabOptions = [
-    { id: 'all' as const, label: 'All Members', count: filteredResults.length, icon: <Users className="w-3.5 h-3.5" /> },
-    { id: 'alumni' as const, label: 'Alumni Profiles', count: combinedDirectory.filter(u => u.userType === 'alumni' && u.id !== currentUser.id).length, icon: <GraduationCap className="w-3.5 h-3.5" /> },
-    { id: 'faculty' as const, label: 'Faculty Profiles', count: combinedDirectory.filter(u => u.userType === 'faculty' && u.id !== currentUser.id).length, icon: <BookOpen className="w-3.5 h-3.5" /> }
+    { id: 'all' as const, label: 'All members', count: filteredResults.length, icon: <Users className="w-3.5 h-3.5" /> },
+    { id: 'alumni' as const, label: 'Alumni', count: combinedDirectory.filter(u => u.userType === 'alumni' && u.id !== currentUser.id).length, icon: <GraduationCap className="w-3.5 h-3.5" /> },
+    { id: 'faculty' as const, label: 'Faculty', count: combinedDirectory.filter(u => u.userType === 'faculty' && u.id !== currentUser.id).length, icon: <BookOpen className="w-3.5 h-3.5" /> }
   ];
 
   return (
@@ -295,7 +295,7 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#E5E7EB] pb-5">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-[#0A0A0A] tracking-tight">
-            Find Alumni & Faculty
+            Directory
           </h1>
           <p className="text-sm text-[#6B7280] font-medium mt-1">
             Search network members by company, university, skills, or department for referrals and guidance.
@@ -306,15 +306,17 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
           <div className="flex items-center bg-[#FAFAFA] p-1 rounded-xl border border-[#E5E7EB]">
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-[#0A0A0A] text-white shadow-xs' : 'text-[#6B7280] hover:text-[#0A0A0A]'}`}
-              title="Grid View"
+              className={`min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-2 sm:p-1.5 rounded-lg flex items-center justify-center transition-all ${viewMode === 'grid' ? 'bg-[#0A0A0A] text-white' : 'text-[#6B7280] hover:text-[#0A0A0A]'}`}
+              title="Grid view"
+              aria-label="Grid view"
             >
               <LayoutGrid className="w-4 h-4" />
             </button>
             <button
               onClick={() => setViewMode('table')}
-              className={`p-1.5 rounded-lg transition-all ${viewMode === 'table' ? 'bg-[#0A0A0A] text-white shadow-xs' : 'text-[#6B7280] hover:text-[#0A0A0A]'}`}
-              title="Table View"
+              className={`min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-2 sm:p-1.5 rounded-lg flex items-center justify-center transition-all ${viewMode === 'table' ? 'bg-[#0A0A0A] text-white' : 'text-[#6B7280] hover:text-[#0A0A0A]'}`}
+              title="Table view"
+              aria-label="Table view"
             >
               <List className="w-4 h-4" />
             </button>
@@ -332,41 +334,36 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
       {/* Multi-Filter Search Container */}
       <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-4 shadow-none">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-          <div>
-            <label className="app-label text-[#0A0A0A] font-bold">Department</label>
-            <select
-              value={selectedDept}
-              onChange={e => setSelectedDept(e.target.value)}
-              className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-            >
-              <option value="All">All Departments</option>
-              <option value="CMPN">Computer (CMPN)</option>
-              <option value="INFT">Information Tech (INFT)</option>
-              <option value="EXTC">Electronics & Telecom (EXTC)</option>
-              <option value="EXCS">Electronics & CS (EXCS)</option>
-              <option value="BIOM">Biomedical (BIOM)</option>
-              <option value="MCA">MCA</option>
-              <option value="MBA">MBA</option>
-            </select>
-          </div>
+          <SelectField
+            label="Department"
+            value={selectedDept}
+            onChange={e => setSelectedDept(e.target.value)}
+            options={[
+              { value: 'All', label: 'All departments (5)' },
+              { value: 'CMPN', label: 'Computer (CMPN)' },
+              { value: 'INFT', label: 'Information Tech (INFT)' },
+              { value: 'EXCS', label: 'Electronics & CS (EXCS)' },
+              { value: 'EXTC', label: 'Electronics & Telecom (EXTC)' },
+              { value: 'BIOM', label: 'Biomedical (BIOM)' }
+            ]}
+          />
 
           <div className="relative">
-            <label className="app-label text-[#0A0A0A] font-bold">Company / University</label>
-            <input
+            <TextField
+              label="Company or university"
               type="text"
               value={orgSearchTerm}
               onFocus={() => setShowOrgAutocomplete(true)}
               onChange={e => { setOrgSearchTerm(e.target.value); setSearchTerm(e.target.value); setShowOrgAutocomplete(true); }}
               placeholder="e.g. Google, IIT Bombay"
-              className="app-input w-full border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
             />
             {showOrgAutocomplete && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white text-[#0A0A0A] border border-[#E5E7EB] rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto font-sans text-xs">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white text-[#0A0A0A] border border-[#E5E7EB] rounded-lg shadow-sm z-50 max-h-48 overflow-y-auto font-sans text-xs">
                 {MASTER_ORGANIZATIONS.filter(o => o.toLowerCase().includes(orgSearchTerm.toLowerCase())).map(org => (
                   <div
                     key={org}
                     onClick={() => handleSelectOrg(org)}
-                    className="px-3 py-2 hover:bg-[#FAFAFA] cursor-pointer border-b border-[#E5E7EB] font-bold"
+                    className="px-3 py-2 hover:bg-[#FAFAFA] cursor-pointer border-b border-[#E5E7EB] font-medium"
                   >
                     {org}
                   </div>
@@ -375,16 +372,13 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
             )}
           </div>
 
-          <div>
-            <label className="app-label text-[#0A0A0A] font-bold">Technical Skills</label>
-            <input
-              type="text"
-              value={skillsFilter}
-              onChange={e => setSkillsFilter(e.target.value)}
-              placeholder="e.g. React, C++, Docker"
-              className="app-input w-full border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-            />
-          </div>
+          <TextField
+            label="Technical skills"
+            type="text"
+            value={skillsFilter}
+            onChange={e => setSkillsFilter(e.target.value)}
+            placeholder="e.g. React, C++, Docker"
+          />
 
           <div className="flex items-end gap-2">
             <Button
@@ -393,7 +387,7 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
               className="flex-1"
               onClick={() => setOnlyMentors(!onlyMentors)}
             >
-              {onlyMentors ? '✓ Mentors Only' : 'Filter Mentors'}
+              {onlyMentors ? '✓ Mentors only' : 'Filter mentors'}
             </Button>
 
             <Button
@@ -408,29 +402,37 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[#6B7280]">
-        <span>Central Directory Matches ({filteredResults.length})</span>
+      <div className="flex items-center justify-between text-xs font-semibold text-[#6B7280]">
+        <span>Directory members <span className="tabular-nums font-bold text-[#0A0A0A]">({filteredResults.length})</span></span>
       </div>
 
       {isDataLoading ? (
         <div className="flex flex-col items-center justify-center py-24 text-center space-y-4">
           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#171717]"></div>
-          <p className="text-[#6B7280] font-mono text-xs font-bold uppercase tracking-wider">Loading Directory...</p>
+          <p className="text-[#6B7280] font-sans text-xs font-semibold">Loading directory...</p>
         </div>
+      ) : filteredResults.length === 0 ? (
+        <EmptyState
+          icon={<Users className="w-6 h-6 text-[#0A0A0A]" />}
+          title="No members found"
+          description="Try adjusting your filters or search keywords to find alumni and faculty members."
+          actionLabel="Clear filters"
+          onAction={clearFilters}
+        />
       ) : viewMode === 'grid' && (
         isOrgSearchActive && groupedResults && Object.keys(groupedResults).length > 0 ? (
           <div className="space-y-6">
             {Object.entries(groupedResults).map(([orgName, members]) => (
               <div key={orgName} className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-4 shadow-none">
-                <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3 font-display">
+                <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-[#0A0A0A]" />
-                    <h3 className="font-bold text-xs text-[#0A0A0A] uppercase tracking-wider">
-                      {orgName} ({members.length} {members.length === 1 ? 'Alum/Faculty' : 'Alumni & Faculty'})
+                    <h3 className="font-bold text-xs text-[#0A0A0A]">
+                      {orgName} ({members.length} {members.length === 1 ? 'member' : 'members'})
                     </h3>
                   </div>
-                  <span className="font-mono text-[10px] font-bold text-[#374151] bg-[#F3F4F6] px-2.5 py-0.5 rounded-full border border-[#E5E7EB]">
-                    {members.length} Headcount
+                  <span className="text-[10px] font-bold text-[#374151] bg-[#F3F4F6] px-2.5 py-0.5 rounded-full border border-[#E5E7EB] tabular-nums">
+                    {members.length} {members.length === 1 ? 'member' : 'members'}
                   </span>
                 </div>
 
@@ -554,12 +556,14 @@ export const AlumniDirectoryPage: React.FC<AlumniDirectoryPageProps> = ({ setAct
 
                 <div className="p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg flex flex-col justify-center">
                   <span className="app-label text-[#6B7280] font-bold tracking-wider mb-1.5 block">Location & University</span>
-                  <p className="font-bold text-[#0A0A0A]">
-                    📍 {u.location || 'Mumbai, India'}
+                  <p className="font-bold text-[#0A0A0A] flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-[#0A0A0A] shrink-0" />
+                    <span>{u.location || 'Mumbai, India'}</span>
                   </p>
                   {u.higherEducationInstitute && (
-                    <p className="text-[11px] text-[#6B7280] font-medium">
-                      🎓 {u.higherEducationInstitute}
+                    <p className="text-[11px] text-[#6B7280] font-medium flex items-center gap-1.5 mt-0.5">
+                      <GraduationCap className="w-3.5 h-3.5 text-[#0A0A0A] shrink-0" />
+                      <span>{u.higherEducationInstitute}</span>
                     </p>
                   )}
                 </div>

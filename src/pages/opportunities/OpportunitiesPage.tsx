@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Briefcase, Calendar, Sparkles } from 'lucide-react';
+import { Briefcase, Calendar } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { SegmentedTabs } from '../../components/common/UIComponents';
+import { SegmentedTabs, PageHeader } from '../../components/common/UIComponents';
 import { JobPortalPage } from '../jobs/JobPortalPage';
 import { EventsPage } from '../events/EventsPage';
 
@@ -30,43 +30,37 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({ initialSub
   const tabOptions = [
     {
       id: 'jobs' as const,
-      label: currentRole === 'alumni' || currentRole === 'faculty' ? 'Post & Share Jobs' : 'Jobs & Internships',
-      icon: <Briefcase className="w-3.5 h-3.5" />,
+      label: 'Jobs & internships',
+      icon: <Briefcase className="w-4 h-4" />,
       count: publishedJobs.length
     },
     {
       id: 'events' as const,
-      label: 'Campus Events & Talks',
-      icon: <Calendar className="w-3.5 h-3.5" />,
+      label: 'Events & talks',
+      icon: <Calendar className="w-4 h-4" />,
       count: eventsList.length
     }
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 font-sans text-xs">
-      {/* Top Opportunities Banner Header with Internal Segmented Toggle (Mobile Only) */}
-      <div className="lg:hidden flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#E5E7EB] pb-5">
+    <div className="space-y-6 font-sans text-xs">
+      {/* Unified Opportunities Hub Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#E5E7EB] pb-5">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#6B7280]">
-              Institutional Portal
-            </span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-display font-black text-[#0A0A0A] tracking-tight mt-0.5">
-            Opportunities & Campus Events
+          <h1 className="text-2xl sm:text-3xl font-display font-bold text-[#0A0A0A] tracking-tight">
+            Opportunities
           </h1>
-          <p className="text-xs sm:text-sm text-[#6B7280] font-medium mt-1">
+          <p className="text-xs sm:text-sm text-[#6B7280] font-normal mt-1">
             Browse verified job vacancies, corporate internships, and campus masterclasses.
           </p>
         </div>
 
-        <div className="lg:hidden">
+        <div>
           <SegmentedTabs
             options={tabOptions}
             activeTab={activeSubTab}
             onChange={(tab) => setActiveSubTab(tab)}
-            layoutId="opportunitiesSubTabPill"
-            className="self-start md:self-auto"
+            layoutId="opportunitiesHubSubTabPill"
           />
         </div>
       </div>
@@ -75,10 +69,10 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({ initialSub
       <AnimatePresence mode="wait">
         <motion.div
           key={activeSubTab}
-          initial={{ opacity: 0, y: 8 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
         >
           {activeSubTab === 'jobs' ? <JobPortalPage /> : <EventsPage />}
         </motion.div>

@@ -21,7 +21,7 @@ import {
   AlertCircle,
   X
 } from 'lucide-react';
-import { Badge, Button, SegmentedTabs, Modal, ToastNotice } from '../../components/common/UIComponents';
+import { Badge, Button, SegmentedTabs, Modal, ToastNotice, EmptyState, TextField, SelectField, TextArea } from '../../components/common/UIComponents';
 
 interface MentorshipPageProps {
   selectedMentorForBooking?: AlumniProfile | FacultyProfile | any | null;
@@ -34,7 +34,7 @@ const AdminMentorshipGuardView: React.FC = () => {
     <div className="space-y-6 animate-in fade-in duration-300 font-sans text-xs">
       <div className="border-b border-[#E5E7EB] pb-4">
         <h1 className="text-2xl sm:text-3xl font-bold text-[#0A0A0A] tracking-tight">
-          Mentorship & Guidance Portal
+          Guidance
         </h1>
         <p className="text-sm text-[#6B7280] font-medium mt-1">
           Peer-to-peer mentorship and research advisory relationships.
@@ -248,9 +248,7 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({ selectedMentorF
       <div className="border-b border-[#E5E7EB] pb-5">
         <h1 className="text-2xl sm:text-3xl font-bold text-[#0A0A0A] tracking-tight flex items-center gap-2">
           <GraduationCap className="w-7 h-7 text-[#0A0A0A]" />
-          {isStudent
-            ? 'Find a Mentor'
-            : 'Guidance & Mentorship'}
+          Guidance
         </h1>
         <p className="text-sm text-[#6B7280] font-medium mt-1">
           {isStudent
@@ -292,8 +290,8 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({ selectedMentorF
             {!isTargetLocked && (
               <SegmentedTabs
                 options={[
-                  { id: 'alumni', label: 'Alumni Member' },
-                  { id: 'faculty', label: 'Faculty Member' }
+                  { id: 'alumni', label: 'Alumni member' },
+                  { id: 'faculty', label: 'Faculty member' }
                 ]}
                 activeTab={mentorType}
                 onChange={(t) => {
@@ -311,7 +309,7 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({ selectedMentorF
                 <div className="flex items-center gap-3">
                   <img src={selectedTargetUser.avatar} alt={selectedTargetUser.name} className="w-10 h-10 rounded-full object-cover border border-[#E5E7EB]" />
                   <div>
-                    <Badge variant="indigo">TARGET MEMBER LOCKED</Badge>
+                    <Badge variant="indigo">Target member locked</Badge>
                     <h3 className="font-bold text-[#0A0A0A] text-sm mt-0.5">{selectedTargetUser.name}</h3>
                     <p className="text-xs text-[#6B7280] font-medium">
                       {selectedTargetUser.company || selectedTargetUser.department}
@@ -319,99 +317,78 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({ selectedMentorF
                   </div>
                 </div>
                 <Button variant="secondary" size="sm" onClick={() => setIsTargetLocked(false)}>
-                  Change Member
+                  Change member
                 </Button>
               </div>
             ) : (
-              <div>
-                <label className="app-label text-[#0A0A0A] font-bold">
-                  Select Target {mentorType === 'alumni' ? 'Alumni' : 'Faculty'} Member
-                </label>
-                <select
-                  value={selectedMentorId}
-                  onChange={e => setSelectedMentorId(e.target.value)}
-                  className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-                >
-                  {mentorType === 'alumni'
-                    ? availableAlumniMentors.map(a => (
-                        <option key={a.id} value={a.id}>
-                          {a.name} — {a.company} ({a.designation}) [{a.department}]
-                        </option>
-                      ))
-                    : availableFacultyMentors.map(f => (
-                        <option key={f.id} value={f.id}>
-                          {f.name} — {f.designation} [{f.department}]
-                        </option>
-                      ))
-                  }
-                </select>
-              </div>
+              <SelectField
+                label={`Select target ${mentorType === 'alumni' ? 'alumni' : 'faculty'} member`}
+                value={selectedMentorId}
+                onChange={e => setSelectedMentorId(e.target.value)}
+                options={
+                  mentorType === 'alumni'
+                    ? availableAlumniMentors.map(a => ({
+                        value: a.id,
+                        label: `${a.name} — ${a.company} (${a.designation}) [${a.department}]`
+                      }))
+                    : availableFacultyMentors.map(f => ({
+                        value: f.id,
+                        label: `${f.name} — ${f.designation} [${f.department}]`
+                      }))
+                }
+              />
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="app-label text-[#0A0A0A] font-bold">Primary Engagement Purpose</label>
-                <select
-                  value={purposeOfRequest}
-                  onChange={e => setPurposeOfRequest(e.target.value as MentorshipGuidancePurpose)}
-                  className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-                >
-                  {requestConfig.purposeOptions.map(opt => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
+              <SelectField
+                label="Primary engagement purpose"
+                value={purposeOfRequest}
+                onChange={e => setPurposeOfRequest(e.target.value as MentorshipGuidancePurpose)}
+                options={requestConfig.purposeOptions.map(opt => ({
+                  value: opt,
+                  label: opt
+                }))}
+              />
 
-              <div>
-                <label className="app-label text-[#0A0A0A] font-bold">Specific Domain / Topic</label>
-                <input
-                  type="text"
-                  value={areaOfGuidance}
-                  onChange={e => setAreaOfGuidance(e.target.value)}
-                  placeholder="e.g. Distributed Consensus, Resume Review, Higher Ed Applications"
-                  className="app-input w-full border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-                />
-              </div>
+              <TextField
+                label="Specific domain or topic"
+                type="text"
+                value={areaOfGuidance}
+                onChange={e => setAreaOfGuidance(e.target.value)}
+                placeholder="e.g. Distributed Consensus, Resume Review, Higher Ed Applications"
+              />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="app-label text-[#0A0A0A] font-bold">Proposed Meeting Date (Optional)</label>
-                <input
-                  type="date"
-                  value={proposedDate}
-                  min={new Date().toISOString().split('T')[0]}
-                  onChange={e => setProposedDate(e.target.value)}
-                  className="app-input w-full border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-                />
-              </div>
+              <TextField
+                label="Proposed meeting date (optional)"
+                type="date"
+                value={proposedDate}
+                min={new Date().toISOString().split('T')[0]}
+                onChange={e => setProposedDate(e.target.value)}
+              />
 
-              <div>
-                <label className="app-label text-[#0A0A0A] font-bold">Preferred Time Slot (Optional)</label>
-                <select
-                  value={proposedTimeSlot}
-                  onChange={e => setProposedTimeSlot(e.target.value)}
-                  className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-                >
-                  <option value="">Flexible / Anytime</option>
-                  <option value="Morning (9:00 AM - 12:00 PM)">Morning (9:00 AM - 12:00 PM)</option>
-                  <option value="Afternoon (12:00 PM - 4:00 PM)">Afternoon (12:00 PM - 4:00 PM)</option>
-                  <option value="Evening (4:00 PM - 8:00 PM)">Evening (4:00 PM - 8:00 PM)</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="app-label text-[#0A0A0A] font-bold">Personal Message & Background Context</label>
-              <textarea
-                rows={4}
-                required
-                value={message}
-                onChange={e => setMessage(e.target.value)}
-                placeholder="Introduce yourself, mention your branch, year, and specific questions..."
-                className="app-input w-full border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
+              <SelectField
+                label="Preferred time slot (optional)"
+                value={proposedTimeSlot}
+                onChange={e => setProposedTimeSlot(e.target.value)}
+                options={[
+                  { value: '', label: 'Flexible / anytime' },
+                  { value: 'Morning (9:00 AM - 12:00 PM)', label: 'Morning (9:00 AM - 12:00 PM)' },
+                  { value: 'Afternoon (12:00 PM - 4:00 PM)', label: 'Afternoon (12:00 PM - 4:00 PM)' },
+                  { value: 'Evening (4:00 PM - 8:00 PM)', label: 'Evening (4:00 PM - 8:00 PM)' }
+                ]}
               />
             </div>
+
+            <TextArea
+              label="Personal message & background context"
+              rows={4}
+              required
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              placeholder="Introduce yourself, mention your branch, year, and specific questions..."
+            />
 
             <Button
               type="submit"
@@ -429,7 +406,7 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({ selectedMentorF
       {/* TAB 2: SENT REQUESTS / OUTREACH */}
       {activeSubTab === 'my-sent' && (
         <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-4 shadow-none">
-          <h2 className="font-bold text-[#0A0A0A] text-base">{isStudent ? 'My Requests' : 'My Sent Outreach'}</h2>
+          <h2 className="font-bold text-[#0A0A0A] text-base">{isStudent ? 'My requests' : 'My sent outreach'}</h2>
           <p className="text-xs text-[#6B7280] font-medium">
             {isStudent
               ? 'Track the status of your outgoing mentorship and guidance requests.'
@@ -437,9 +414,13 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({ selectedMentorF
           </p>
 
           {mySentRequests.length === 0 ? (
-            <p className="text-[#9CA3AF] font-medium py-6 italic text-center">
-              {isStudent ? 'No requests sent yet.' : 'No sent outreach yet.'}
-            </p>
+            <EmptyState
+              icon={<Inbox className="w-6 h-6 text-[#0A0A0A]" />}
+              title={isStudent ? 'No requests sent yet' : 'No sent outreach yet'}
+              description={isStudent ? 'You haven’t submitted any mentorship requests yet. Browse the directory to find a mentor.' : 'You have not sent any outreach invitations yet.'}
+              actionLabel={isStudent ? 'Find a mentor' : undefined}
+              onAction={isStudent ? () => setActiveSubTab('find') : undefined}
+            />
           ) : (
             <div className="space-y-3">
               {mySentRequests.map(req => (
@@ -492,11 +473,15 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({ selectedMentorF
       {/* TAB 3: INCOMING REQUESTS FOR YOU */}
       {activeSubTab === 'incoming' && (
         <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-4 shadow-none">
-          <h2 className="font-bold text-[#0A0A0A] text-base">Requests for You</h2>
+          <h2 className="font-bold text-[#0A0A0A] text-base">Requests for you</h2>
           <p className="text-xs text-[#6B7280] font-medium">Review and respond to incoming guidance and mentorship requests from students or peers.</p>
 
           {pendingIncomingRequests.length === 0 ? (
-            <p className="text-[#9CA3AF] font-medium py-6 italic text-center">No pending requests for you at this time.</p>
+            <EmptyState
+              icon={<Sparkles className="w-6 h-6 text-[#0A0A0A]" />}
+              title="No pending requests"
+              description="You have no pending guidance or mentorship requests from students or peers at this time."
+            />
           ) : (
             <div className="space-y-3">
               {pendingIncomingRequests.map(req => (
@@ -505,9 +490,9 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({ selectedMentorF
                     <div>
                       <Badge variant="indigo">{req.purposeOfRequest}</Badge>
                       <h3 className="font-bold text-[#0A0A0A] text-sm mt-1">From: {req.studentName} ({req.studentDepartment})</h3>
-                      <p className="text-xs text-[#6B7280] font-medium">{req.studentEmail} • PRN: {req.studentEnrollmentNo}</p>
+                      <p className="text-xs text-[#6B7280] font-medium">{req.studentEmail} • PRN: <span className="font-mono">{req.studentEnrollmentNo}</span></p>
                     </div>
-                    <Badge variant="indigo">14-day Auto Expiry</Badge>
+                    <Badge variant="indigo">14-day auto expiry</Badge>
                   </div>
                   <p className="text-xs text-[#374151] bg-white p-3 rounded-lg border border-[#E5E7EB] font-medium">
                     "{req.message}"
@@ -542,7 +527,7 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({ selectedMentorF
       {/* TAB 4: ESTABLISHED CONNECTIONS (MY MENTORS / MY MENTEES) */}
       {activeSubTab === 'requests' && (
         <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-4 shadow-none">
-          <h2 className="font-bold text-[#0A0A0A] text-base">{isStudent ? 'My Mentors' : 'My Mentees & Connections'}</h2>
+          <h2 className="font-bold text-[#0A0A0A] text-base">{isStudent ? 'My mentors' : 'My mentees & connections'}</h2>
           <p className="text-xs text-[#6B7280] font-medium">
             {isStudent
               ? 'Active mentorship connections with alumni and faculty advisors.'
@@ -550,9 +535,13 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({ selectedMentorF
           </p>
 
           {activeEstablishedConnections.length === 0 ? (
-            <p className="text-[#9CA3AF] font-medium py-6 italic text-center">
-              {isStudent ? 'No active mentor connections established yet.' : 'No active mentee connections established yet.'}
-            </p>
+            <EmptyState
+              icon={<UserCheck className="w-6 h-6 text-[#0A0A0A]" />}
+              title={isStudent ? 'No active mentors yet' : 'No active mentees yet'}
+              description={isStudent ? 'Once a mentor accepts your request, your active guidance relationship will appear here.' : 'Accepted guidance and mentorship requests will appear here.'}
+              actionLabel={isStudent ? 'Request guidance' : undefined}
+              onAction={isStudent ? () => setActiveSubTab('find') : undefined}
+            />
           ) : (
             <div className="space-y-3">
               {activeEstablishedConnections.map(req => (

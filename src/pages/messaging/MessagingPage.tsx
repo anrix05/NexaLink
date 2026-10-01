@@ -235,24 +235,24 @@ function buildTimeline(msgs: any[], unreadCutoffId?: string, unreadCount: number
 
 const AdminMessagingGuardView: React.FC = () => {
   return (
-    <div className="space-y-6 font-sans text-xs bg-white p-8 border border-[#E5E5E5]">
-      <div className="border-b border-[#E5E5E5] pb-4">
-        <p className="text-[10px] font-mono uppercase tracking-[0.08em] text-[#9CA3AF] font-bold">Governance & Privacy</p>
-        <h1 className="text-2xl font-bold text-[#0A0A0A] tracking-tight mt-1">NexaChats</h1>
-        <p className="text-xs text-[#6B6B6B] mt-1">
+    <div className="space-y-6 font-sans text-xs bg-white p-8 border border-[#E5E7EB] rounded-xl">
+      <div className="border-b border-[#E5E7EB] pb-4">
+        <p className="text-xs uppercase tracking-wide text-[#6B7280] font-semibold">Governance & Privacy</p>
+        <h1 className="text-2xl font-bold text-[#0A0A0A] tracking-tight mt-1">Chats</h1>
+        <p className="text-xs text-[#6B7280] mt-1">
           Institutional privacy protection & peer-to-peer communication boundaries.
         </p>
       </div>
 
-      <div className="bg-[#F8F8F8] border border-[#E5E5E5] p-6 flex items-start gap-4">
-        <div className="p-2.5 bg-white border border-[#E5E5E5] shrink-0">
+      <div className="bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl p-6 flex items-start gap-4">
+        <div className="p-2.5 bg-white border border-[#E5E7EB] rounded-lg shrink-0">
           <Shield className="w-5 h-5 text-[#0A0A0A]" />
         </div>
         <div>
           <h2 className="font-bold text-sm text-[#0A0A0A] tracking-tight mb-1">
             Admin Role: Direct Messages Access Restricted
           </h2>
-          <p className="text-xs text-[#6B6B6B] leading-relaxed">
+          <p className="text-xs text-[#6B7280] leading-relaxed">
             Administrator accounts do not have access to peer-to-peer Direct Messages. This is a deliberate
             institutional privacy constraint — Admin accounts must not read private conversations between Students,
             Alumni, and Faculty members.
@@ -264,11 +264,11 @@ const AdminMessagingGuardView: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white border border-[#E5E5E5] p-6 space-y-3">
-        <h3 className="font-bold text-xs text-[#0A0A0A] uppercase tracking-[0.08em] flex items-center gap-2">
+      <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-3">
+        <h3 className="font-bold text-xs text-[#0A0A0A] flex items-center gap-2">
           <Lock className="w-3.5 h-3.5 text-[#0A0A0A]" /> Admin Messaging Capabilities
         </h3>
-        <ul className="space-y-2 text-xs text-[#6B6B6B]">
+        <ul className="space-y-2 text-xs text-[#6B7280]">
           <li className="flex items-start gap-2">
             <Check className="w-3.5 h-3.5 text-[#0A0A0A] mt-0.5 shrink-0" />
             <span>View and moderate <strong>reported message threads</strong> in the Governance Suite.</span>
@@ -754,63 +754,63 @@ const StandardMessagingView: React.FC = () => {
   }, [pendingChatUserId, allDirectoryProfiles, setPendingChatUserId]);
 
   return (
-    <div className="font-sans text-xs relative bg-white border border-[#E5E5E5] rounded-2xl overflow-hidden shadow-2xs">
+    <div className="font-sans text-xs relative bg-white border border-[#E5E7EB] rounded-2xl overflow-hidden">
 
       {/* Toast Notice */}
       <ToastNotice
         message={notice}
         onClose={() => setNotice(null)}
         variant={notice?.includes('failed') ? 'amber' : 'success'}
-        className="fixed top-20 right-6 z-50 shadow-lg"
+        className="fixed top-20 right-6 z-50"
       />
 
       {contactList.length === 0 ? (
         <div className="bg-white p-12 flex flex-col items-center justify-center text-center font-sans min-h-[460px] md:min-h-[620px]">
-          <div className="w-12 h-12 rounded-full border border-[#E5E5E5] bg-[#FAFAFA] flex items-center justify-center mb-4">
+          <div className="w-12 h-12 rounded-full border border-[#E5E7EB] bg-[#FAFAFA] flex items-center justify-center mb-4">
             <MessageSquare className="w-5 h-5 text-[#0A0A0A]" />
           </div>
-          <h2 className="text-base font-bold text-[#0A0A0A] uppercase tracking-wider">No conversations yet</h2>
-          <p className="text-xs text-[#6B6B6B] mt-1 mb-6 max-w-sm">
+          <h2 className="text-base font-bold text-[#0A0A0A]">No conversations yet</h2>
+          <p className="text-xs text-[#6B7280] mt-1 mb-6 max-w-sm">
             Message any alumni or faculty member directly — no connection request required.
           </p>
           <button
             onClick={() => setShowNewConversationModal(true)}
-            className="py-2.5 px-6 border border-[#E5E5E5] rounded-xl text-[#0A0A0A] font-bold text-xs uppercase tracking-wider hover:bg-[#F8F8F8] transition-colors flex items-center justify-center gap-2 shadow-2xs"
+            className="py-2.5 px-6 border border-[#E5E7EB] rounded-xl text-[#0A0A0A] font-bold text-xs hover:bg-[#FAFAFA] transition-colors flex items-center justify-center gap-2"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>New Conversation</span>
+            <span>New conversation</span>
           </button>
         </div>
       ) : (
       <div className="h-[calc(100dvh-10rem)] md:h-[calc(100vh-130px)] min-h-[460px] md:min-h-[620px] max-h-[920px] grid grid-cols-1 md:grid-cols-12 bg-white rounded-xl overflow-hidden">
         {/* TWO-COLUMN CHAT CONTAINER — Responsive Dynamic Viewport Height */}
         {/* ─── COLUMN 2: DIRECT CHATS LIST (300px / md:col-span-4) ───────────── */}
-        <div className={`md:col-span-4 border-r border-[#E5E5E5] flex flex-col bg-white min-h-0 ${
+        <div className={`md:col-span-4 border-r border-[#E5E7EB] flex flex-col bg-white min-h-0 ${
           showMobileChat ? 'hidden md:flex' : 'flex'
         }`}>
           
           {/* Header "DIRECT CHATS" with count badge */}
-          <div className="p-4 px-5 border-b border-[#E5E5E5] flex items-center justify-between bg-white shrink-0">
+          <div className="p-4 px-5 border-b border-[#E5E7EB] flex items-center justify-between bg-white shrink-0">
             <div className="flex items-center gap-2">
               <UsersRoundIcon className="w-4 h-4 text-[#0A0A0A]" />
-              <h2 className="font-bold text-xs uppercase tracking-[0.08em] text-[#0A0A0A]">
-                Direct Chats
+              <h2 className="font-bold text-xs text-[#0A0A0A]">
+                Direct chats
               </h2>
             </div>
-            <span className="w-5 h-5 bg-[#0A0A0A] text-white text-[10px] font-mono font-bold flex items-center justify-center rounded-full">
+            <span className="w-5 h-5 bg-[#0A0A0A] text-white text-[10px] tabular-nums font-bold flex items-center justify-center rounded-full">
               {contactList.length}
             </span>
           </div>
 
           {/* Search Bar & Filters */}
-          <div className="p-3 px-4 border-b border-[#E5E5E5] bg-white shrink-0 flex flex-col gap-2">
+          <div className="p-3 px-4 border-b border-[#E5E7EB] bg-white shrink-0 flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <select
                 value={contactFilterMode}
                 onChange={(e) => setContactFilterMode(e.target.value as any)}
-                className="text-xs font-bold uppercase tracking-[0.05em] bg-transparent text-[#6B6B6B] hover:text-[#0A0A0A] focus:outline-none cursor-pointer transition-colors"
+                className="text-xs font-semibold bg-transparent text-[#6B7280] hover:text-[#0A0A0A] focus:outline-none cursor-pointer transition-colors"
               >
-                <option value="All">All Messages ▾</option>
+                <option value="All">All messages ▾</option>
                 <option value="Unread">Unread ▾</option>
                 <option value="Starred">Starred ▾</option>
               </select>
@@ -913,13 +913,13 @@ const StandardMessagingView: React.FC = () => {
           </div>
 
           {/* "+ NEW CONVERSATION" Action Button with rounded-xl */}
-          <div className="p-3 border-t border-[#E5E5E5] bg-white shrink-0">
+          <div className="p-3 border-t border-[#E5E7EB] bg-white shrink-0">
             <button
               onClick={() => setShowNewConversationModal(true)}
-              className="w-full py-2.5 px-4 border border-[#E5E5E5] rounded-xl text-[#0A0A0A] font-bold text-xs uppercase tracking-wider hover:bg-[#F8F8F8] transition-colors flex items-center justify-center gap-2 shadow-2xs"
+              className="w-full py-2.5 px-4 border border-[#E5E7EB] rounded-xl text-[#0A0A0A] font-semibold text-xs hover:bg-[#FAFAFA] transition-colors flex items-center justify-center gap-2"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>New Conversation</span>
+              <span>New conversation</span>
             </button>
           </div>
 
@@ -933,17 +933,17 @@ const StandardMessagingView: React.FC = () => {
         {isDataLoading ? (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#171717]"></div>
-            <p className="text-[#6B7280] font-mono text-xs font-bold uppercase tracking-wider">Loading Conversation...</p>
+            <p className="text-[#6B7280] font-sans text-xs font-semibold">Loading conversation...</p>
           </div>
         ) : activeContact ? (
           <div className="flex flex-col h-full min-h-0">
 
-              {/* Chat Header Bar matching screenshot */}
-              <div className="p-3.5 px-6 border-b border-[#E5E5E5] flex items-center justify-between bg-white shrink-0 z-10">
+              {/* Chat Header Bar */}
+              <div className="p-3.5 px-6 border-b border-[#E5E7EB] flex items-center justify-between bg-white shrink-0 z-10">
                 <div className="flex items-center gap-3 min-w-0">
                   <button
                     onClick={() => setShowMobileChat(false)}
-                    className="md:hidden p-1.5 border border-[#E5E5E5] text-[#0A0A0A] hover:bg-[#F0F0F0] shrink-0"
+                    className="md:hidden p-1.5 border border-[#E5E7EB] text-[#0A0A0A] hover:bg-[#FAFAFA] shrink-0 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center"
                     title="Back to conversations"
                   >
                     <ArrowLeft className="w-4 h-4" />
@@ -959,7 +959,7 @@ const StandardMessagingView: React.FC = () => {
                     <h3 className="font-bold text-[15px] text-[#0A0A0A] tracking-tight leading-tight truncate">
                       {activeContact.name}
                     </h3>
-                    <p className="text-[11px] text-[#6B6B6B] flex items-center gap-1.5 mt-0.5 truncate">
+                    <p className="text-[11px] text-[#6B7280] flex items-center gap-1.5 mt-0.5 truncate">
                       <span className="w-1.5 h-1.5 bg-[#16A34A] rounded-full inline-block shrink-0" />
                       <span className="text-[#16A34A] font-medium shrink-0">online</span>
                       <span className="truncate">{activeContact.type === 'alumni' ? 'Alumni' : 'Faculty'} · {activeContact.company || 'Google'}, {activeContact.designation}</span>
@@ -974,8 +974,8 @@ const StandardMessagingView: React.FC = () => {
                       setShowThreadSearch(prev => !prev);
                       if (showThreadSearch) setThreadSearchQuery('');
                     }}
-                    className={`p-1.5 rounded-lg border transition-colors ${
-                      showThreadSearch ? 'bg-[#0A0A0A] text-white border-[#0A0A0A]' : 'bg-white border-[#E5E5E5] text-[#6B6B6B] hover:text-[#0A0A0A]'
+                    className={`p-1.5 rounded-lg border transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center ${
+                      showThreadSearch ? 'bg-[#0A0A0A] text-white border-[#0A0A0A]' : 'bg-white border-[#E5E7EB] text-[#6B7280] hover:text-[#0A0A0A]'
                     }`}
                     title="Search messages in thread"
                   >
@@ -983,16 +983,16 @@ const StandardMessagingView: React.FC = () => {
                   </button>
 
                   <span
-                    className="hidden sm:flex items-center gap-1.5 px-3 py-1 border border-[#E5E5E5] bg-white text-[#6B6B6B] text-[11px] font-mono tracking-wider uppercase rounded-[4px]"
+                    className="hidden sm:flex items-center gap-1.5 px-3 py-1 border border-[#E5E7EB] bg-white text-[#6B7280] text-xs font-medium rounded-full"
                     title="Private End-to-End Thread"
                   >
-                    <Lock className="w-3 h-3 text-[#6B6B6B]" />
+                    <Lock className="w-3 h-3 text-[#6B7280]" />
                     <span>Private</span>
                   </span>
                   <div className="relative">
                     <button
                       onClick={() => setOpenMenuMsgId(openMenuMsgId === 'header' ? null : 'header')}
-                      className="p-1 text-[#6B6B6B] hover:text-[#0A0A0A]"
+                      className="p-1 text-[#6B7280] hover:text-[#0A0A0A] min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                       title="More actions"
                     >
                       <MoreHorizontal className="w-4 h-4" />
@@ -1002,7 +1002,7 @@ const StandardMessagingView: React.FC = () => {
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
-                        className="absolute right-0 top-full mt-1 w-48 bg-white border border-[#E5E5E5] shadow-lg rounded-xl overflow-hidden z-50 text-xs py-1"
+                        className="absolute right-0 top-full mt-1 w-48 bg-white border border-[#E5E7EB] rounded-xl overflow-hidden z-50 text-xs py-1"
                       >
                         <button
                           onClick={() => {
@@ -1023,7 +1023,6 @@ const StandardMessagingView: React.FC = () => {
                         </button>
                         <button
                           onClick={() => {
-                            // Re-uses global reportMessage but tied to contact in a real app
                             setOpenMenuMsgId(null);
                           }}
                           className="w-full text-left px-4 py-2 hover:bg-[#FFF5F5] flex items-center gap-2 text-[#DC2626]"
@@ -1111,17 +1110,17 @@ const StandardMessagingView: React.FC = () => {
                 >
                   {/* Topic Banner Header */}
                   <div className="flex items-center justify-center my-2">
-                    <span className="px-3 py-1 bg-white border border-[#E5E5E5] text-[#6B6B6B] font-mono uppercase tracking-[0.1em] text-[11px] font-semibold rounded-[4px]">
-                      TOPIC: {threadTopic.toUpperCase()}
+                    <span className="px-3 py-1 bg-white border border-[#E5E7EB] text-[#6B7280] text-xs font-medium rounded-full">
+                      Topic: {threadTopic}
                     </span>
                   </div>
 
                   {timeline.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-3/4 gap-2 text-[#9CA3AF] py-16 font-mono text-center">
-                      <div className="text-sm uppercase tracking-wider text-[#9CA3AF]">
-                        No messages yet.
+                    <div className="flex flex-col items-center justify-center h-3/4 gap-2 text-[#6B7280] py-16 text-center">
+                      <div className="text-sm font-semibold text-[#0A0A0A]">
+                        No messages yet
                       </div>
-                      <p className="text-[11px] text-[#9CA3AF] font-sans">
+                      <p className="text-xs text-[#6B7280]">
                         Start your academic & mentorship discussion with {activeContact.name}.
                       </p>
                     </div>
@@ -1130,7 +1129,7 @@ const StandardMessagingView: React.FC = () => {
                       if (item.kind === 'divider') {
                         return (
                           <div key={item.id} className="relative flex items-center justify-center my-6">
-                            <span className="px-3 bg-transparent text-[#9CA3AF] font-mono text-[11px] uppercase tracking-wider">
+                            <span className="px-3 bg-transparent text-[#6B7280] text-xs font-medium">
                               {item.label}
                             </span>
                           </div>
@@ -1143,8 +1142,8 @@ const StandardMessagingView: React.FC = () => {
                             <div className="absolute inset-0 flex items-center">
                               <div className="w-full border-t border-[#0A0A0A]" />
                             </div>
-                            <span className="relative px-3 bg-[#FAFAFA] text-[10px] font-mono uppercase tracking-wider text-[#0A0A0A] font-bold">
-                              {item.unreadCount} UNREAD {item.unreadCount === 1 ? 'MESSAGE' : 'MESSAGES'}
+                            <span className="relative px-3 bg-[#FAFAFA] text-xs font-semibold text-[#0A0A0A]">
+                              {item.unreadCount} unread {item.unreadCount === 1 ? 'message' : 'messages'}
                             </span>
                           </div>
                         );
@@ -1527,10 +1526,11 @@ const StandardMessagingView: React.FC = () => {
                     <button
                       type="submit"
                       disabled={!isSendEnabled}
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                        isSendEnabled ? 'bg-[#0A0A0A] text-white hover:scale-105 shadow-xs' : 'text-[#9CA3AF] cursor-not-allowed'
+                      className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 ${
+                        isSendEnabled ? 'bg-[#0A0A0A] text-white hover:bg-[#222222]' : 'text-[#9CA3AF] cursor-not-allowed'
                       }`}
-                      title="Send"
+                      title="Send message"
+                      aria-label="Send message"
                     >
                       <Send className="w-3.5 h-3.5" />
                     </button>
@@ -1539,8 +1539,8 @@ const StandardMessagingView: React.FC = () => {
 
                 {/* Subtitle Caption */}
                 <div className="mt-2 pt-1">
-                  <p className="text-[10px] font-mono text-[#9CA3AF] uppercase tracking-wider">
-                    PRESS ENTER TO SEND
+                  <p className="text-xs text-[#6B7280]">
+                    Press Enter to send, Shift + Enter for a new line
                   </p>
                 </div>
 
@@ -1548,9 +1548,9 @@ const StandardMessagingView: React.FC = () => {
 
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full gap-2 text-[#9CA3AF] font-mono text-xs">
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-[#6B7280] font-sans text-xs">
               <MessageSquare className="w-6 h-6 text-[#9CA3AF]" />
-              <p>SELECT A CONVERSATION TO START MESSAGING</p>
+              <p className="font-medium text-[#0A0A0A]">Select a conversation to start messaging</p>
             </div>
           )}
 
@@ -1586,10 +1586,10 @@ const StandardMessagingView: React.FC = () => {
                 <button
                   key={tab}
                   onClick={() => setModalFilter(tab)}
-                  className={`px-3 py-1 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                     modalFilter === tab
-                      ? 'bg-[#0A0A0A] text-white shadow-xs'
-                      : 'bg-white text-[#6B6B6B] border border-[#E5E5E5] hover:text-[#0A0A0A]'
+                      ? 'bg-[#0A0A0A] text-white'
+                      : 'bg-white text-[#6B7280] border border-[#E5E7EB] hover:text-[#0A0A0A]'
                   }`}
                 >
                   {tab === 'all' ? `All (${allDirectoryProfiles.length})` : tab === 'alumni' ? `Alumni (${allDirectoryProfiles.filter(p => p.type === 'alumni').length})` : `Faculty (${allDirectoryProfiles.filter(p => p.type === 'faculty').length})`}
@@ -1599,9 +1599,9 @@ const StandardMessagingView: React.FC = () => {
           </div>
 
           {/* Scrollable Profiles List */}
-          <div className="overflow-y-auto max-h-[50vh] p-4 px-6 divide-y divide-[#E5E5E5] custom-scrollbar">
+          <div className="overflow-y-auto max-h-[50vh] p-4 px-6 divide-y divide-[#E5E7EB] custom-scrollbar">
             {filteredModalProfiles.length === 0 ? (
-              <div className="py-12 text-center text-[#9CA3AF] font-mono text-xs">
+              <div className="py-12 text-center text-[#6B7280] font-sans text-xs">
                 No matching alumni or faculty profiles found.
               </div>
             ) : (
@@ -1624,17 +1624,17 @@ const StandardMessagingView: React.FC = () => {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <h4 className="font-bold text-xs text-[#0A0A0A] truncate">{person.name}</h4>
-                          <span className="px-1.5 py-0.2 bg-[#F0F0F0] text-[#0A0A0A] text-[9px] font-mono uppercase font-bold tracking-wider rounded-md">
-                            {person.type}
+                          <span className="px-1.5 py-0.5 bg-[#EEF2FF] text-[#3730A3] border border-[#C7D2FE] text-[10px] font-semibold rounded-md">
+                            {person.type === 'alumni' ? 'Alumni' : 'Faculty'}
                           </span>
                         </div>
-                        <p className="text-[11px] text-[#6B6B6B] truncate mt-0.5">
+                        <p className="text-[11px] text-[#6B7280] truncate mt-0.5">
                           {person.company} · {person.designation} · {person.department}
                         </p>
                         {person.skills && person.skills.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1.5">
                             {person.skills.slice(0, 3).map((skill, idx) => (
-                              <span key={idx} className="px-1.5 py-0.2 border border-[#E5E5E5] rounded text-[#6B6B6B] text-[9px] font-mono">
+                              <span key={idx} className="px-1.5 py-0.5 border border-[#E5E7EB] rounded text-[#6B7280] text-[10px] font-medium">
                                 {skill}
                               </span>
                             ))}
