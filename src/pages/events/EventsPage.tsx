@@ -151,12 +151,13 @@ export const EventsPage: React.FC = () => {
     e.preventDefault();
     if (!feedbackEventId) return;
 
-    submitEventFeedback(feedbackEventId, {
-      userId: currentUser.id,
-      userName: currentUser.name,
-      rating: eventRating,
-      comment: eventComment
-    });
+    submitEventFeedback(
+      feedbackEventId,
+      currentUser.id,
+      currentUser.name,
+      eventRating,
+      eventComment
+    );
 
     setFeedbackEventId(null);
     setRsvpSuccessMsg('Thank you for submitting event feedback.');

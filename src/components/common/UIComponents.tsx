@@ -18,7 +18,7 @@ import {
 // 1. REUSABLE BADGE COMPONENT (Semantic Accents & Role Indigo, Sentence Case)
 // ============================================================================
 export interface BadgeProps {
-  variant?: 'verified' | 'pending' | 'danger' | 'role' | 'default' | 'indigo' | 'emerald' | 'amber' | 'rose' | 'slate';
+  variant?: 'verified' | 'pending' | 'danger' | 'role' | 'default' | 'indigo' | 'emerald' | 'amber' | 'rose' | 'slate' | 'blue';
   children: React.ReactNode;
   icon?: React.ReactNode;
   className?: string;
@@ -45,6 +45,7 @@ export const Badge: React.FC<BadgeProps> = ({
       case 'danger':
       case 'rose':
         return 'bg-[#FEE2E2] text-[#991B1B] border-[#FECDD3]';
+      case 'blue':
       case 'role':
       case 'indigo':
         return 'bg-[#EEF2FF] text-[#3730A3] border-[#C7D2FE]';
@@ -77,6 +78,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   icon?: React.ReactNode;
   children: React.ReactNode;
   isLoading?: boolean;
+  loading?: boolean;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -87,9 +89,11 @@ export const Button: React.FC<ButtonProps> = ({
   className = '',
   disabled,
   isLoading = false,
+  loading = false,
   ...props
 }) => {
-  const isDisabled = disabled || isLoading;
+  const isBusy = isLoading || loading;
+  const isDisabled = disabled || isBusy;
 
   const getVariantStyles = () => {
     switch (variant) {
@@ -128,7 +132,7 @@ export const Button: React.FC<ButtonProps> = ({
       className={`inline-flex items-center justify-center gap-2 font-sans font-semibold cursor-pointer select-none disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed ${getVariantStyles()} ${getSizeStyles()} ${className}`}
       {...(props as any)}
     >
-      {isLoading ? (
+      {isBusy ? (
         <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
       ) : (
         icon
@@ -617,6 +621,7 @@ export interface StatCardProps {
   title: string;
   value: string | number;
   subtext?: string;
+  hoverDetail?: string;
   icon?: React.ReactNode;
   trend?: { value: string; positive: boolean };
   badge?: React.ReactNode;
@@ -628,6 +633,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   title,
   value,
   subtext,
+  hoverDetail,
   icon,
   trend,
   badge,
@@ -637,6 +643,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   return (
     <div
       onClick={onClick}
+      title={hoverDetail}
       className={`app-card relative ${onClick ? 'cursor-pointer hover:border-[#9CA3AF] transition-colors' : ''} ${className}`}
     >
       <div className="flex items-center justify-between gap-2">
@@ -682,7 +689,9 @@ export interface EmptyStateProps {
   action?: {
     label: string;
     onClick: () => void;
-  };
+  } | React.ReactNode;
+  actionLabel?: string;
+  onAction?: () => void;
   className?: string;
 }
 
@@ -692,8 +701,43 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   icon,
   variant = 'nothing-yet',
   action,
+  actionLabel,
+  onAction,
   className = ''
 }) => {
+  const renderAction = () => {
+    if (actionLabel && onAction) {
+      return (
+        <Button
+          variant={variant === 'no-results' ? 'secondary' : 'primary'}
+          size="sm"
+          onClick={onAction}
+          className="mt-2"
+        >
+          {actionLabel}
+        </Button>
+      );
+    }
+    if (!action) return null;
+    if (React.isValidElement(action)) {
+      return <div className="mt-2">{action}</div>;
+    }
+    if (typeof action === 'object' && 'label' in action && 'onClick' in action) {
+      const act = action as { label: string; onClick: () => void };
+      return (
+        <Button
+          variant={variant === 'no-results' ? 'secondary' : 'primary'}
+          size="sm"
+          onClick={act.onClick}
+          className="mt-2"
+        >
+          {act.label}
+        </Button>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className={`app-card p-8 sm:p-10 flex flex-col items-center justify-center text-center space-y-3 ${className}`}>
       {icon && (
@@ -709,16 +753,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
           {description}
         </p>
       </div>
-      {action && (
-        <Button
-          variant={variant === 'no-results' ? 'secondary' : 'primary'}
-          size="sm"
-          onClick={action.onClick}
-          className="mt-2"
-        >
-          {action.label}
-        </Button>
-      )}
+      {renderAction()}
     </div>
   );
 };
@@ -850,6 +885,7 @@ export interface SheetProps {
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   className?: string;
   icon?: React.ReactNode;
+  headerVariant?: string;
 }
 
 export const Sheet: React.FC<SheetProps> = ({
@@ -1189,3 +1225,7 @@ export const Card: React.FC<CardProps> = ({
     </div>
   );
 };
+
+export const AnimatedCheckIcon: React.FC<{ size?: number; className?: string }> = ({ size = 16, className = '' }) => (
+  <CheckCircle2 className={`w-4 h-4 text-current ${className}`} style={{ width: size, height: size }} />
+);
