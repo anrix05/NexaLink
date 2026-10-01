@@ -1,19 +1,19 @@
 # NexaLink — Centralized Alumni Data Management & Engagement Platform
 
-> **Institution:** Vidyalankar Institute of Technology (VIT), Wadala, Mumbai  
-> **Problem Statement:** SIH25017 – Digital Platform for Centralized Alumni Data Management & Engagement  
-> **Project Type:** Third Year Mini Project  
-> **Version:** 2.7.0 (One-Time Logo Intro Animation & Motion System Hardening)
+> **Institution:** Vidyalankar Institute of Technology (VIT), Wadala, Mumbai
+> **Problem Statement:** SIH25017 – Digital Platform for Centralized Alumni Data Management & Engagement
+> **Project Type:** Third Year Mini Project
+> **Version:** 2.8.0 — Mobile & Tablet Motion Parity
 
 ---
 
 ## What is NexaLink?
 
-NexaLink is an institutional web platform designed for Vidyalankar Institute of Technology to centralize alumni data management and enable structured, role-governed engagement between students, alumni, faculty, and administrators.
+NexaLink is an institutional web platform for Vidyalankar Institute of Technology that centralizes alumni data management and enables structured, role-governed engagement between students, alumni, faculty, and administrators.
 
 It bridges academic preparation with verified industry mentorship, corporate job referrals, campus event management, NAAC/NIRF accreditation analytics, and privacy-governed direct messaging via **NexaChats** — all in a single, production-ready platform.
 
-**Live (No Demo):** Deployed on Supabase with real authentication, database, file storage, and realtime messaging. No hardcoded demo data in production.  
+**Live (No Demo):** Deployed on Supabase with real authentication, database, file storage, and realtime messaging. No hardcoded demo data in production.
 **Dual-Mode:** Runs in offline evaluation mode with seeded personas when no Supabase credentials are provided.
 
 ---
@@ -21,6 +21,7 @@ It bridges academic preparation with verified industry mentorship, corporate job
 ## Core Feature Set
 
 ### 🎓 Role-Based Portals
+
 | Role | Key Capabilities |
 |------|-----------------|
 | **Student** | Smart mentor matching, mentorship booking, job/internship applications, event RSVPs, resume upload, semester tracking, career goal profiles |
@@ -31,21 +32,15 @@ It bridges academic preparation with verified industry mentorship, corporate job
 ---
 
 ### 🛡️ Administrator Console
-- **Verification Queue:** Role-aware institutional match confidence checks (Student/Faculty active domain vs Alumni historical PRN record) with working proof-document viewer
-- **Clarification Workflow:** Request proof clarification with custom prompts; users can resubmit updated documents directly
-- **Bulk Provisional Graduation:** Checkbox batch selection and graduation tool with mandatory personal email safeguards
+- **Verification Queue:** Role-aware institutional match confidence checks with working proof-document viewer
+- **Clarification Workflow:** Request proof clarification with custom prompts; users can resubmit updated documents
+- **Bulk Provisional Graduation:** Checkbox batch selection with mandatory personal email safeguards
 - **Bulk Actions:** Bulk Approve & Bulk Reject modal workflows
 - **Reported Messages Queue:** Moderation queue for review and actioning of user-flagged NexaChats messages
-- **Admin Invite & Role Handoff System:**
-  - Only existing Faculty/Teacher accounts can be promoted to Administrator
-  - Invite link auto-generates using `window.location.origin` — works identically in localhost and production
-  - Existing users accept with their current password; new users set a password on first activation
-  - Seamless account upgrade (no duplicate profiles created)
-  - Full audit trail logged on every invite, acceptance, and revocation
-  - Admin Step Down with department selector — converts Admin back to Faculty with chosen department
-- **Announcements Management:** Audience targeting (`all`, `students`, `alumni`, `faculty`) and announcement retraction
-- **Audit Log:** Full-spectrum searchable and category-filtered audit log with NAAC Criteria 5.4.1 / NIRF report exports
-- **Live Computed Analytics:** Real-time stat cards and analytics derived directly from database records — zero hardcoded placeholders
+- **Admin Invite & Role Handoff System:** Faculty-to-admin promotion, seamless account upgrade, full audit trail, admin step-down with department selector
+- **Announcements Management:** Audience targeting (`all`, `students`, `alumni`, `faculty`) with retraction
+- **Audit Log:** Full-spectrum searchable and category-filtered log with NAAC Criteria 5.4.1 / NIRF report exports
+- **Live Computed Analytics:** Real-time stat cards derived directly from database records — zero hardcoded placeholders
 
 ---
 
@@ -53,39 +48,39 @@ It bridges academic preparation with verified industry mentorship, corporate job
 - **Dual-Email Authentication:** Alumni authenticate via personal email (Gmail, Outlook) since institutional emails deactivate post-graduation
 - **Proof-Document Upload:** Scanned ID / Admit Card / Degree certificate upload with Supabase Storage
 - **Account Lockout & Password Reset:** 5-attempt rate-limiting lockout and OTP password reset flow
-- **Admin Promotion Flow:** Faculty members invited by existing admins can seamlessly upgrade their account — no duplicate account creation
+- **Admin Promotion Flow:** Faculty members invited by existing admins seamlessly upgrade — no duplicate account creation
 
 ---
 
 ### 💬 NexaChats Messaging
 - Realtime peer-to-peer messaging via Supabase WebSocket subscriptions (`postgres_changes`)
 - Persistent message history across sessions
-- Role-isolation privacy guards — admins cannot inspect private messages unless flagged with `is_reported = true`
+- Role-isolation privacy guards — admins cannot inspect private messages unless flagged
 - File attachment support with Supabase Storage
 - Message reporting and moderation queue
 
 ---
 
-### 🎨 Design System & Motion
-- **Obsidian Monochrome Palette:** Pure white (`#FFFFFF`) canvas, near-black (`#0A0A0A`) primary, `#6B7280` muted, `#E5E7EB` hairline borders
-- **Sanctioned Semantic Accents:** Verified Emerald `#065F46`, Actionable Amber `#B45309`, Governance Rose `#991B1B`, Academic Indigo `#3730A3`
-- **Framer Motion Physics:** Spring animations (`stiffness: 400, damping: 17`), `layoutId` sliding pills, staggered card entrances, `IntersectionObserver` scroll reveals, GPU-accelerated count-up stats
-- **Accessibility:** Full `prefers-reduced-motion` OS compliance across all animations
-- **Responsive:** 10-tier responsive layout matrix (320px → 1920px+) with mobile BottomNav and desktop-only admin interstitial
+### 🎬 Landing Page Motion System
 
----
+The public landing page is a fully scroll-driven motion experience:
 
-### 🎬 Intro Animation (One-Time Brand Assembly & Flight)
-NexaLink features an institutional one-time opening intro sequence:
-- **Assembly & Settle:** Full obsidian `#0A0A0A` canvas where the two halves of the "N-Link" mark assemble from 4 vertical geometric slices (staggered from the center outwards).
-- **The "Link" Ignition:** The central amber nexus core node (`#FD9C03`) pops in with a short spring, a white dot flash, and a single expanding pulse ring.
-- **Flight & Color Handoff:** The wordmark dissolves while the mark flies smoothly into the header logo via a seamless FLIP translation/scale animation with a fast color handoff at mid-alpha.
-- **Session Rules:** Plays once per browser session (tab) on initial boot at `/` (`sessionStorage` key `nexalink:intro:v1`). Refreshing or in-app navigation never replays the intro.
-- **Instant Bypasses:** Automatically skipped under `prefers-reduced-motion: reduce`, `low` performance tiers (`saveData`, low hardware cores/memory), automated environments (`navigator.webdriver`), or Supabase Auth callback URLs (`#access_token`, `type=recovery`, etc.).
-- **User Skip Controls:** Click, tap, `Esc`, or any keyboard interaction initiates an instant 250ms fade-out skip. An `ESC / TAP TO SKIP` hint surfaces after 600ms.
-- **Failsafe:** Pre-JS CSS fallback hides `#intro-root` after 4s; `<noscript>` keeps content immediately visible if JS is disabled.
-- **Replay Capabilities:** Force playback anytime via `/?intro=1`, via the "REPLAY INTRO" link in the public footer, or via the `Replay Intro Animation` command in the `CommandPalette` (`Ctrl+K`).
-- **Configuration:** Fully customizable in `src/lib/intro.ts` (`INTRO_SCOPE`, `INTRO_ENABLED_ROUTES`, `INTRO_NODE_COLOR`, durations).
+- **Intro Animation:** One-time cinematic brand assembly — 4 geometric slices assemble the NexaLink mark, the central amber nexus node ignites, and the mark FLIP-flies into the navbar logo
+- **Hero Section:** Parallax headline, `AlumniNetworkCanvas` (interactive WebGL-like particle graph), full touch & pointer support
+- **Scrollytelling:** 3-beat pinned scroll narrative with crossfade transitions, progress step indicators, and card morphing effects
+- **Features:** Sticky stacking cards with miniature UI mocks
+- **Role Journeys:** 4-segment animated tab panel with horizontal swipe gesture on touch devices
+- **Campus Spotlight:** Auto-advancing carousel with drag-to-swipe on mobile
+- **Departments Accordion:** Tap-to-toggle on touch, hover-to-expand on desktop
+- **Scroll Progress Bar:** 2px top progress indicator throughout the page
+
+**Mobile & Tablet Parity (v2.8.0):**
+- All scroll-driven animations work on touch devices with `touch-action: pan-y` guards
+- `useMotionProfile` hook detects device layout, input type, and performance tier
+- DPR cap (2× desktop, 1.5× mid/low tier), FPS governor, safe-area insets
+- Step indicators are tappable ≥44px buttons with tap-to-jump scroll behaviour
+- Landscape phone fallback reduces scrollytelling height
+- Desktop is entirely unchanged — verified by automated parity harness
 
 ---
 
@@ -102,9 +97,10 @@ NexaLink features an institutional one-time opening intro sequence:
 |-------|-----------|
 | **Frontend** | React 19, TypeScript, Vite, Tailwind CSS v4, Framer Motion, Lucide React |
 | **State Management** | React Context API (`AuthContext`, `DataContext`) |
+| **Motion** | Framer Motion, `useSyncExternalStore`-powered `useMotionProfile`, `useReducedMotionPreference` |
 | **Backend & Database** | Supabase — Hosted PostgreSQL, 14 relational tables, foreign key cascades, automated triggers |
-| **Security** | Row Level Security (RLS) on all tables, P2P message privacy guards, minimum 1-admin guard trigger, institutional email validation |
-| **Authentication** | Supabase GoTrue Auth — email/password, session sync, rate-limiting lockout, Google OAuth SSO helper |
+| **Security** | Row Level Security (RLS) on all tables, P2P message privacy guards, institutional email validation |
+| **Authentication** | Supabase GoTrue Auth — email/password, session sync, rate-limiting lockout |
 | **File Storage** | 5 Supabase Storage buckets: `avatars`, `proof-documents`, `resumes`, `chat-attachments`, `event-certificates` |
 | **Realtime** | WebSocket subscriptions on `chat_messages` for live NexaChats messaging |
 | **Export Engines** | `jspdf`, `jspdf-autotable`, `xlsx`, `html2canvas` |
@@ -135,11 +131,14 @@ npx tsc -b
 
 # Production build
 npm run build
+
+# Run linter
+npm run lint
 ```
 
 ### Dual-Mode Configuration
 
-**Mode 1 — Offline Evaluation (Default):**  
+**Mode 1 — Offline Evaluation (Default):**
 No setup required. Without `.env` credentials, NexaLink runs with seeded demo personas (Student, Alumni, Faculty, Admin), instant role switcher chips, and mock storage. Ideal for judges and evaluators.
 
 **Mode 2 — Production Supabase:**
@@ -154,14 +153,32 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 Apply migrations via the Supabase SQL Editor or CLI:
 ```
 supabase/migrations/
-├── 20260916000001_initial_schema.sql     # 14 tables, enums, triggers
-├── 20260916000002_rls_policies.sql       # Row Level Security policies
-├── 20260916000003_storage_buckets.sql    # Storage buckets & upload policies
-├── 20260916000004_seed_data.sql          # Institutional demo seed data
-└── 20260916000008_admin_realtime.sql     # Admin dashboard realtime channel
+├── 20260916000001_initial_schema.sql       # 14 tables, enums, triggers
+├── 20260916000002_rls_policies.sql         # Row Level Security policies
+├── 20260916000003_storage_buckets.sql      # Storage buckets & upload policies
+├── 20260916000004_seed_data.sql            # Institutional demo seed data
+├── 20260916000008_admin_realtime.sql       # Admin dashboard realtime channel
+├── 20260916000010_purge_mock_data.sql      # Mock data cleanup
+├── 20260916000011_sanitize_corrupted_emails.sql
+├── 20260916000012_announcement_enhancements.sql
+├── 20261001000001_backend_hardening.sql    # Security hardening
+└── 20261001000002_storage_hardening.sql    # Storage policy hardening
 ```
 
 > ⚠️ **Never commit `.env` or `.env.backup`** — both are listed in `.gitignore`.
+
+---
+
+## Project Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `npm run dev` | Start Vite development server |
+| `npm run build` | Production bundle |
+| `npm run lint` | Run oxlint |
+| `npm run test:desktop-parity` | Automated parity harness — verifies desktop layout is unchanged |
+| `node scripts/lint-design-system.mjs` | Verify design token consistency |
+| `node scripts/verify-landing.mjs` | Verify landing page sections |
 
 ---
 
@@ -169,145 +186,16 @@ supabase/migrations/
 
 - [x] **Phase 1:** Requirement Analysis (SIH25017 problem scope & roles defined)
 - [x] **Phase 2:** System Design & Branding (NexaLink/NexaChats identity, monochrome design system)
-- [x] **Phase 3:** Frontend Architecture & Governance (Identity verification, admin handoff, reported messages, accreditation analytics, motion system)
-- [x] **Phase 4:** Backend & Database Foundations (Express server structure & SQLite schema)
-- [x] **Phase 5:** Supabase Full-Stack Migration (Hosted PostgreSQL, GoTrue Auth, Storage, Realtime NexaChats, RLS Policies, Dual-Mode Client Fallback)
-- [x] **Phase 5.1:** Admin Invite System (Role-gated faculty-to-admin promotion, existing user seamless upgrade, invite link generation, audit trail)
+- [x] **Phase 3:** Frontend Architecture & Governance (Identity verification, admin handoff, reported messages, accreditation analytics)
+- [x] **Phase 4:** Open Canvas Redesign & Security Hardening (FORCE RLS, privileged RPCs, signed storage, server-side lockout)
+- [x] **Phase 5:** Supabase Full-Stack Migration (Hosted PostgreSQL, GoTrue Auth, Realtime NexaChats, RLS, Dual-Mode fallback)
+- [x] **Phase 5.1:** Admin Invite System (Role-gated faculty-to-admin promotion, audit trail)
+- [x] **Phase 6:** Motion System (Intro animation, landing page scroll-driven motion, Framer Motion physics)
+- [x] **Phase 7:** Mobile & Tablet Motion Parity (Touch gestures, performance tiers, safe-area insets, landscape fallbacks)
 
 ---
 
 ## License & Credits
 
-Developed for **Vidyalankar Institute of Technology (VIT Wadala), Mumbai** under SIH25017 Problem Statement.  
+Developed for **Vidyalankar Institute of Technology (VIT Wadala), Mumbai** under SIH25017 Problem Statement.
 © 2026 NexaLink. All rights reserved.
-  
-
----
-
-## 1. Executive Summary
-
-NexaLink is an institutional web platform designed for Vidyalankar Institute of Technology to centralize alumni data management and enable structured peer-to-peer engagement between students, alumni, faculty, and administrators. 
-
-The platform bridges academic preparation with verified industry mentorship, corporate job referrals, campus event management, NAAC/NIRF accreditation analytics, and privacy-governed direct messaging via **NexaChats**.
-
----
-
-## 2. Core Key Features
-
-### Role-Based Portals & Governance
-- **Student Dashboard:** Smart mentor matching, mentorship booking, role-transition request to Alumni, job/internship applications, event RSVPs, and direct resume attachment linking.
-- **Alumni Dashboard:** Mentorship availability controls, mentee request approvals, posting job referrals, updating personal and career details.
-- **Faculty / HOD Dashboard:** Departmental alumni engagement metrics, mentorship oversight, course feedback, and academic event management.
-- **Administrator Console:** Unified governance center featuring:
-  - **Verification Queue:** Role-aware institutional match confidence checks (Student/Faculty active domain vs Alumni historical PRN record) and working proof-document viewer.
-  - **Clarification Workflow:** Ability to request proof clarification with custom prompt instructions, allowing users to submit updated proof documents directly.
-  - **Bulk Provisional Graduation:** Checkbox batch selection and graduation tool with mandatory personal email safeguards (CSV cross-referencing).
-  - **Bulk Action Capabilities:** Bulk Approve & Bulk Reject modal workflows.
-  - **Reported Messages Queue:** Moderation queue for review and actioning of user-flagged chat messages.
-  - **Single-Admin Invite Handoff:** Single-admin-vouches-for-new-admin invitation and role handoff system with audit trail.
-  - **Announcements Management:** Audience targeting (`all`, `students`, `alumni`, `faculty`) and announcement retraction.
-  - **Audit Logging & Analytics:** Full-spectrum searchable and category-filtered audit log, NAAC Criteria 5.4.1 / NIRF report exports.
-  - **Live Computed Analytics:** Real-time computed stat cards and analytics derived directly from system records without hardcoded placeholders.
-
-### Authentication & Identity Management
-- **Personal Email Authentication for Alumni:** Accommodates college email deactivation post-graduation by authenticating alumni via `personalEmail` (e.g., Gmail, Outlook).
-- **Proof-Document Upload:** Supports scanned ID/Admit Card/Degree upload with session object URLs (`verificationDocumentUrl`).
-- **Account Lockout & Password Reset:** 5-attempt rate-limiting lockout and OTP password reset flow.
-- **Top-Aligned Form Layout & Smooth Transitions:** Dynamic height transitions with Framer Motion and sliding indicator highlights (`layoutId="authModePill"`, `layoutId="authRolePill"`).
-
-### Design System & Visual Aesthetics
-- **Monochrome Aesthetics:** Pure white (`#FFFFFF`) canvas, near-black (`#0A0A0A`) primary accents, `#6B7280` muted text, `#E5E7EB` 1px hairline borders (no soft drop shadows).
-- **Monochrome-First System with Sanctioned Semantic Accents:** Strictly adheres to the obsidian, white, and hairline gray visual system. The four semantic status accents defined in PRD Section 2.1 (Verified Emerald `#065F46`, Actionable Amber `#B45309`, Governance Rose `#991B1B`, Academic Indigo `#3730A3`) are the only sanctioned exceptions, reserved exclusively for their defined semantic meaning — no other colors, decorative gradients, or ad hoc accent usage are permitted.
-- **Motion Hierarchy & Tactile Physics:** 
-  - Framer Motion spring physics (`stiffness: 400, damping: 17`, `whileHover={{ scale: 1.03 }}`, `whileTap={{ scale: 0.95 }}`).
-  - Sliding background pills via `layoutId` across tabs and mode selectors.
-  - Real SVG path length checkmark animations for approvals (`AnimatedCheckIcon`).
-  - Staggered entrances for cards, lists, tables, and modal contents.
-  - Scroll-triggered IntersectionObserver animations (`useScrollReveal`) and GPU-accelerated count-up stat counters (`useCountUp`).
-  - Full `prefers-reduced-motion` OS accessibility compliance across all animations.
-
-### Productivity Tools
-- **Role-Scoped Command Palette (`Ctrl+K` / `Cmd+K`):** Global instant navigation, quick actions, and directory search strictly scoped to the active user's permissions.
-
----
-
-## 3. Technology Stack
-
-- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, Framer Motion, Lucide React icons
-- **State Management:** React Context API (`AuthContext`, `DataContext`)
-- **Backend & Data Layer (Phase 5):** Supabase (`@supabase/supabase-js`)
-  - **Database:** Hosted PostgreSQL with 14 relational tables, foreign key cascades, triggers, and automated `updated_at` timestamps.
-  - **Security:** Row Level Security (RLS) on all tables, P2P message privacy guards, minimum 1-admin guard trigger, and institutional email validation triggers.
-  - **Authentication:** Supabase GoTrue Auth with email/password, session sync, server-side rate-limiting lockout check, and Google OAuth SSO helper.
-  - **File Storage:** 5 Supabase Storage buckets (`avatars`, `proof-documents`, `resumes`, `chat-attachments`, `event-certificates`).
-  - **Realtime:** WebSocket subscriptions (`postgres_changes` on `chat_messages`) for live messaging.
-- **Export Engines:** `jspdf`, `jspdf-autotable`, `xlsx`, `html2canvas`
-
----
-
-## 4. Getting Started Locally
-
-### Prerequisites
-- Node.js (v18+)
-- npm (v9+)
-
-### Installation & Running
-```bash
-# Clone the repository
-git clone https://github.com/vit-wadala/NexaLink.git
-cd NexaLink
-
-# Install dependencies
-npm install
-
-# Start Vite local development server
-npm run dev
-
-# Run TypeScript compilation check
-npx tsc -b
-
-# Build production bundle
-npm run build
-
-# Run linter
-npm run lint
-```
-
-### Supabase Cloud Configuration (Dual-Mode)
-
-NexaLink features an intelligent **Dual-Mode architecture**:
-1. **Local Evaluation Mode (Default):** If no Supabase credentials are provided in `.env`, NexaLink runs seamlessly with seeded demo personas (Student, Alumni, Faculty, Admin), instant role switcher chips, and mock storage. Zero cloud setup required for evaluations and testing.
-2. **Production Supabase Mode:** To connect to a live Supabase instance:
-   - Copy `.env.example` to `.env`:
-     ```bash
-     cp .env.example .env
-     ```
-   - Set your project credentials:
-     ```env
-     VITE_SUPABASE_URL=https://your-project.supabase.co
-     VITE_SUPABASE_ANON_KEY=your-anon-key
-     ```
-   - Apply database migrations located in `supabase/migrations/` using the Supabase CLI or SQL Editor:
-     - `20260916000001_initial_schema.sql` (14 relational tables, enums, triggers)
-     - `20260916000002_rls_policies.sql` (Row Level Security policies & privacy guards)
-     - `20260916000003_storage_buckets.sql` (Storage buckets & file upload policies)
-     - `20260916000004_seed_data.sql` (Institutional demo seed data)
-
----
-
-## 5. Development Roadmap & Status
-
-- [x] **Phase 1: Requirement Analysis** (SIH25017 problem scope & roles defined)
-- [x] **Phase 2: System Design & Branding** (Rebranded to NexaLink/NexaChats, monochrome design system)
-- [x] **Phase 3: Frontend Architecture & Governance** (Identity verification, admin handoff, reported messages queue, accreditation analytics, motion system)
-- [x] **Phase 4: Open Canvas Redesign & Security Hardening** (Full Open Canvas UI migration, FORCE RLS, privileged RPCs, signed storage, server-side lockout)
-- [x] **Phase 5: Supabase Full-Stack Architecture** (Hosted PostgreSQL 17 tables, GoTrue Auth, Realtime NexaChats, hash-chained audit logs, and dual-mode client fallback)
-
----
-
-## 6. License & Credits
-
-Developed for **Vidyalankar Institute of Technology (VIT Wadala), Mumbai** under SIH25017 Problem Statement.  
-© 2026 NexaLink.
-
-

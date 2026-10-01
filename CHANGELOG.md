@@ -4,7 +4,53 @@ All notable changes to the NexaLink platform are documented in this file.
 
 ---
 
+## [v2.8.0] - 2026-10-02
+
+### Mobile & Tablet Motion Parity
+
+#### Added
+- **`src/lib/perfTier.ts`:** Synchronous hardware performance tier classifier (`low` / `mid` / `high`) using `navigator.hardwareConcurrency`, `navigator.deviceMemory`, and `navigator.connection.effectiveType`. No runtime FPS measurement required.
+- **`src/hooks/useMotionProfile.ts`:** `useSyncExternalStore`-powered hook returning a stable `MotionProfile` object (`layout`, `input`, `perf`, `reducedMotion`, `shortViewport`, `supportsSticky`). Subscribes to resize and `orientationchange` events — updates only when values actually change.
+- **`AlumniNetworkCanvas.tsx` touch & performance enhancements:**
+  - Pointer and touch event handlers with `touch-action: none` on canvas
+  - Idle ambient Lissajous attractor keeps canvas animated without hover
+  - DPR cap: 2× on high tier, 1.5× on mid/low tier
+  - Rolling frame-time FPS governor: steps down node density when frame time exceeds 24ms
+- **`ScrollytellingSection.tsx` touch parity:**
+  - Progress step indicators are now `<button>` elements with ≥44px tap targets
+  - Tapping a step indicator smoothly scrolls the document to that beat's position (`jumpToStep`)
+  - Landscape phone fallback: `shortViewport` (≤560px tall) reduces section height from `250vh` → `180vh`
+- **`RoleJourneysSection.tsx` horizontal swipe gesture:**
+  - Role content panel is now a `motion.div` with `drag="x"`, `dragConstraints`, and `dragElastic={0.12}`
+  - Swiping left advances to the next role; swiping right goes to the previous role
+  - Vertical page scroll unaffected via `style={{ touchAction: 'pan-y' }}`
+  - Gesture disabled under `prefers-reduced-motion`
+- **`DepartmentsAccordion.tsx` touch toggle:**
+  - `onClick` handler added so touch users can tap to expand/collapse departments
+  - Previously required `onMouseEnter` (hover-only — inaccessible on touch)
+- **Desktop Parity Harness (`scripts/test-desktop-parity.mjs`):**
+  - Automated regression test verifying layout bounding boxes at 1024px, 1280px, 1440px, 1920px
+  - `npm run test:desktop-parity` script added to `package.json`
+
+#### Changed
+- **`Navbar.tsx` mobile menu drawer:**
+  - Added `paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))'` so the bottom nav bar items are not obscured by the iPhone home indicator
+
+#### Fixed
+- **`useMotionProfile.ts` infinite loop (`Maximum update depth exceeded`):**
+  - Root cause: `getSnapshot` passed to `useSyncExternalStore` was calling `getSnapshot()` (returning a new `{}` on every React render), which React's `Object.is` check always detected as a change → re-render loop
+  - Fix: `getSnapshot` now returns the module-level `cachedSnapshot` singleton directly. Only the `subscribe → handleResize` handler replaces `cachedSnapshot` (with a new reference) when values actually change
+
+#### Repository
+- **`.gitignore` cleanup:**
+  - Added: `test-artifacts/`, `public/screenshots-landing/`, `public/screenshots-responsive/`, `supabase/.temp`, `skills-lock.json`, `.agents/`, `.env.backup` (explicit)
+  - Fixed corrupted null-byte characters in the old `.gitignore`
+- **Admin `SidebarNav`:** Removed defunct "Members" nav link from the admin portal
+
+---
+
 ## [v2.7.0] - 2026-10-01
+
 
 ### One-Time Logo Intro Animation & Motion System Hardening
 
