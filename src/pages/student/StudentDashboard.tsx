@@ -29,8 +29,9 @@ import {
   Upload,
   FileText
 } from 'lucide-react';
-import { Badge, Button, StatCard } from '../../components/common/UIComponents';
+import { Badge, Button, StatCard, TextField, SelectField, Modal } from '../../components/common/UIComponents';
 import { uploadProofDocument } from '../../lib/storage';
+import { InstitutionalAnnouncementFeed } from '../../components/common/InstitutionalAnnouncementFeed';
 
 interface StudentDashboardProps {
   setActiveTab: (tab: string, subTab?: string) => void;
@@ -38,7 +39,7 @@ interface StudentDashboardProps {
 
 const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile: StudentProfile }> = ({ setActiveTab, studentProfile }) => {
   const currentUser = studentProfile;
-  const { alumniList, facultyList, jobsList, eventsList, mentorshipRequests, roleTransitionRequests, submitRoleTransitionRequest, resubmitUserVerification, isDataLoading } = useData();
+  const { alumniList, facultyList, jobsList, eventsList, mentorshipRequests, roleTransitionRequests, submitRoleTransitionRequest, resubmitUserVerification, isDataLoading, announcements } = useData();
 
   // Run Smart Recommendation Engine
   const recommendedAlumniMatches = getRecommendedAlumniMentors(studentProfile, alumniList);
@@ -267,11 +268,11 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E7EB] pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <Badge variant="indigo" size="sm">Student Workspace</Badge>
+            <Badge variant="indigo" size="sm">Student workspace</Badge>
             <span className="text-[11px] font-mono text-[#6B7280]">PRN: {studentProfile.enrollmentNo || studentProfile.prn || '23101A0042'}</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-display font-black text-[#0A0A0A] tracking-tight mt-1 flex items-center gap-2">
-            Welcome back, {currentUser.name.split(' ')[0]} <span className="text-xl">👋</span>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold text-[#0A0A0A] tracking-tight mt-1">
+            Welcome back, {currentUser.name.split(' ')[0]}
           </h1>
           <p className="text-xs sm:text-sm text-[#6B7280] font-medium mt-1">
             Personalized guidance matches and career roadmaps powered by central Vidyalankar data.
@@ -285,28 +286,31 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
             onClick={() => setActiveTab('settings')}
             icon={<Sparkles className="w-3.5 h-3.5" />}
           >
-            Complete Profile ({profileCompletionPct}%)
+            Complete profile ({profileCompletionPct}%)
           </Button>
         )}
       </div>
 
-      {/* 2. Profile Completion Status Card with Embedded Resume (Single Source of Truth) */}
+      {/* Institutional Broadcast Announcements Feed */}
+      <InstitutionalAnnouncementFeed announcements={announcements} userRole="student" />
+
+      {/* 2. Profile Completion Status Card with Embedded Resume */}
       <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 sm:p-6 shadow-none space-y-3.5">
         <div className="flex items-center justify-between text-xs">
-          <span className="font-display font-bold text-[#0A0A0A] uppercase tracking-wider flex items-center gap-2">
+          <span className="font-bold text-[#0A0A0A] flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-[#16A34A]" />
-            Profile Completion Status: {profileCompletionPct}% Complete
+            Profile completion: {profileCompletionPct}% complete
           </span>
           {profileCompletionPct < 100 ? (
             <button
               onClick={() => setActiveTab('settings')}
-              className="text-xs font-display font-bold text-[#0A0A0A] hover:underline flex items-center gap-1 transition uppercase tracking-wider"
+              className="text-xs font-semibold text-[#0A0A0A] hover:underline flex items-center gap-1 transition"
             >
-              Add Skills & Resume <ArrowRight className="w-3.5 h-3.5" />
+              Add skills & resume <ArrowRight className="w-3.5 h-3.5" />
             </button>
           ) : (
-            <span className="text-[11px] font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-              Full Access Active
+            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+              Full access active
             </span>
           )}
         </div>
@@ -326,16 +330,16 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
               <span className="truncate">
                 Resume: <strong className="font-mono text-[#0A0A0A]">{studentProfile.resumeUrl.split('/').pop() || 'aanya_patel_vit.pdf'}</strong>
               </span>
-              <span className="text-emerald-700 font-bold font-mono text-[10px]">✓ On File</span>
+              <span className="text-emerald-700 font-semibold text-[10px]">✓ On file</span>
             </div>
             {studentProfile.resumeUrl.startsWith('http') && (
               <a
                 href={studentProfile.resumeUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs font-display font-bold text-[#0A0A0A] hover:underline flex items-center gap-1 shrink-0 self-start sm:self-auto"
+                className="text-xs font-semibold text-[#0A0A0A] hover:underline flex items-center gap-1 shrink-0 self-start sm:self-auto"
               >
-                View Document <ExternalLink className="w-3 h-3" />
+                View document <ExternalLink className="w-3 h-3" />
               </a>
             )}
           </div>
@@ -344,9 +348,9 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
             <span className="text-[#6B7280] font-medium">No resume document uploaded</span>
             <button
               onClick={() => setActiveTab('settings')}
-              className="text-xs font-display font-bold text-[#0A0A0A] hover:underline flex items-center gap-1"
+              className="text-xs font-semibold text-[#0A0A0A] hover:underline flex items-center gap-1"
             >
-              Upload in Settings <ArrowRight className="w-3 h-3" />
+              Upload in settings <ArrowRight className="w-3 h-3" />
             </button>
           </div>
         )}
@@ -356,41 +360,41 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
       {isDataLoading ? (
         <div className="flex flex-col items-center justify-center py-12 text-center space-y-3 bg-white border border-[#E5E7EB] rounded-xl">
           <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-[#171717]"></div>
-          <p className="text-[#6B7280] font-mono text-[11px] font-bold uppercase tracking-wider">Loading Dashboard Metrics...</p>
+          <p className="text-[#6B7280] font-sans text-xs font-semibold">Loading dashboard metrics...</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard
-          title="Active Requests"
+          title="Active requests"
           value={activeStudentRequests.length}
-          subtext="Guidance & Research"
+          subtext="Guidance & research"
           icon={<GraduationCap className="w-4 h-4 text-[#0A0A0A]" />}
-          trend={{ value: `${activePct}% Active`, positive: true }}
+          trend={{ value: `${activePct}% active`, positive: true }}
           onClick={() => setActiveTab('mentorship', 'my-sent')}
         />
 
         <StatCard
-          title="Smart Matches"
+          title="Smart matches"
           value={totalSmartMatches}
-          subtext="Alumni & Faculty"
+          subtext="Alumni & faculty"
           icon={<Sparkles className="w-4 h-4 text-[#0A0A0A]" />}
-          trend={{ value: topMatchScore > 0 ? `${topMatchScore}% Top Match` : 'Curated', positive: true }}
+          trend={{ value: topMatchScore > 0 ? `${topMatchScore}% top match` : 'Curated', positive: true }}
           onClick={() => setActiveTab('mentorship', 'find')}
         />
 
         <StatCard
-          title="Job Openings"
+          title="Job openings"
           value={publishedJobs.length}
-          subtext="Corporate Referrals"
+          subtext="Corporate referrals"
           icon={<Briefcase className="w-4 h-4 text-[#0A0A0A]" />}
-          trend={{ value: `${validNewJobsBadgeCount} New`, positive: true }}
+          trend={{ value: `${validNewJobsBadgeCount} new`, positive: true }}
           onClick={() => setActiveTab('jobs')}
         />
 
         <StatCard
-          title="Campus Events"
+          title="Campus events"
           value={upcomingEvents.length}
-          subtext="Masterclasses & Talks"
+          subtext="Masterclasses & talks"
           icon={<Calendar className="w-4 h-4 text-[#0A0A0A]" />}
           trend={{ value: rsvpdEventsCount > 0 ? `${rsvpdEventsCount} RSVP'd` : 'Upcoming', positive: true }}
           onClick={() => setActiveTab('events')}
@@ -398,16 +402,14 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
       </div>
       )}
 
-
-
-      {/* 5. Top Matches Preview Row (Replaces Full Inline Engine) */}
+      {/* 5. Top Matches Preview Row */}
       <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 sm:p-6 space-y-4 shadow-none">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-[#0A0A0A]" />
             <div>
-              <h2 className="font-display font-bold text-xs uppercase tracking-wider text-[#0A0A0A]">
-                Top Recommended Matches
+              <h2 className="font-bold text-xs text-[#0A0A0A]">
+                Top recommended matches
               </h2>
               <p className="text-[11px] text-[#6B7280] font-medium">
                 Curated for {studentProfile.careerGoal || 'Software Engineering'}
@@ -417,9 +419,9 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
 
           <button
             onClick={() => setActiveTab('mentorship')}
-            className="text-xs font-display font-bold text-[#0A0A0A] hover:underline flex items-center gap-1 uppercase tracking-wider transition"
+            className="text-xs font-semibold text-[#0A0A0A] hover:underline flex items-center gap-1 transition"
           >
-            View All Mentors <ArrowRight className="w-3.5 h-3.5" />
+            View all mentors <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
@@ -480,179 +482,148 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
         </div>
       </div>
 
-
-      {/* Role Transition Modal */}
-      {showTransitionModal && (
-        <div className="fixed inset-0 bg-[#0A0A0A]/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border border-[#E5E7EB]">
-            <div className="p-5 border-b border-[#E5E7EB] flex items-center justify-between">
-              <div>
-                <h3 className="font-display font-bold text-[#0A0A0A] uppercase tracking-wider text-sm">Update to Alumni Status</h3>
-                <p className="text-[#6B7280] text-[11px] mt-0.5">Please provide your current professional details.</p>
-              </div>
-              <button onClick={() => setShowTransitionModal(false)} className="text-[#6B7280] hover:text-[#0A0A0A]">
-                <X className="w-5 h-5" />
+      {/* Role Transition Request Modal */}
+      <Modal
+        isOpen={showTransitionModal}
+        onClose={() => setShowTransitionModal(false)}
+        title="Update to Alumni Status"
+        subtitle="Please provide your current professional details."
+        maxWidth="md"
+      >
+        <form onSubmit={handleTransitionSubmit} className="space-y-4 text-xs font-sans">
+          {/* Path Type Selector */}
+          <div>
+            <label className="block text-[#0A0A0A] font-semibold text-xs mb-1.5">Current primary path</label>
+            <div className="grid grid-cols-2 gap-2 bg-[#F3F4F6] p-1 rounded-xl border border-[#E5E7EB]">
+              <button
+                type="button"
+                onClick={() => setTransPathType('employed')}
+                className={`py-1.5 px-3 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  transPathType === 'employed'
+                    ? 'bg-white text-[#0A0A0A] border border-[#E5E7EB]'
+                    : 'text-[#6B7280] hover:text-[#0A0A0A]'
+                }`}
+              >
+                <Briefcase className="w-3.5 h-3.5" /> Employed
+              </button>
+              <button
+                type="button"
+                onClick={() => setTransPathType('higher_studies')}
+                className={`py-1.5 px-3 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  transPathType === 'higher_studies'
+                    ? 'bg-white text-[#0A0A0A] border border-[#E5E7EB]'
+                    : 'text-[#6B7280] hover:text-[#0A0A0A]'
+                }`}
+              >
+                <GradCapIcon className="w-3.5 h-3.5" /> Higher studies
               </button>
             </div>
-            
-            <form onSubmit={handleTransitionSubmit} className="p-5 space-y-4">
-              {/* Path Type Selector */}
-              <div>
-                <label className="block text-[#0A0A0A] font-bold text-[10px] uppercase tracking-wider mb-1.5">Current Primary Path</label>
-                <div className="grid grid-cols-2 gap-2 bg-[#F3F4F6] p-1 rounded-xl border border-[#E5E7EB]">
-                  <button
-                    type="button"
-                    onClick={() => setTransPathType('employed')}
-                    className={`py-1.5 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-                      transPathType === 'employed'
-                        ? 'bg-white text-[#0A0A0A] shadow-sm border border-[#E5E7EB]'
-                        : 'text-[#6B7280] hover:text-[#0A0A0A]'
-                    }`}
-                  >
-                    <Briefcase className="w-3.5 h-3.5" /> Employed
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTransPathType('higher_studies')}
-                    className={`py-1.5 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-                      transPathType === 'higher_studies'
-                        ? 'bg-white text-[#0A0A0A] shadow-sm border border-[#E5E7EB]'
-                        : 'text-[#6B7280] hover:text-[#0A0A0A]'
-                    }`}
-                  >
-                    <GradCapIcon className="w-3.5 h-3.5" /> Higher Studies
-                  </button>
-                </div>
-              </div>
-
-              {transPathType === 'employed' ? (
-                <>
-                  <div>
-                    <label className="block text-[#0A0A0A] font-bold text-[10px] uppercase tracking-wider mb-1">Company / Organization</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={transCompany} 
-                      onChange={e => setTransCompany(e.target.value)} 
-                      placeholder="e.g. Google India" 
-                      className="w-full bg-[#F9FAFB] border border-[#E5E7EB] px-3 py-2 text-xs rounded-lg focus:outline-none focus:border-[#0A0A0A]" 
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-[#0A0A0A] font-bold text-[10px] uppercase tracking-wider mb-1">Current Designation</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={transDesignation} 
-                      onChange={e => setTransDesignation(e.target.value)} 
-                      placeholder="e.g. Software Engineer" 
-                      className="w-full bg-[#F9FAFB] border border-[#E5E7EB] px-3 py-2 text-xs rounded-lg focus:outline-none focus:border-[#0A0A0A]" 
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <label className="block text-[#0A0A0A] font-bold text-[10px] uppercase tracking-wider mb-1">University / Institution Name</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={transUniversity} 
-                      onChange={e => setTransUniversity(e.target.value)} 
-                      placeholder="e.g. Carnegie Mellon University / IIT Bombay" 
-                      className="w-full bg-[#F9FAFB] border border-[#E5E7EB] px-3 py-2 text-xs rounded-lg focus:outline-none focus:border-[#0A0A0A]" 
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-[#0A0A0A] font-bold text-[10px] uppercase tracking-wider mb-1">Degree & Field of Study</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={transDegree} 
-                      onChange={e => setTransDegree(e.target.value)} 
-                      placeholder="e.g. M.S. in Computer Science / MBA" 
-                      className="w-full bg-[#F9FAFB] border border-[#E5E7EB] px-3 py-2 text-xs rounded-lg focus:outline-none focus:border-[#0A0A0A]" 
-                    />
-                  </div>
-                </>
-              )}
-              
-              <div>
-                <label className="block text-[#0A0A0A] font-bold text-[10px] uppercase tracking-wider mb-1">
-                  Personal Login Email (Post-Graduation)
-                </label>
-                <input 
-                  type="email" 
-                  required 
-                  value={transPersonalEmail} 
-                  onChange={e => setTransPersonalEmail(e.target.value)} 
-                  placeholder="e.g. yourname@gmail.com" 
-                  className="w-full bg-[#F9FAFB] border border-[#E5E7EB] px-3 py-2 text-xs rounded-lg focus:outline-none focus:border-[#0A0A0A]" 
-                />
-              </div>
-
-              <div>
-                <label className="block text-[#0A0A0A] font-bold text-[10px] uppercase tracking-wider mb-1">
-                  Verification Proof Document (Degree Certificate / Offer Letter Scan)
-                </label>
-                <input 
-                  type="file" 
-                  accept="image/*,.pdf" 
-                  onChange={async e => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      setTransDocName(file.name);
-                      try {
-                        const res = await uploadProofDocument(file, studentProfile.id);
-                        setTransDocUrl(res.url);
-                      } catch {
-                        const objUrl = URL.createObjectURL(file);
-                        setTransDocUrl(objUrl);
-                      }
-                    }
-                  }} 
-                  className="w-full bg-[#F9FAFB] border border-[#E5E7EB] px-3 py-2 text-xs rounded-lg focus:outline-none focus:border-[#0A0A0A] cursor-pointer" 
-                />
-                {transDocName && (
-                  <p className="text-[10px] text-emerald-700 font-bold mt-1">✓ Attached: {transDocName}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-[#0A0A0A] font-bold text-[10px] uppercase tracking-wider mb-1">VIT Department</label>
-                <input 
-                  type="text" 
-                  disabled 
-                  value={transDept} 
-                  className="w-full bg-[#F3F4F6] border border-[#E5E7EB] px-3 py-2 text-xs rounded-lg text-[#6B7280] cursor-not-allowed" 
-                />
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <input 
-                  type="checkbox" 
-                  id="openToMentoring" 
-                  checked={transMentoring} 
-                  onChange={e => setTransMentoring(e.target.checked)} 
-                  className="w-4 h-4 text-[#0A0A0A] border-[#E5E7EB] rounded focus:ring-[#0A0A0A]" 
-                />
-                <label htmlFor="openToMentoring" className="text-xs text-[#0A0A0A] font-medium">I am open to mentoring current students</label>
-              </div>
-              
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E5E7EB]">
-                <button type="button" onClick={() => setShowTransitionModal(false)} className="text-xs font-bold text-[#6B7280] hover:text-[#0A0A0A]">
-                  Cancel
-                </button>
-                <Button variant="primary" size="sm" type="submit" disabled={isSubmittingTransition}>
-                  {isSubmittingTransition ? 'Submitting...' : 'Submit Request'}
-                </Button>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+
+          {transPathType === 'employed' ? (
+            <>
+              <TextField
+                label="Company or organization"
+                type="text"
+                required
+                value={transCompany}
+                onChange={e => setTransCompany(e.target.value)}
+                placeholder="e.g. Google India"
+              />
+              <TextField
+                label="Current designation"
+                type="text"
+                required
+                value={transDesignation}
+                onChange={e => setTransDesignation(e.target.value)}
+                placeholder="e.g. Software Engineer"
+              />
+            </>
+          ) : (
+            <>
+              <TextField
+                label="University or institution name"
+                type="text"
+                required
+                value={transUniversity}
+                onChange={e => setTransUniversity(e.target.value)}
+                placeholder="e.g. Carnegie Mellon University / IIT Bombay"
+              />
+              <TextField
+                label="Degree & field of study"
+                type="text"
+                required
+                value={transDegree}
+                onChange={e => setTransDegree(e.target.value)}
+                placeholder="e.g. M.S. in Computer Science / MBA"
+              />
+            </>
+          )}
+
+          <TextField
+            label="Personal login email (post-graduation)"
+            type="email"
+            required
+            value={transPersonalEmail}
+            onChange={e => setTransPersonalEmail(e.target.value)}
+            placeholder="e.g. yourname@gmail.com"
+          />
+
+          <div>
+            <label className="block text-[#0A0A0A] font-semibold text-xs mb-1">
+              Verification proof document (degree certificate / offer letter scan)
+            </label>
+            <input 
+              type="file" 
+              accept="image/*,.pdf" 
+              onChange={async e => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setTransDocName(file.name);
+                  try {
+                    const res = await uploadProofDocument(file, studentProfile.id);
+                    setTransDocUrl(res.url);
+                  } catch {
+                    const objUrl = URL.createObjectURL(file);
+                    setTransDocUrl(objUrl);
+                  }
+                }
+              }} 
+              className="w-full bg-[#FAFAFA] border border-[#E5E7EB] px-3 py-2 text-xs rounded-lg focus:outline-none focus:border-[#0A0A0A] cursor-pointer" 
+            />
+            {transDocName && (
+              <p className="text-[10px] text-emerald-700 font-semibold mt-1">✓ Attached: {transDocName}</p>
+            )}
+          </div>
+
+          <TextField
+            label="VIT department"
+            type="text"
+            disabled
+            value={transDept}
+          />
+
+          <div className="flex items-center gap-2 pt-2">
+            <input 
+              type="checkbox" 
+              id="openToMentoring" 
+              checked={transMentoring} 
+              onChange={e => setTransMentoring(e.target.checked)} 
+              className="w-4 h-4 text-[#0A0A0A] border-[#E5E7EB] rounded focus:ring-[#0A0A0A]" 
+            />
+            <label htmlFor="openToMentoring" className="text-xs text-[#0A0A0A] font-medium">I am open to mentoring current students</label>
+          </div>
+          
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E5E7EB]">
+            <Button variant="secondary" size="sm" type="button" onClick={() => setShowTransitionModal(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" type="submit" disabled={isSubmittingTransition}>
+              {isSubmittingTransition ? 'Submitting...' : 'Submit request'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

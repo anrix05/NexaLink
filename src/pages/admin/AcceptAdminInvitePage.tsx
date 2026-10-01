@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, UserCheck, AlertCircle, CheckCircle2, Building2 } from 'lucide-react';
+import { ShieldCheck, UserCheck, AlertCircle, CheckCircle2, Building2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '../../components/common/UIComponents';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
@@ -16,6 +16,7 @@ export const AcceptAdminInvitePage: React.FC<AcceptAdminInvitePageProps> = ({ se
   const [inviteMatchEmail, setInviteMatchEmail] = useState('');
   const [inviteFullName, setInviteFullName] = useState('');
   const [inviteNewPassword, setInviteNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
 
@@ -63,7 +64,7 @@ export const AcceptAdminInvitePage: React.FC<AcceptAdminInvitePageProps> = ({ se
 
   return (
     <div className="min-h-[calc(100vh-64px)] flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white border border-slate-200/80 rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+      <div className="w-full max-w-md bg-white border border-[#E5E7EB] rounded-2xl overflow-hidden animate-in fade-in duration-300">
         
         {/* Header */}
         <div className="pt-8 pb-4 text-center space-y-1">
@@ -151,15 +152,26 @@ export const AcceptAdminInvitePage: React.FC<AcceptAdminInvitePageProps> = ({ se
               <label className="block text-slate-700 font-display font-bold text-[10px] uppercase tracking-wider mb-1">
                 Account Password
               </label>
-              <input
-                type="password"
-                required
-                disabled={!isValidInvite}
-                value={inviteNewPassword}
-                onChange={e => setInviteNewPassword(e.target.value)}
-                placeholder="••••••••••••"
-                className="w-full bg-stone-50 border border-stone-200 px-4 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-950 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  disabled={!isValidInvite}
+                  value={inviteNewPassword}
+                  onChange={e => setInviteNewPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full bg-stone-50 border border-stone-200 px-4 py-2.5 pr-10 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-950 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  disabled={!isValidInvite}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer p-0.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             <div className="pt-2">

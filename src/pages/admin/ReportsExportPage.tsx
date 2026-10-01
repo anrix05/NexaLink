@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
 import type { FacultyProfile } from '../../types';
 import jsPDF from 'jspdf';
@@ -37,11 +37,21 @@ interface UserRecord {
   isVerified: boolean;
 }
 
-export const ReportsExportPage: React.FC = () => {
-  const { alumniList, studentList, facultyList } = useData();
+interface ReportsExportPageProps {
+  initialSubTab?: 'analytics' | 'export';
+}
+
+export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSubTab = 'analytics' }) => {
+  const { alumniList, studentList, facultyList, adminList } = useData();
 
   // Mode Switcher: Visual Charts vs Document Exporter
-  const [activeViewMode, setActiveViewMode] = useState<'analytics' | 'export'>('analytics');
+  const [activeViewMode, setActiveViewMode] = useState<'analytics' | 'export'>(initialSubTab);
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveViewMode(initialSubTab);
+    }
+  }, [initialSubTab]);
 
   // Export Filter Parameters
   const [selectedRole, setSelectedRole] = useState<string>('All');
@@ -70,12 +80,26 @@ export const ReportsExportPage: React.FC = () => {
     }, 4000);
   };
 
+  // Helper to format faculty info cleanly without trailing bullets
+  const formatFacultyInfo = (t: FacultyProfile) => {
+    const isHod = t.isHod || (t.name && t.name.toUpperCase().includes('HOD'));
+    const designation = isHod
+      ? (t.designation?.toLowerCase().includes('hod') ? t.designation : `HOD & ${t.designation || 'Professor'}`)
+      : (t.designation || 'Professor');
+
+    const subDetail =
+      (t.specialization && t.specialization.trim()) ||
+      (t.employeeId && t.employeeId.trim() ? `Emp ID: ${t.employeeId.trim()}` : null);
+
+    return subDetail ? `${designation} • ${subDetail}` : designation;
+  };
+
   // Combine All User Categories (Students, Alumni, Faculty, Admin)
   const combinedUserRecords: UserRecord[] = [
     ...studentList.map(s => ({
       id: s.id,
       name: s.name,
-      email: s.email,
+      email: (s.email || '').replace(/^\+/, '').trim(),
       roleDisplay: 'Student',
       roleKey: 'student',
       department: s.department,
@@ -88,12 +112,12 @@ export const ReportsExportPage: React.FC = () => {
     ...alumniList.map(a => ({
       id: a.id,
       name: a.name,
-      email: a.email,
+      email: (a.email || '').replace(/^\+/, '').trim(),
       roleDisplay: 'Alumni',
       roleKey: 'alumni',
       department: a.department,
       year: a.graduationYear,
-      info: `${a.company} • ${a.designation}`,
+      info: a.company && a.designation ? `${a.company} • ${a.designation}` : (a.company || a.designation || 'Alumni'),
       location: a.location,
       avatar: a.avatar,
       isVerified: !!a.isVerified
@@ -101,29 +125,31 @@ export const ReportsExportPage: React.FC = () => {
     ...facultyList.map((t: FacultyProfile) => ({
       id: t.id,
       name: t.name,
-      email: t.email,
+      email: (t.email || '').replace(/^\+/, '').trim(),
       roleDisplay: 'Faculty',
       roleKey: 'faculty',
       department: t.department,
       year: 2026,
-      info: `${t.designation} • ${t.specialization}`,
+      info: formatFacultyInfo(t),
       location: 'VIT Wadala Campus',
       avatar: t.avatar,
       isVerified: true
     })),
-    {
-      id: 'admin-1',
-      name: 'Dr. Sunita Rawat',
-      email: 'admin@vit.edu.in',
-      roleDisplay: 'Admin (Cell Head)',
-      roleKey: 'admin',
-      department: 'CMPN',
-      year: 2026,
-      info: 'Alumni Cell Head & Professor',
-      location: 'VIT Wadala Campus',
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80',
-      isVerified: true
-    }
+    ...(adminList && adminList.length > 0
+      ? adminList.map(adm => ({
+          id: adm.id,
+          name: adm.name,
+          email: (adm.email || '').replace(/^\+/, '').trim(),
+          roleDisplay: 'Admin',
+          roleKey: 'admin',
+          department: adm.department || 'CMPN',
+          year: 2026,
+          info: adm.employeeId ? `Institutional Admin • Emp ID: ${adm.employeeId}` : 'Institutional Admin Cell',
+          location: 'VIT Wadala Campus',
+          avatar: adm.avatar,
+          isVerified: true
+        }))
+      : [])
   ];
 
   const filteredRecords = combinedUserRecords.filter(item => {
@@ -190,6 +216,20 @@ export const ReportsExportPage: React.FC = () => {
         alternateRowStyles: {
           fillColor: [245, 245, 245]
         },
+        columnStyles: {
+          0: { cellWidth: 10, halign: 'center' }, // #
+          1: { cellWidth: 36 },                   // Name
+          2: { cellWidth: 26 },                   // Category Role
+          3: { cellWidth: 16, halign: 'center' }, // Dept
+          4: { cellWidth: 15, halign: 'center' }, // Year
+          5: { cellWidth: 64 },                   // Details / Employer / PRN
+          6: { cellWidth: 42 },                   // Location
+          7: { cellWidth: 60 }                    // Email Address
+        },
+        styles: {
+          overflow: 'linebreak',
+          cellPadding: 2
+        },
         margin: { left: 14, right: 14 }
       });
 
@@ -230,6 +270,25 @@ export const ReportsExportPage: React.FC = () => {
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+      // Auto-fit column widths based on maximum content and header length
+      const keys = Object.keys(exportData[0] || {});
+      const colWidths = keys.map(key => {
+        let maxLen = key.length;
+        exportData.forEach(row => {
+          const val = (row as any)[key];
+          if (val !== undefined && val !== null) {
+            const str = String(val);
+            if (str.length > maxLen) {
+              maxLen = str.length;
+            }
+          }
+        });
+        // Header length + padding, min-width 12 ensures headers never truncate
+        return { wch: Math.max(maxLen + 4, 12) };
+      });
+      worksheet['!cols'] = colWidths;
+
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Institutional Roster');
 
@@ -444,21 +503,19 @@ export const ReportsExportPage: React.FC = () => {
                   onChange={e => setSelectedDept(e.target.value)}
                   className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
                 >
-                  <option value="All">All Departments (7)</option>
+                  <option value="All">All Departments (5)</option>
                   <option value="CMPN">Computer Engg (CMPN)</option>
                   <option value="INFT">Information Tech (INFT)</option>
-                  <option value="EXTC">Electronics & Telecom (EXTC)</option>
                   <option value="EXCS">Electronics & Computer (EXCS)</option>
+                  <option value="EXTC">Electronics & Telecom (EXTC)</option>
                   <option value="BIOM">Biomedical Engg (BIOM)</option>
-                  <option value="MCA">MCA Department</option>
-                  <option value="MBA">MMS / MBA Dept</option>
                 </select>
               </div>
             </div>
 
             <div className="pt-4 border-t border-[#E5E7EB]">
-              <p className="text-xs text-[#6B7280] font-bold mb-3 uppercase tracking-wider">
-                Choose Output Export Format:
+              <p className="text-xs text-[#6B7280] font-semibold mb-3">
+                Choose output export format:
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* PDF Export Button */}

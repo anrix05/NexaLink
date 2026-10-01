@@ -26,7 +26,8 @@ import {
   AlertTriangle,
   RotateCcw
 } from 'lucide-react';
-import { Badge, Button, StatCard } from '../../components/common/UIComponents';
+import { Badge, Button, StatCard, Modal, TextField, SelectField, TextArea } from '../../components/common/UIComponents';
+import { InstitutionalAnnouncementFeed } from '../../components/common/InstitutionalAnnouncementFeed';
 import type { JobListing } from '../../types';
 
 interface AlumniDashboardProps {
@@ -47,6 +48,14 @@ const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniPr
   } = useData();
 
   const [isMentoring, setIsMentoring] = useState<boolean>(alumni?.isMentoringAvailable ?? true);
+  const [avatarError, setAvatarError] = useState(false);
+  const alumniInitials = (alumni.name || 'Alumni')
+    .split(' ')
+    .filter(Boolean)
+    .map(w => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 
   // Profile Edit Modal State
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -107,22 +116,29 @@ const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniPr
       <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 shadow-none space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <img
-              src={alumni.avatar}
-              alt={alumni.name}
-              className="w-14 h-14 rounded-full object-cover border border-[#E5E7EB] shrink-0"
-            />
+            {alumni.avatar && !avatarError ? (
+              <img
+                src={alumni.avatar}
+                alt={alumni.name}
+                onError={() => setAvatarError(true)}
+                className="w-14 h-14 rounded-full object-cover border border-[#E5E7EB] shrink-0"
+              />
+            ) : (
+              <div className="w-14 h-14 rounded-full bg-[#0A0A0A] text-white flex items-center justify-center font-display font-black text-lg tracking-wider border border-[#E5E7EB] shrink-0 shadow-xs">
+                {alumniInitials || 'AL'}
+              </div>
+            )}
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl font-display font-black text-[#0A0A0A] tracking-tight">{alumni.name}</h1>
+                <h1 className="text-2xl font-display font-bold text-[#0A0A0A] tracking-tight">{alumni.name}</h1>
                 <Badge variant="emerald" size="sm" icon={<CheckCircle2 className="w-3.5 h-3.5" />}>
-                  Verified Alum
+                  Verified alumni
                 </Badge>
               </div>
-              <p className="text-xs text-[#0A0A0A] font-bold mt-0.5">
+              <p className="text-xs text-[#0A0A0A] font-semibold mt-0.5">
                 {designation} at <strong className="text-[#0A0A0A]">{company}</strong>
               </p>
-              <p className="text-xs text-[#6B7280] font-mono mt-0.5">
+              <p className="text-xs text-[#6B7280] mt-0.5">
                 VIT {alumni.department} • Class of {alumni.graduationYear || 2018} • {location}
               </p>
             </div>
@@ -135,57 +151,60 @@ const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniPr
               onClick={() => setShowProfileModal(true)}
               icon={<User className="w-3.5 h-3.5" />}
             >
-              Edit Profile
+              Edit profile
             </Button>
 
             <div className="p-1.5 bg-[#FAFAFA] rounded-xl border border-[#E5E7EB] flex items-center gap-2">
-              <span className="font-display font-bold text-[#6B7280] text-[10px] uppercase tracking-wider pl-1">Mentorship:</span>
+              <span className="font-semibold text-[#6B7280] text-xs pl-1">Mentorship:</span>
               <button
                 onClick={() => {
                   setIsMentoring(!isMentoring);
                   showToast(`Student mentorship status set to ${!isMentoring ? 'Active' : 'Paused'}.`);
                 }}
-                className={`px-3 py-1 text-xs font-display font-bold uppercase transition rounded-lg ${
-                  isMentoring ? 'bg-[#0A0A0A] text-white shadow-xs' : 'bg-[#E5E7EB] text-[#374151]'
+                className={`px-3 py-1 text-xs font-semibold transition rounded-lg ${
+                  isMentoring ? 'bg-[#0A0A0A] text-white' : 'bg-[#E5E7EB] text-[#374151]'
                 }`}
               >
-                {isMentoring ? 'Accepting Mentees' : 'Paused'}
+                {isMentoring ? 'Accepting mentees' : 'Paused'}
               </button>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Institutional Broadcast Announcements Feed */}
+      <InstitutionalAnnouncementFeed announcements={announcements} userRole="alumni" />
+
       {/* 2. Impact Metrics Card — Solid Black #0A0A0A */}
       <div className="bg-[#0A0A0A] text-white p-6 rounded-xl border border-[#222222] space-y-4 shadow-none">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#222222] pb-4">
           <div className="flex items-center gap-2.5">
             <Award className="w-4 h-4 text-white" />
-            <h2 className="font-display font-bold text-xs uppercase tracking-widest text-white">
-              Institutional Impact & Mentorship Metrics
+            <h2 className="font-bold text-xs text-white">
+              Institutional impact & mentorship metrics
             </h2>
           </div>
-          <span className="font-mono text-xs font-bold text-neutral-300 bg-white/10 px-3 py-0.5 rounded-full border border-white/20 self-start sm:self-auto">
-            {avgRating ? `★ ${avgRating} / 5.0 Rating (${totalReviewsCount} ${totalReviewsCount === 1 ? 'Review' : 'Reviews'})` : 'No Ratings Received Yet'}
+          <span className="text-xs font-semibold text-neutral-300 bg-white/10 px-3 py-0.5 rounded-full border border-white/20 self-start sm:self-auto">
+            {avgRating ? `★ ${avgRating} / 5.0 rating (${totalReviewsCount} ${totalReviewsCount === 1 ? 'review' : 'reviews'})` : 'No ratings received yet'}
           </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-          <div className="p-4 bg-white/5 border border-white/10 rounded-lg space-y-1 hover:bg-white/10 transition-all">
-            <span className="text-[10px] font-mono uppercase font-bold tracking-widest text-neutral-400 block">Students Mentored</span>
-            <span className="font-mono text-3xl font-bold text-white block mt-1">{studentsMentoredCount}</span>
-            <span className="text-xs text-neutral-300 font-medium block">Active & Completed Sessions</span>
+          <div className="p-4 bg-white/5 border border-white/10 rounded-lg space-y-1 hover:bg-white/10 transition-colors">
+            <span className="text-xs font-semibold text-neutral-400 block">Students mentored</span>
+            <span className="tabular-nums text-3xl font-bold text-white block mt-1">{studentsMentoredCount}</span>
+            <span className="text-xs text-neutral-300 font-medium block">Active & completed sessions</span>
           </div>
 
-          <div className="p-4 bg-white/5 border border-white/10 rounded-lg space-y-1 hover:bg-white/10 transition-all">
-            <span className="text-[10px] font-mono uppercase font-bold tracking-widest text-neutral-400 block">Opportunities Posted</span>
-            <span className="font-mono text-3xl font-bold text-white block mt-1">{myPostedJobs.length}</span>
-            <span className="text-xs text-neutral-300 font-medium block">Active Referrals Published</span>
+          <div className="p-4 bg-white/5 border border-white/10 rounded-lg space-y-1 hover:bg-white/10 transition-colors">
+            <span className="text-xs font-semibold text-neutral-400 block">Opportunities posted</span>
+            <span className="tabular-nums text-3xl font-bold text-white block mt-1">{myPostedJobs.length}</span>
+            <span className="text-xs text-neutral-300 font-medium block">Active referrals published</span>
           </div>
 
-          <div className="p-4 bg-white/5 border border-white/10 rounded-lg space-y-1 hover:bg-white/10 transition-all">
-            <span className="text-[10px] font-mono uppercase font-bold tracking-widest text-neutral-400 block">Average Feedback Rating</span>
-            <div className="flex items-center gap-1.5 text-white font-mono text-2xl font-bold mt-1">
+          <div className="p-4 bg-white/5 border border-white/10 rounded-lg space-y-1 hover:bg-white/10 transition-colors">
+            <span className="text-xs font-semibold text-neutral-400 block">Average feedback rating</span>
+            <div className="flex items-center gap-1.5 text-white tabular-nums text-2xl font-bold mt-1">
               {avgRating ? (
                 <>
                   <Star className="w-4 h-4 fill-white" /> {avgRating} / 5.0
@@ -451,83 +470,61 @@ const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniPr
       </div>
 
       {/* Profile Edit Modal */}
-      {showProfileModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-[#E5E7EB] rounded-xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
-              <h3 className="font-bold text-xs uppercase tracking-wider text-[#0A0A0A]">
-                Edit Alumni Profile
-              </h3>
-              <button
-                onClick={() => setShowProfileModal(false)}
-                className="p-1 text-[#9CA3AF] hover:text-[#0A0A0A]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      <Modal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        title="Edit Alumni Profile"
+        subtitle="Update your organization, designation, and expertise."
+        maxWidth="md"
+      >
+        <form onSubmit={handleSaveProfile} className="space-y-3 font-sans text-xs">
+          <TextField
+            label="Company or employer"
+            type="text"
+            value={company}
+            onChange={e => setCompany(e.target.value)}
+          />
 
-            <form onSubmit={handleSaveProfile} className="space-y-3">
-              <div>
-                <label className="app-label text-[#0A0A0A] font-bold">Company / Employer</label>
-                <input
-                  type="text"
-                  value={company}
-                  onChange={e => setCompany(e.target.value)}
-                  className="app-input w-full border-[#E5E7EB] rounded-lg"
-                />
-              </div>
+          <TextField
+            label="Designation or role"
+            type="text"
+            value={designation}
+            onChange={e => setDesignation(e.target.value)}
+          />
 
-              <div>
-                <label className="app-label text-[#0A0A0A] font-bold">Designation / Role</label>
-                <input
-                  type="text"
-                  value={designation}
-                  onChange={e => setDesignation(e.target.value)}
-                  className="app-input w-full border-[#E5E7EB] rounded-lg"
-                />
-              </div>
+          <TextField
+            label="Current location"
+            type="text"
+            value={location}
+            onChange={e => setLocation(e.target.value)}
+          />
 
-              <div>
-                <label className="app-label text-[#0A0A0A] font-bold">Current Location</label>
-                <input
-                  type="text"
-                  value={location}
-                  onChange={e => setLocation(e.target.value)}
-                  className="app-input w-full border-[#E5E7EB] rounded-lg"
-                />
-              </div>
+          <TextField
+            label="Technical skills (comma-separated)"
+            type="text"
+            value={skillsText}
+            onChange={e => setSkillsText(e.target.value)}
+          />
 
-              <div>
-                <label className="app-label text-[#0A0A0A] font-bold">Technical Skills (comma-separated)</label>
-                <input
-                  type="text"
-                  value={skillsText}
-                  onChange={e => setSkillsText(e.target.value)}
-                  className="app-input w-full border-[#E5E7EB] rounded-lg"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#E5E7EB]">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setShowProfileModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="sm"
-                >
-                  Save Changes
-                </Button>
-              </div>
-            </form>
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#E5E7EB]">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowProfileModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+            >
+              Save changes
+            </Button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
       {/* EDIT JOB MODAL */}
       {editingJob && (() => {
@@ -538,25 +535,19 @@ const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniPr
           editJobType !== editingJob.type;
 
         return (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200 font-sans text-xs">
-            <div className="bg-white border border-[#E5E7EB] rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
-                <div className="flex items-center gap-2.5">
-                  <Edit3 className="w-5 h-5 text-[#0A0A0A]" />
-                  <h3 className="font-display font-bold text-sm text-[#0A0A0A]">
-                    Edit Job Listing — {editingJob.title}
-                  </h3>
-                </div>
-                <button onClick={() => setEditingJob(null)} className="p-1 text-[#9CA3AF] hover:text-[#0A0A0A]">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
+          <Modal
+            isOpen={!!editingJob}
+            onClose={() => setEditingJob(null)}
+            title={`Edit Opportunity — ${editingJob.title}`}
+            subtitle="Update listing details and application guidelines."
+            maxWidth="lg"
+          >
+            <div className="space-y-4 font-sans text-xs">
               {isSubstantiveChange && (
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-xs text-[#78350F]">
                   <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
                   <p className="leading-relaxed">
-                    <strong className="text-[#B45309] font-bold">Re-moderation Notice:</strong> Modifying title, company, salary/stipend, or job type will reset this listing to <em>"Pending Approval"</em> for admin review, temporarily hiding it from students until re-approved.
+                    <strong className="text-[#B45309] font-bold">Re-moderation notice:</strong> Modifying title, company, salary/stipend, or job type will reset this listing to <em>"Pending Approval"</em> for admin review, temporarily hiding it from students until re-approved.
                   </p>
                 </div>
               )}
@@ -577,96 +568,79 @@ const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniPr
                   setEditingJob(null);
                   showToast(
                     res.isReModerationRequired
-                      ? 'Listing updated & sent to Admin for re-approval!'
+                      ? 'Listing updated & sent to admin for re-approval!'
                       : 'Job listing updated successfully.'
                   );
                 }}
                 className="space-y-3"
               >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="app-label text-[#0A0A0A] font-bold">Position Title</label>
-                    <input
-                      type="text"
-                      required
-                      value={editJobTitle}
-                      onChange={e => setEditJobTitle(e.target.value)}
-                      className="app-input w-full border-[#E5E7EB] rounded-lg"
-                    />
-                  </div>
+                  <TextField
+                    label="Position title"
+                    type="text"
+                    required
+                    value={editJobTitle}
+                    onChange={e => setEditJobTitle(e.target.value)}
+                  />
 
-                  <div>
-                    <label className="app-label text-[#0A0A0A] font-bold">Company</label>
-                    <input
-                      type="text"
-                      required
-                      value={editJobCompany}
-                      onChange={e => setEditJobCompany(e.target.value)}
-                      className="app-input w-full border-[#E5E7EB] rounded-lg"
-                    />
-                  </div>
+                  <TextField
+                    label="Company"
+                    type="text"
+                    required
+                    value={editJobCompany}
+                    onChange={e => setEditJobCompany(e.target.value)}
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="app-label text-[#0A0A0A] font-bold">Opportunity Type</label>
-                    <select
-                      value={editJobType}
-                      onChange={e => setEditJobType(e.target.value as any)}
-                      className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-                    >
-                      <option value="Full-Time">Full-Time</option>
-                      <option value="Internship">Internship</option>
-                      <option value="Contract">Contract</option>
-                      <option value="Remote">Remote</option>
-                    </select>
-                  </div>
+                  <SelectField
+                    label="Opportunity type"
+                    value={editJobType}
+                    onChange={e => setEditJobType(e.target.value as any)}
+                    options={[
+                      { value: 'Full-Time', label: 'Full-Time' },
+                      { value: 'Internship', label: 'Internship' },
+                      { value: 'Contract', label: 'Contract' },
+                      { value: 'Remote', label: 'Remote' }
+                    ]}
+                  />
 
-                  <div>
-                    <label className="app-label text-[#0A0A0A] font-bold">Stipend / Salary</label>
-                    <input
-                      type="text"
-                      required
-                      value={editJobStipend}
-                      onChange={e => setEditJobStipend(e.target.value)}
-                      className="app-input w-full font-mono text-xs border-[#E5E7EB] rounded-lg"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="app-label text-[#0A0A0A] font-bold">Location</label>
-                    <input
-                      type="text"
-                      required
-                      value={editJobLocation}
-                      onChange={e => setEditJobLocation(e.target.value)}
-                      className="app-input w-full border-[#E5E7EB] rounded-lg"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="app-label text-[#0A0A0A] font-bold">Description & Referral Guidelines</label>
-                  <textarea
-                    rows={3}
+                  <TextField
+                    label="Stipend / Salary"
+                    type="text"
                     required
-                    value={editJobDescription}
-                    onChange={e => setEditJobDescription(e.target.value)}
-                    className="app-input w-full border-[#E5E7EB] rounded-lg"
+                    value={editJobStipend}
+                    onChange={e => setEditJobStipend(e.target.value)}
+                  />
+
+                  <TextField
+                    label="Location"
+                    type="text"
+                    required
+                    value={editJobLocation}
+                    onChange={e => setEditJobLocation(e.target.value)}
                   />
                 </div>
+
+                <TextArea
+                  label="Description & referral guidelines"
+                  rows={3}
+                  required
+                  value={editJobDescription}
+                  onChange={e => setEditJobDescription(e.target.value)}
+                />
 
                 <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#E5E7EB]">
                   <Button type="button" variant="secondary" size="sm" onClick={() => setEditingJob(null)}>
                     Cancel
                   </Button>
                   <Button type="submit" variant="primary" size="sm">
-                    Save Listing Changes
+                    Save listing changes
                   </Button>
                 </div>
               </form>
             </div>
-          </div>
+          </Modal>
         );
       })()}    </div>
   );

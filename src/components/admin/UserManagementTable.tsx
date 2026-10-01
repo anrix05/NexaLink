@@ -25,7 +25,8 @@ import {
   XCircle,
   Building2,
   GraduationCap,
-  Briefcase
+  Briefcase,
+  Trash2
 } from 'lucide-react';
 import { Badge, Button } from '../common/UIComponents';
 
@@ -39,6 +40,7 @@ export const UserManagementTable: React.FC = () => {
     reactivateUser,
     mutateUserRole,
     reopenVerification,
+    deleteUser,
     updateUserProfile
   } = useData();
 
@@ -55,9 +57,9 @@ export const UserManagementTable: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [deptFilter, setDeptFilter] = useState<string>('All');
 
-  // Modals State
   const [selectedUserDetail, setSelectedUserDetail] = useState<any | null>(null);
   const [roleMutateUser, setRoleMutateUser] = useState<any | null>(null);
+  const [deleteUserCandidate, setDeleteUserCandidate] = useState<any | null>(null);
   const [newSelectedRole, setNewSelectedRole] = useState<UserRole>('student');
   const [editEmail, setEditEmail] = useState<string>('');
   const [editPersonalEmail, setEditPersonalEmail] = useState<string>('');
@@ -191,14 +193,12 @@ export const UserManagementTable: React.FC = () => {
                 onChange={e => setDeptFilter(e.target.value)}
                 className="w-full bg-[#FAFAFA] border border-[#E5E7EB] px-3 py-2 rounded-lg text-xs font-bold text-[#0A0A0A]"
               >
-                <option value="All">All Departments (7)</option>
+                <option value="All">All Departments (5)</option>
                 <option value="CMPN">Computer (CMPN)</option>
                 <option value="INFT">Information Tech (INFT)</option>
-                <option value="EXTC">Telecom (EXTC)</option>
                 <option value="EXCS">Electronics & CS (EXCS)</option>
+                <option value="EXTC">Telecom (EXTC)</option>
                 <option value="BIOM">Biomedical (BIOM)</option>
-                <option value="MCA">MCA Dept</option>
-                <option value="MBA">MMS / MBA Dept</option>
               </select>
             </div>
           </div>
@@ -347,12 +347,21 @@ export const UserManagementTable: React.FC = () => {
                                   reopenVerification(user.id);
                                   showToast(`Re-opened verification queue for ${user.name}`);
                                 }}
-                                title="Re-open Verification Queue"
+                                title="Re-open Verification Queue (Undo rejection and re-queue applicant)"
                                 className="p-1.5 text-[#2563EB] hover:bg-blue-50 rounded-lg transition"
                               >
                                 <RotateCcw className="w-4 h-4" />
                               </button>
                             )}
+
+                            {/* Delete User Record */}
+                            <button
+                              onClick={() => setDeleteUserCandidate(user)}
+                              title="Delete Account Record"
+                              className="p-1.5 text-[#9CA3AF] hover:text-[#DC2626] hover:bg-rose-50 rounded-lg transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </td>
                       </motion.tr>
@@ -367,7 +376,7 @@ export const UserManagementTable: React.FC = () => {
         {/* MODAL 1: VIEW FULL PROFILE DETAIL */}
         {selectedUserDetail && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
-            <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 max-w-lg w-full shadow-2xl space-y-4 font-sans text-xs">
+            <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 max-w-lg w-full space-y-4 font-sans text-xs">
               <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
                 <div className="flex items-center gap-3">
                   {selectedUserDetail.avatar ? (
@@ -447,7 +456,7 @@ export const UserManagementTable: React.FC = () => {
         {/* MODAL 2: EDIT USER CREDENTIALS & ROLE */}
         {roleMutateUser && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
-            <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 max-w-md w-full shadow-2xl space-y-4 font-sans text-xs">
+            <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 max-w-md w-full space-y-4 font-sans text-xs">
               <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
                 <h3 className="font-bold text-sm text-[#0A0A0A] flex items-center gap-2">
                   <Edit3 className="w-4 h-4 text-[#0A0A0A]" />
@@ -528,6 +537,52 @@ export const UserManagementTable: React.FC = () => {
                   }}
                 >
                   Save Account Changes
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL 3: CONFIRM DELETE USER */}
+        {deleteUserCandidate && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+            <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 max-w-md w-full space-y-4 font-sans text-xs">
+              <div className="flex items-center gap-3 border-b border-[#E5E7EB] pb-3">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-[#DC2626] flex items-center justify-center font-bold">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-[#0A0A0A]">Delete User Record</h3>
+                  <p className="text-[11px] text-[#6B7280]">Permanently purge from active platform roster</p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl space-y-1">
+                <div className="font-bold text-[#0A0A0A]">{deleteUserCandidate.name}</div>
+                <div className="text-[#6B7280] font-mono text-[11px]">{deleteUserCandidate.email}</div>
+                <div className="text-[10px] text-[#9CA3AF] uppercase font-bold tracking-wider">{deleteUserCandidate.role || deleteUserCandidate.userCategory} • {deleteUserCandidate.department}</div>
+              </div>
+
+              <p className="text-[#4B5563] text-xs leading-relaxed">
+                Are you sure you want to delete this account? It will be removed from your institutional roster directory.
+              </p>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E5E7EB]">
+                <Button variant="secondary" size="sm" onClick={() => setDeleteUserCandidate(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="bg-[#DC2626] hover:bg-[#B91C1C] text-white border-transparent"
+                  onClick={async () => {
+                    const name = deleteUserCandidate.name;
+                    await deleteUser(deleteUserCandidate.id);
+                    setDeleteUserCandidate(null);
+                    showToast(`Deleted ${name} from platform roster.`);
+                  }}
+                >
+                  Confirm Delete
                 </Button>
               </div>
             </div>

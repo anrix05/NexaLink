@@ -31,7 +31,7 @@ import {
   ChevronDown,
   Copy
 } from 'lucide-react';
-import { Badge, Button, SegmentedTabs, Modal, ToastNotice } from '../components/common/UIComponents';
+import { Badge, Button, SegmentedTabs, Modal, ToastNotice, TextField, PasswordField, Toggle, SelectField, TextArea } from '../components/common/UIComponents';
 
 export const SettingsPage: React.FC = () => {
   const { currentUser, currentRole, updateCurrentUserState } = useAuth();
@@ -292,14 +292,14 @@ export const SettingsPage: React.FC = () => {
       {activeTab === 'profile' && (
         <form noValidate onSubmit={handleSaveProfile} className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-6 shadow-none space-y-5 sm:space-y-6">
           <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3 sm:pb-4">
-            <h2 className="font-display font-bold text-[11px] sm:text-xs uppercase tracking-wider text-[#0A0A0A] flex items-center gap-2">
+            <h2 className="font-bold text-xs text-[#0A0A0A] flex items-center gap-2">
               <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0A0A0A]" />
-              Profile Overview
+              Profile overview
             </h2>
 
             {/* Soft-fill Emerald Verified Badge */}
             <Badge variant="emerald" icon={<CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#065F46]" />}>
-              {currentRole.toUpperCase()} VERIFIED
+              Verified {currentRole.toLowerCase()}
             </Badge>
           </div>
 
@@ -424,11 +424,9 @@ export const SettingsPage: React.FC = () => {
                     >
                       <option value="CMPN">Computer (CMPN)</option>
                       <option value="INFT">IT (INFT)</option>
-                      <option value="EXTC">Telecom (EXTC)</option>
                       <option value="EXCS">Electronics & CS (EXCS)</option>
+                      <option value="EXTC">Telecom (EXTC)</option>
                       <option value="BIOM">Biomedical (BIOM)</option>
-                      <option value="MCA">MCA</option>
-                      <option value="MBA">MMS / MBA</option>
                     </select>
                     <ChevronDown className="w-4 h-4 text-[#6B7280] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   </div>
@@ -690,21 +688,21 @@ export const SettingsPage: React.FC = () => {
           <div className="space-y-4 max-w-xl text-xs">
             <div className="p-4 sm:p-5 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl space-y-4">
               <div className="flex items-center justify-between gap-3">
-                <span className="font-bold text-[#0A0A0A] text-xs">Active Mentorship Status:</span>
+                <span className="font-semibold text-[#0A0A0A] text-xs">Active mentorship status:</span>
                 <button
                   type="button"
                   onClick={() => setIsMentoringAvailable(!isMentoringAvailable)}
-                  className={`px-3.5 py-1.5 font-bold uppercase transition rounded-lg text-xs cursor-pointer ${
-                    isMentoringAvailable ? 'bg-[#0A0A0A] text-white shadow-xs' : 'bg-[#E5E7EB] text-[#374151]'
+                  className={`px-3.5 py-1.5 font-semibold transition rounded-lg text-xs cursor-pointer ${
+                    isMentoringAvailable ? 'bg-[#0A0A0A] text-white' : 'bg-[#E5E7EB] text-[#374151]'
                   }`}
                 >
-                  {isMentoringAvailable ? 'Accepting Requests' : 'Mentorship Paused'}
+                  {isMentoringAvailable ? 'Accepting requests' : 'Mentorship paused'}
                 </button>
               </div>
 
               <div>
-                <label className="block text-[#0A0A0A] font-bold text-[11px] sm:text-xs uppercase tracking-wider mb-2">
-                  Max Simultaneous Active Mentees: <strong className="text-[#0A0A0A] text-sm font-mono">{maxMentees} Mentees</strong>
+                <label className="block text-[#0A0A0A] font-semibold text-xs mb-2">
+                  Max simultaneous active mentees: <strong className="text-[#0A0A0A] text-sm tabular-nums">{maxMentees} mentees</strong>
                 </label>
                 <input
                   type="range"
@@ -728,8 +726,8 @@ export const SettingsPage: React.FC = () => {
       {activeTab === 'notifications' && (
         <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-6 space-y-5 sm:space-y-6 text-xs shadow-none">
           <div className="border-b border-[#E5E7EB] pb-3 sm:pb-4">
-            <h2 className="font-display font-bold text-[11px] sm:text-xs uppercase tracking-wider text-[#0A0A0A] flex items-center gap-2">
-              <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0A0A0A]" /> Notification Preferences
+            <h2 className="font-bold text-xs text-[#0A0A0A] flex items-center gap-2">
+              <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0A0A0A]" /> Notification preferences
             </h2>
             <p className="text-[#6B7280] font-medium mt-0.5 sm:mt-1 line-clamp-2 sm:line-clamp-none">
               {currentRole === 'admin'
@@ -743,20 +741,22 @@ export const SettingsPage: React.FC = () => {
           </div>
 
           <div className="space-y-3 sm:space-y-4 max-w-xl text-xs font-sans">
-            <div className="p-3.5 sm:p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl flex items-center justify-between">
-              <div>
-                <span className="font-bold text-[#0A0A0A] block text-xs">In-App Drawer Notifications</span>
-                <span className="text-[11px] text-[#6B7280]">Receive instant alerts in top navigation bell</span>
-              </div>
-              <input type="checkbox" checked={inAppNotifs} onChange={e => setInAppNotifs(e.target.checked)} className="w-4 h-4 accent-[#0A0A0A] rounded cursor-pointer" />
+            <div className="p-3.5 sm:p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl">
+              <Toggle
+                checked={inAppNotifs}
+                onChange={setInAppNotifs}
+                label="In-app drawer notifications"
+                description="Receive instant alerts in top navigation bell"
+              />
             </div>
 
-            <div className="p-3.5 sm:p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl flex items-center justify-between">
-              <div>
-                <span className="font-bold text-[#0A0A0A] block text-xs">Email Alert Notifications</span>
-                <span className="text-[11px] text-[#6B7280]">Forward high-priority messages to institutional email</span>
-              </div>
-              <input type="checkbox" checked={emailNotifs} onChange={e => setEmailNotifs(e.target.checked)} className="w-4 h-4 accent-[#0A0A0A] rounded cursor-pointer" />
+            <div className="p-3.5 sm:p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl">
+              <Toggle
+                checked={emailNotifs}
+                onChange={setEmailNotifs}
+                label="Email alert notifications"
+                description="Forward high-priority messages to institutional email"
+              />
             </div>
 
             <div className="p-3.5 sm:p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
@@ -802,36 +802,27 @@ export const SettingsPage: React.FC = () => {
 
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4 text-xs">
-              <div>
-                <label className="app-label text-[#0A0A0A] font-bold">Current Password</label>
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={e => setCurrentPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="app-input w-full font-mono tracking-widest border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-                />
-              </div>
-              <div>
-                <label className="app-label text-[#0A0A0A] font-bold">New Password</label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="app-input w-full font-mono tracking-widest border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-                />
-              </div>
-              <div>
-                <label className="app-label text-[#0A0A0A] font-bold">Confirm New Password</label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="app-input w-full font-mono tracking-widest border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-                />
-              </div>
+              <PasswordField
+                label="Current Password"
+                value={currentPassword}
+                onChange={e => setCurrentPassword(e.target.value)}
+                placeholder="••••••••"
+                className="bg-[#FAFAFA]"
+              />
+              <PasswordField
+                label="New Password"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                placeholder="••••••••"
+                className="bg-[#FAFAFA]"
+              />
+              <PasswordField
+                label="Confirm New Password"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                placeholder="••••••••"
+                className="bg-[#FAFAFA]"
+              />
             </div>
 
             <div className="flex justify-end pt-1">

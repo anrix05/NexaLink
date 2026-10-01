@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
-import type { AlumniProfile, StudentProfile, FacultyProfile } from '../../types';
+import type { AlumniProfile, StudentProfile, FacultyProfile, Announcement, AnnouncementSeverity } from '../../types';
 import { useCountUp } from '../../hooks/useCountUp';
 import {
   GraduationCap,
@@ -41,7 +41,13 @@ import {
   UploadCloud,
   FileUp,
   Mail,
-  AlertTriangle
+  AlertTriangle,
+  Pin,
+  Edit3,
+  Trash2,
+  Radio,
+  ShieldAlert,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UserManagementTable } from '../../components/admin/UserManagementTable';
@@ -49,7 +55,7 @@ import { AdminVisualAnalytics } from './AdminVisualAnalytics';
 import { Badge, Button, SegmentedTabs, Modal, ToastNotice, StatCard, AnimatedCheckIcon } from '../../components/common/UIComponents';
 
 interface AdminDashboardProps {
-  setActiveTab: (tab: string) => void;
+  setActiveTab: (tab: string, subTab?: string) => void;
   initialView?: 'dashboard' | 'console';
 }
 
@@ -71,6 +77,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
     moderateOpportunity,
     graduateStudentToAlumni,
     addAnnouncement,
+    updateAnnouncement,
+    deleteAnnouncement,
+    togglePinAnnouncement,
     retractAnnouncement,
     addAuditLog,
     roleTransitionRequests,
@@ -126,10 +135,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
 
   // Announcement Form Modal State
   const [showAncModal, setShowAncModal] = useState(false);
+  const [editingAncId, setEditingAncId] = useState<string | null>(null);
   const [ancTitle, setAncTitle] = useState('');
   const [ancContent, setAncContent] = useState('');
-  const [ancCategory, setAncCategory] = useState<'Placement Alert' | 'Institutional Update' | 'Alumni News' | 'Event Highlight'>('Placement Alert');
-  const [ancTargetAudience, setAncTargetAudience] = useState<'All' | 'Students' | 'Alumni' | 'Faculty'>('All');
+  const [ancCategory, setAncCategory] = useState<string>('Placement Alert');
+  const [ancTargetAudience, setAncTargetAudience] = useState<string>('All');
+  const [ancSeverity, setAncSeverity] = useState<AnnouncementSeverity>('standard');
+  const [ancHasExpiry, setAncHasExpiry] = useState(false);
+  const [ancExpiresAt, setAncExpiresAt] = useState('');
+  const [ancIsPinned, setAncIsPinned] = useState(false);
+  const [isSubmittingAnc, setIsSubmittingAnc] = useState(false);
 
   const handleConfirmBulkGraduation = () => {
     const res = bulkGraduateStudents(selectedBulkGradIds);
@@ -235,23 +250,64 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
     }
   };
 
-  const handleCreateAnnouncement = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!ancTitle || !ancContent) return;
-
-    addAnnouncement({
-      title: ancTitle,
-      category: ancCategory,
-      author: 'Admin (VIT Alumni Cell)',
-      content: ancContent,
-      isImportant: true,
-      targetAudience: ancTargetAudience
-    });
-
+  const handleOpenNewAnnouncement = () => {
+    setEditingAncId(null);
     setAncTitle('');
     setAncContent('');
-    setShowAncModal(false);
-    showNotification('New announcement published successfully!');
+    setAncCategory('Placement Alert');
+    setAncTargetAudience('All');
+    setAncSeverity('standard');
+    setAncHasExpiry(false);
+    setAncExpiresAt('');
+    setAncIsPinned(false);
+    setShowAncModal(true);
+  };
+
+  const handleOpenEditAnnouncement = (anc: Announcement) => {
+    setEditingAncId(anc.id);
+    setAncTitle(anc.title);
+    setAncContent(anc.content);
+    setAncCategory(anc.category);
+    setAncTargetAudience(anc.targetAudience);
+    setAncSeverity(anc.severity || (anc.isImportant ? 'governance' : 'standard'));
+    setAncHasExpiry(!!anc.expiresAt);
+    setAncExpiresAt(anc.expiresAt ? anc.expiresAt.split('T')[0] : '');
+    setAncIsPinned(!!anc.isPinned);
+    setShowAncModal(true);
+  };
+
+  const handleSubmitAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ancTitle.trim() || !ancContent.trim()) return;
+
+    setIsSubmittingAnc(true);
+    try {
+      const payload = {
+        title: ancTitle.trim(),
+        category: ancCategory,
+        author: 'Institutional Admin Cell',
+        content: ancContent.trim(),
+        isImportant: ancSeverity === 'governance',
+        targetAudience: ancTargetAudience,
+        severity: ancSeverity,
+        expiresAt: ancHasExpiry && ancExpiresAt ? new Date(ancExpiresAt + 'T23:59:59').toISOString() : undefined,
+        isPinned: ancIsPinned
+      };
+
+      if (editingAncId) {
+        await updateAnnouncement(editingAncId, payload);
+        showNotification(`Updated announcement: "${payload.title}"`);
+      } else {
+        await addAnnouncement(payload);
+        showNotification(`Broadcast announcement published: "${payload.title}"`);
+      }
+      setShowAncModal(false);
+    } catch (err: any) {
+      console.error(err);
+      showNotification('Failed to save announcement.');
+    } finally {
+      setIsSubmittingAnc(false);
+    }
   };
 
   const toggleSelectUser = (id: string) => {
@@ -425,26 +481,92 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => {
+                  setCurrentView('console');
+                  setConsoleTab('approvals');
+                }}
+                icon={<ShieldCheck className="w-4 h-4" />}
+                className="relative shadow-xs"
+              >
+                Verification Queue {totalPendingQueue > 0 ? `(${totalPendingQueue})` : ''}
+              </Button>
+
               <Button
                 variant="secondary"
                 size="md"
-                onClick={() => setActiveTab('reports')}
+                onClick={() => setActiveTab('reports', 'exporter')}
                 icon={<FileSpreadsheet className="w-4 h-4 text-[#0A0A0A]" />}
               >
                 Export Reports
               </Button>
 
               <Button
-                variant="primary"
+                variant="secondary"
                 size="md"
-                onClick={() => setShowAncModal(true)}
-                icon={<Plus className="w-4 h-4" />}
+                onClick={handleOpenNewAnnouncement}
+                icon={<Plus className="w-4 h-4 text-[#0A0A0A]" />}
               >
                 Publish Announcement
               </Button>
             </div>
           </div>
+
+          {/* Prominent Actionable Amber Urgency Banner for Pending Verifications */}
+          {totalPendingQueue > 0 ? (
+            <div className="bg-[#FFFBEB] border border-[#FCD34D] rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-[#92400E] shadow-none animate-in fade-in">
+              <div className="flex items-start sm:items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-[#B45309] border border-amber-200 flex items-center justify-center shrink-0">
+                  <AlertCircle className="w-5 h-5 text-[#B45309]" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-extrabold text-sm text-[#92400E]">
+                      {totalPendingQueue} Institutional Verification{totalPendingQueue > 1 ? 's' : ''} Pending Review
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-200/60 text-[#78350F] border border-amber-300/60">
+                      Action Required
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#B45309] mt-0.5">
+                    Student enrollment PRNs and credential proofs are awaiting administrative audit. Unverified applicants remain restricted from portal access.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => {
+                    setCurrentView('console');
+                    setConsoleTab('approvals');
+                  }}
+                  className="px-4 py-2 bg-[#B45309] hover:bg-[#92400E] text-white rounded-lg font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                >
+                  Review Verification Queue ({totalPendingQueue})
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-emerald-50/50 border border-emerald-200/60 rounded-xl p-3 px-4 flex items-center justify-between gap-3 text-[#065F46] text-xs">
+              <div className="flex items-center gap-2 font-medium">
+                <CheckCircle2 className="w-4 h-4 text-[#16A34A] shrink-0" />
+                <span>All verification queues clear — no student or alumni credentials awaiting audit.</span>
+              </div>
+              <button
+                onClick={() => {
+                  setCurrentView('console');
+                  setConsoleTab('approvals');
+                }}
+                className="font-bold text-[#065F46] hover:underline text-[11px] shrink-0 cursor-pointer"
+              >
+                Open Audit Archive →
+              </button>
+            </div>
+          )}
 
           {/* 7 Uniform Stat Cards with Clean Monochrome Icon Chips & Genuine Computed Hover Detail */}
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3">
@@ -483,16 +605,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
             <StatCard
               title="Guidance"
               value={animMentorship}
-              subtext={`${mentorshipRequests.length} total asks`}
-              hoverDetail={`${acceptedMentorshipsCount} accepted / completed guidance sessions`}
+              subtext={mentorshipRequests.length > 0 ? `${mentorshipRequests.length} total asks` : '0 requests'}
+              hoverDetail={mentorshipRequests.length > 0 ? `${acceptedMentorshipsCount} accepted / completed guidance sessions` : 'No mentorship guidance requests submitted yet'}
               icon={<UserCheck className="w-3.5 h-3.5" />}
             />
 
             <StatCard
               title="Jobs"
               value={animJobs}
-              subtext={`${pendingJobs.length} pending`}
-              hoverDetail={`${approvedJobsCount} active verified opportunities live`}
+              subtext={pendingJobs.length > 0 ? `${pendingJobs.length} pending` : 'All reviewed'}
+              hoverDetail={approvedJobsCount > 0 ? `${approvedJobsCount} active verified opportunities live` : 'No approved job listings live yet'}
               icon={<Briefcase className="w-3.5 h-3.5" />}
             />
 
@@ -514,61 +636,146 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
           <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 space-y-4 font-sans">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E5E7EB] pb-3">
               <div>
-                <h3 className="font-display font-bold text-sm text-[#0A0A0A] uppercase tracking-wider flex items-center gap-2">
+                <h3 className="font-display font-bold text-sm text-[#0A0A0A] flex items-center gap-2">
                   <BookOpen className="w-4 h-4 text-[#0A0A0A]" />
-                  Published Institutional Announcements ({announcements.length})
+                  Published institutional announcements ({announcements.filter(a => !a.isRetracted).length})
                 </h3>
                 <p className="text-xs text-[#6B7280] font-medium mt-0.5">
-                  Manage active system-wide announcements broadcasted across student, alumni, and faculty feeds.
+                  Live broadcast cards synchronized across student, alumni, and faculty portal feeds with audience targeting.
                 </p>
               </div>
 
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() => setShowAncModal(true)}
+                onClick={handleOpenNewAnnouncement}
                 icon={<Plus className="w-4 h-4" />}
               >
                 New Announcement
               </Button>
             </div>
 
-            {announcements.length === 0 ? (
+            {announcements.filter(a => !a.isRetracted).length === 0 ? (
               <div className="p-8 text-center bg-[#FAFAFA] border border-dashed border-[#E5E7EB] rounded-xl text-xs text-[#6B7280]">
                 No active announcements published. Click "New Announcement" to broadcast to portal feeds.
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {announcements.map(anc => (
-                  <div key={anc.id} className="p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl flex flex-col justify-between gap-3">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <Badge variant="indigo" size="sm">{anc.category}</Badge>
-                        <span className="font-mono text-[10px] text-[#6B7280]">{anc.date}</span>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {announcements.filter(a => !a.isRetracted).map(anc => {
+                  const isExpired = anc.expiresAt ? Date.now() > new Date(anc.expiresAt).getTime() : false;
+                  const severity = anc.severity || (anc.isImportant ? 'governance' : 'standard');
+
+                  const getBorderAccent = () => {
+                    switch (severity) {
+                      case 'actionable': return 'border-l-4 border-l-[#B45309] bg-amber-50/20';
+                      case 'governance': return 'border-l-4 border-l-[#991B1B] bg-rose-50/20';
+                      case 'academic': return 'border-l-4 border-l-[#3730A3] bg-indigo-50/20';
+                      case 'standard':
+                      default: return 'border-l-4 border-l-[#E5E7EB] bg-[#FAFAFA]';
+                    }
+                  };
+
+                  const getSeverityBadge = () => {
+                    switch (severity) {
+                      case 'actionable':
+                        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-[#B45309] border border-amber-300">Actionable Alert</span>;
+                      case 'governance':
+                        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-100 text-[#991B1B] border border-rose-300">Governance Urgent</span>;
+                      case 'academic':
+                        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-100 text-[#3730A3] border border-indigo-300">Academic Notice</span>;
+                      case 'standard':
+                      default:
+                        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-[#F3F4F6] text-[#374151] border border-[#E5E7EB]">Standard Notice</span>;
+                    }
+                  };
+
+                  return (
+                    <div
+                      key={anc.id}
+                      className={`p-4 border border-[#E5E7EB] rounded-xl flex flex-col justify-between gap-3 shadow-none transition-all ${getBorderAccent()}`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {anc.isPinned && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#0A0A0A] text-white">
+                                <Pin className="w-3 h-3 fill-white" />
+                                PINNED
+                              </span>
+                            )}
+                            {getSeverityBadge()}
+                            <Badge variant="slate" size="sm">{anc.category}</Badge>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[10px] font-mono">
+                            {isExpired ? (
+                              <span className="text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded font-bold border border-rose-200">
+                                EXPIRED
+                              </span>
+                            ) : anc.expiresAt ? (
+                              <span className="text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                Exp: {new Date(anc.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                              </span>
+                            ) : (
+                              <span className="text-[#6B7280]">Permanent</span>
+                            )}
+                            <span className="text-[#6B7280]">{anc.date ? new Date(anc.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</span>
+                          </div>
+                        </div>
+
+                        <h4 className="font-bold text-[#0A0A0A] text-sm leading-snug">
+                          {anc.title}
+                        </h4>
+                        <p className="text-xs text-[#374151] line-clamp-3 leading-relaxed whitespace-pre-line font-normal">
+                          {anc.content}
+                        </p>
                       </div>
-                      <h4 className="font-bold text-[#0A0A0A] text-sm">{anc.title}</h4>
-                      <p className="text-xs text-[#374151] line-clamp-2 leading-relaxed">{anc.content}</p>
-                    </div>
 
-                    <div className="pt-2 border-t border-[#E5E7EB] flex items-center justify-between gap-2 text-[11px]">
-                      <span className="font-mono font-medium text-[#6B7280]">
-                        Audience: <strong className="text-[#0A0A0A]">{anc.targetAudience || 'All'}</strong>
-                      </span>
+                      <div className="pt-2.5 border-t border-[#E5E7EB] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px]">
+                        <div className="flex items-center gap-2 font-mono text-[11px] text-[#6B7280]">
+                          <span>Audience:</span>
+                          <span className="font-bold text-[#0A0A0A] bg-white border border-[#E5E7EB] px-1.5 py-0.5 rounded text-[10px]">
+                            {anc.targetAudience || 'All'}
+                          </span>
+                        </div>
 
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          retractAnnouncement(anc.id);
-                          showNotification(`Retracted announcement: "${anc.title}".`);
-                        }}
-                        className="text-rose-900 hover:bg-rose-50 border-rose-200"
-                      >
-                        Retract Announcement
-                      </Button>
+                        <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => togglePinAnnouncement(anc.id)}
+                            icon={<Pin className={`w-3.5 h-3.5 ${anc.isPinned ? 'fill-current text-[#0A0A0A]' : 'text-[#6B7280]'}`} />}
+                            title={anc.isPinned ? 'Unpin announcement' : 'Pin to top of feeds'}
+                          >
+                            {anc.isPinned ? 'Unpin' : 'Pin'}
+                          </Button>
+
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleOpenEditAnnouncement(anc)}
+                            icon={<Edit3 className="w-3.5 h-3.5" />}
+                          >
+                            Edit
+                          </Button>
+
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              deleteAnnouncement(anc.id);
+                              showNotification(`Announcement "${anc.title}" deleted.`);
+                            }}
+                            icon={<Trash2 className="w-3.5 h-3.5 text-rose-600" />}
+                            className="text-rose-700 hover:bg-rose-50 border-rose-200"
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -622,8 +829,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
               
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E7EB] pb-4">
                 <div>
-                  <h3 className="font-display font-bold text-sm text-[#0A0A0A] uppercase tracking-wider">
-                    Institutional Verification Queue ({pendingUsersList.length + pendingTransitions.length} Pending)
+                  <h3 className="font-display font-bold text-sm text-[#0A0A0A]">
+                    Institutional verification queue ({pendingUsersList.length + pendingTransitions.length} pending)
                   </h3>
                   <p className="text-xs text-[#6B7280] font-medium mt-0.5">
                     Data-dense table with expandable details and fixed, always-accessible action buttons.
@@ -658,7 +865,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-[#0A0A0A] text-sm">All Verification Queues Clear</h4>
+                    <h4 className="font-bold text-[#0A0A0A] text-sm">All verification queues clear</h4>
                     <p className="text-xs text-[#6B7280] mt-1 max-w-sm mx-auto">
                       All student enrollment numbers and alumni graduation profiles have been audited and verified.
                     </p>
@@ -667,7 +874,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
               ) : (
                 <div className="border border-[#E5E7EB] rounded-xl overflow-x-auto text-xs shadow-none">
                   <table className="w-full text-left">
-                    <thead className="bg-[#FAFAFA] font-display font-bold text-[10px] uppercase tracking-wider text-[#0A0A0A] border-b border-[#E5E7EB]">
+                    <thead className="bg-[#FAFAFA] font-sans font-semibold text-xs text-[#0A0A0A] border-b border-[#E5E7EB]">
                       <tr>
                         <th className="p-3 w-10 text-center">
                           <input
@@ -677,13 +884,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
                             className="rounded border-[#E5E7EB] accent-[#0A0A0A]"
                           />
                         </th>
-                        <th className="p-3">Applicant Name</th>
+                        <th className="p-3">Applicant name</th>
                         <th className="p-3">Role</th>
-                        <th className="p-3">Dept</th>
+                        <th className="p-3">Department</th>
                         <th className="p-3">Enrollment / PRN / Emp ID</th>
-                        <th className="p-3">Domain Email</th>
-                        <th className="p-3">Proof Doc</th>
-                        <th className="p-3 text-right">Fixed Verification Action</th>
+                        <th className="p-3">Domain email</th>
+                        <th className="p-3">Proof document</th>
+                        <th className="p-3 text-right">Verification actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#E5E7EB]">
@@ -789,7 +996,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
                                         className="flex flex-col items-center justify-center py-12 text-center space-y-3"
                                       >
                                         <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-[#171717]"></div>
-                                        <p className="text-[#6B7280] font-mono text-[11px] font-bold uppercase tracking-wider">Loading System Data...</p>
+                                        <p className="text-[#6B7280] font-sans text-xs font-semibold">Loading system data...</p>
                                       </motion.div>
                                     ) : (
                                       <motion.div
@@ -935,8 +1142,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
 
               {/* STUDENTS PAST GRADUATION REPORT */}
               <div className="mt-8 border-t border-[#E5E7EB] pt-6">
-                <h4 className="font-display font-bold text-sm text-[#0A0A0A] uppercase tracking-wider mb-3">
-                  Students Past Graduation (No Pending Request)
+                <h4 className="font-display font-bold text-sm text-[#0A0A0A] mb-3">
+                  Students past graduation (no pending request)
                 </h4>
                 {pastGradStudents.length === 0 ? (
                   <p className="text-xs text-[#6B7280]">All graduated students have updated their alumni profiles.</p>
@@ -980,8 +1187,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
           {consoleTab === 'moderation' && (
             <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-6 shadow-none animate-in fade-in slide-in-from-bottom-1 duration-200">
               <div className="border-b border-[#E5E7EB] pb-4">
-                <h3 className="font-display font-bold text-sm text-[#0A0A0A] uppercase tracking-wider">
-                  Opportunity Moderation Queue ({pendingJobs.length} Pending Approval)
+                <h3 className="font-display font-bold text-sm text-[#0A0A0A]">
+                  Opportunity moderation queue ({pendingJobs.length} pending approval)
                 </h3>
                 <p className="text-xs text-[#6B7280] font-medium mt-0.5">
                   Verify internships, jobs, research projects, and scholarships submitted by alumni & faculty before publication.
@@ -1078,9 +1285,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
               <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-6 shadow-none animate-in fade-in slide-in-from-bottom-1 duration-200">
                 <div className="border-b border-[#E5E7EB] pb-4 space-y-3">
                   <div>
-                    <h3 className="font-display font-bold text-sm text-[#0A0A0A] uppercase tracking-wider flex items-center gap-2">
+                    <h3 className="font-display font-bold text-sm text-[#0A0A0A] flex items-center gap-2">
                       <GraduationCap className="w-4 h-4 text-[#0A0A0A]" />
-                      Bulk Student Batch Graduation (Provisional)
+                      Bulk student batch graduation (provisional)
                     </h3>
                     <p className="text-xs text-[#6B7280] font-medium mt-0.5">
                       Provisional batch migration for final-year students past graduation threshold into the Alumni Registry.
@@ -1142,17 +1349,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
                 {/* Candidate Table */}
                 <div className="border border-[#E5E7EB] rounded-xl overflow-x-auto text-xs shadow-none">
                   <table className="w-full text-left">
-                    <thead className="bg-[#FAFAFA] font-display font-bold text-[10px] uppercase tracking-wider text-[#0A0A0A] border-b border-[#E5E7EB]">
+                    <thead className="bg-[#FAFAFA] font-sans font-semibold text-xs text-[#0A0A0A] border-b border-[#E5E7EB]">
                       <tr>
                         <th className="p-3 w-10 text-center">
                           <button onClick={toggleSelectAll}>
                             {isAllSelected ? <CheckSquare className="w-4 h-4 text-[#0A0A0A]" /> : <Square className="w-4 h-4 text-[#9CA3AF]" />}
                           </button>
                         </th>
-                        <th className="p-3">Student Name</th>
-                        <th className="p-3">Department & Year</th>
-                        <th className="p-3">ID / Enrollment No</th>
-                        <th className="p-3">Primary Login Email</th>
+                        <th className="p-3">Student name</th>
+                        <th className="p-3">Department & year</th>
+                        <th className="p-3">ID / enrollment no</th>
+                        <th className="p-3">Primary login email</th>
                         <th className="p-3">Action</th>
                       </tr>
                     </thead>
@@ -1238,8 +1445,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
               <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-6 shadow-none animate-in fade-in slide-in-from-bottom-1 duration-200">
                 <div className="border-b border-[#E5E7EB] pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <h3 className="font-display font-bold text-sm text-[#0A0A0A] uppercase tracking-wider">
-                      Institutional Security & Audit Logs ({filteredAuditLogs.length} Records)
+                    <h3 className="font-display font-bold text-sm text-[#0A0A0A]">
+                      Institutional security & audit logs ({filteredAuditLogs.length} records)
                     </h3>
                     <p className="text-xs text-[#6B7280] font-medium mt-0.5">
                       Immutable audit trail of all role mutations, verification events, account rejections, and profile modifications.
@@ -1262,22 +1469,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
                       onChange={e => setAuditFilterCategory(e.target.value as any)}
                       className="app-input bg-[#FAFAFA] border-[#E5E7EB] rounded-lg font-bold text-xs"
                     >
-                      <option value="All">All Events</option>
-                      <option value="User Events">User & Verification</option>
-                      <option value="Governance">Governance & Roles</option>
-                      <option value="System">System Logs</option>
+                      <option value="All">All events</option>
+                      <option value="User Events">User & verification</option>
+                      <option value="Governance">Governance & roles</option>
+                      <option value="System">System logs</option>
                     </select>
                   </div>
                 </div>
 
                 <div className="border border-[#E5E7EB] rounded-xl overflow-x-auto text-xs shadow-none">
                   <table className="w-full text-left">
-                    <thead className="bg-[#FAFAFA] font-display font-bold text-[10px] uppercase tracking-wider text-[#0A0A0A] border-b border-[#E5E7EB]">
+                    <thead className="bg-[#FAFAFA] font-sans font-semibold text-xs text-[#0A0A0A] border-b border-[#E5E7EB]">
                       <tr>
                         <th className="p-3">Timestamp</th>
-                        <th className="p-3">Action Event</th>
-                        <th className="p-3">Performed By</th>
-                        <th className="p-3">Details / Target User</th>
+                        <th className="p-3">Action event</th>
+                        <th className="p-3">Performed by</th>
+                        <th className="p-3">Details / target user</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#E5E7EB] font-mono text-xs">
@@ -1371,9 +1578,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
             <div className="space-y-4 animate-in fade-in duration-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E5E7EB] pb-3">
                 <div>
-                  <h3 className="font-display font-bold text-sm text-[#0A0A0A] uppercase tracking-wider flex items-center gap-2">
+                  <h3 className="font-display font-bold text-sm text-[#0A0A0A] flex items-center gap-2">
                     <Flag className="w-4 h-4 text-[#B45309]" />
-                    Reported Messages Moderation Queue ({reportedMessages.length})
+                    Reported messages moderation queue ({reportedMessages.length})
                   </h3>
                   <p className="text-xs text-[#6B7280] font-medium mt-0.5">
                     Review peer-to-peer message reports flagged by Students, Alumni, and Faculty members for policy violations.
@@ -1382,7 +1589,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
 
                 {reportedMessages.length > 0 && (
                   <Badge variant="amber" size="sm">
-                    {reportedMessages.length} Action Required
+                    {reportedMessages.length} action required
                   </Badge>
                 )}
               </div>
@@ -1393,7 +1600,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
                     <CheckCircle2 className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-sm text-[#0A0A0A]">No Reported Messages</h4>
+                    <h4 className="font-bold text-sm text-[#0A0A0A]">No reported messages</h4>
                     <p className="text-xs text-[#6B7280] font-medium mt-1">
                       All reported message threads have been reviewed or resolved by institutional moderators.
                     </p>
@@ -1402,13 +1609,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
               ) : (
                 <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-x-auto text-xs shadow-none">
                   <table className="w-full text-left font-sans">
-                    <thead className="bg-[#FAFAFA] font-display font-bold text-[10px] uppercase tracking-wider text-[#0A0A0A] border-b border-[#E5E7EB]">
+                    <thead className="bg-[#FAFAFA] font-sans font-semibold text-xs text-[#0A0A0A] border-b border-[#E5E7EB]">
                       <tr>
-                        <th className="p-3">Reported Time</th>
-                        <th className="p-3">Reported By</th>
+                        <th className="p-3">Reported time</th>
+                        <th className="p-3">Reported by</th>
                         <th className="p-3">Sender</th>
-                        <th className="p-3">Flagged Content / Reason</th>
-                        <th className="p-3 text-right">Moderation Actions</th>
+                        <th className="p-3">Flagged content / reason</th>
+                        <th className="p-3 text-right">Moderation actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#E5E7EB] text-xs">
@@ -1488,69 +1695,260 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
       {/* ANNOUNCEMENT MODAL */}
       <Modal
         isOpen={showAncModal}
-        onClose={() => setShowAncModal(false)}
-        title="Broadcast Institutional Announcement"
-        icon={<BookOpen className="w-5 h-5" />}
+        onClose={() => {
+          if (!isSubmittingAnc) setShowAncModal(false);
+        }}
+        title={editingAncId ? "Edit Institutional Announcement" : "Broadcast Institutional Announcement"}
+        subtitle={editingAncId ? "Update broadcast parameters, priority level, and target audience" : "Official campus-wide broadcast network for Students, Alumni & Faculty"}
+        icon={<Radio className="w-5 h-5 text-white" />}
+        headerVariant="dark"
+        maxWidth="lg"
       >
-        <form onSubmit={handleCreateAnnouncement} className="space-y-4 font-sans text-xs">
-          <div>
-            <label className="app-label text-[#0A0A0A] font-bold">Category</label>
-            <select
-              value={ancCategory}
-              onChange={e => setAncCategory(e.target.value as any)}
-              className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-            >
-              <option value="Placement Alert">Placement Alert</option>
-              <option value="Institutional Update">Institutional Update</option>
-              <option value="Alumni News">Alumni News</option>
-              <option value="Event Highlight">Event Highlight</option>
-            </select>
+        <form onSubmit={handleSubmitAnnouncement} className="space-y-5 font-sans text-xs">
+          {/* Top Row: Category & Target Audience */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[11px] font-display font-bold uppercase tracking-wider text-[#0A0A0A] mb-1.5">
+                Announcement Category
+              </label>
+              <select
+                value={ancCategory}
+                onChange={e => setAncCategory(e.target.value)}
+                className="app-input w-full font-medium border-[#E5E7EB] rounded-lg bg-[#FAFAFA] text-xs h-10 px-3 text-[#0A0A0A] focus:border-[#0A0A0A] focus:bg-white transition-colors"
+              >
+                <option value="Placement Alert">Placement Alert</option>
+                <option value="Institutional Update">Institutional Update</option>
+                <option value="Alumni News">Alumni News</option>
+                <option value="Event Highlight">Event Highlight</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-display font-bold uppercase tracking-wider text-[#0A0A0A] mb-1.5">
+                Target Audience <span className="text-[#B45309] font-semibold">(Enforced)</span>
+              </label>
+              <select
+                value={ancTargetAudience}
+                onChange={e => setAncTargetAudience(e.target.value)}
+                className="app-input w-full font-medium border-[#E5E7EB] rounded-lg bg-[#FAFAFA] text-xs h-10 px-3 text-[#0A0A0A] focus:border-[#0A0A0A] focus:bg-white transition-colors"
+              >
+                <option value="All">All Portal Users (Students, Alumni & Faculty)</option>
+                <option value="Students">Enrolled Students Only</option>
+                <option value="Alumni">Graduated Alumni Only</option>
+                <option value="Faculty">Faculty Members Only</option>
+              </select>
+            </div>
           </div>
 
+          {/* Title */}
           <div>
-            <label className="app-label text-[#0A0A0A] font-bold">Target Audience</label>
-            <select
-              value={ancTargetAudience}
-              onChange={e => setAncTargetAudience(e.target.value as any)}
-              className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-            >
-              <option value="All">All Portal Users (Students, Alumni & Faculty)</option>
-              <option value="Students">Enrolled Students Only</option>
-              <option value="Alumni">Graduated Alumni Only</option>
-              <option value="Faculty">Faculty Members Only</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="app-label text-[#0A0A0A] font-bold">Announcement Title</label>
+            <label className="block text-[11px] font-display font-bold uppercase tracking-wider text-[#0A0A0A] mb-1.5">
+              Notice Headline / Title <span className="text-rose-600">*</span>
+            </label>
             <input
               type="text"
               required
               value={ancTitle}
               onChange={e => setAncTitle(e.target.value)}
-              placeholder="e.g. SIH 2025 Institutional Mentorship Kickoff"
-              className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
+              placeholder="e.g. Smart India Hackathon (SIH) 2026 Institutional Mentorship Kickoff"
+              className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA] text-xs h-10 px-3 text-[#0A0A0A] focus:border-[#0A0A0A] focus:bg-white transition-colors"
             />
           </div>
 
+          {/* Severity / Priority Level Selector (4 Semantic Accents) */}
           <div>
-            <label className="app-label text-[#0A0A0A] font-bold">Content & Notice Body</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-[11px] font-display font-bold uppercase tracking-wider text-[#0A0A0A]">
+                Semantic Priority Level
+              </label>
+              <span className="text-[10px] text-[#6B7280]">Affects visual accent border & feed badge</span>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* 1. Standard */}
+              <button
+                type="button"
+                onClick={() => setAncSeverity('standard')}
+                className={`text-left p-3 rounded-xl border transition-all text-xs flex items-start gap-2.5 cursor-pointer ${
+                  ancSeverity === 'standard'
+                    ? 'border-[#0A0A0A] bg-stone-50 ring-1 ring-[#0A0A0A]'
+                    : 'border-[#E5E7EB] bg-white hover:border-[#CBD5E1]'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-[#6B7280] mt-1 shrink-0" />
+                <div className="min-w-0">
+                  <div className="font-bold text-[#111827] flex items-center gap-1.5">
+                    Standard (Default)
+                    {ancSeverity === 'standard' && <Check className="w-3.5 h-3.5 text-[#0A0A0A]" />}
+                  </div>
+                  <p className="text-[10px] text-[#6B7280] mt-0.5 leading-normal">
+                    Routine updates, general campus bulletins, and regular notices.
+                  </p>
+                </div>
+              </button>
+
+              {/* 2. Actionable Amber */}
+              <button
+                type="button"
+                onClick={() => setAncSeverity('actionable')}
+                className={`text-left p-3 rounded-xl border transition-all text-xs flex items-start gap-2.5 cursor-pointer ${
+                  ancSeverity === 'actionable'
+                    ? 'border-[#B45309] bg-amber-50/60 ring-1 ring-[#B45309]'
+                    : 'border-[#E5E7EB] bg-white hover:border-amber-300'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-[#B45309] mt-1 shrink-0" />
+                <div className="min-w-0">
+                  <div className="font-bold text-[#B45309] flex items-center gap-1.5">
+                    Actionable Amber
+                    {ancSeverity === 'actionable' && <Check className="w-3.5 h-3.5 text-[#B45309]" />}
+                  </div>
+                  <p className="text-[10px] text-amber-800/80 mt-0.5 leading-normal">
+                    Deadlines, waitlists, RSVP requirements, and impending action items.
+                  </p>
+                </div>
+              </button>
+
+              {/* 3. Governance Rose */}
+              <button
+                type="button"
+                onClick={() => setAncSeverity('governance')}
+                className={`text-left p-3 rounded-xl border transition-all text-xs flex items-start gap-2.5 cursor-pointer ${
+                  ancSeverity === 'governance'
+                    ? 'border-[#991B1B] bg-rose-50/60 ring-1 ring-[#991B1B]'
+                    : 'border-[#E5E7EB] bg-white hover:border-rose-300'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-[#991B1B] mt-1 shrink-0" />
+                <div className="min-w-0">
+                  <div className="font-bold text-[#991B1B] flex items-center gap-1.5">
+                    Governance Rose
+                    {ancSeverity === 'governance' && <Check className="w-3.5 h-3.5 text-[#991B1B]" />}
+                  </div>
+                  <p className="text-[10px] text-rose-800/80 mt-0.5 leading-normal">
+                    Urgent notices, official policies, campus safety, and critical alerts.
+                  </p>
+                </div>
+              </button>
+
+              {/* 4. Academic Indigo */}
+              <button
+                type="button"
+                onClick={() => setAncSeverity('academic')}
+                className={`text-left p-3 rounded-xl border transition-all text-xs flex items-start gap-2.5 cursor-pointer ${
+                  ancSeverity === 'academic'
+                    ? 'border-[#3730A3] bg-indigo-50/60 ring-1 ring-[#3730A3]'
+                    : 'border-[#E5E7EB] bg-white hover:border-indigo-300'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-[#3730A3] mt-1 shrink-0" />
+                <div className="min-w-0">
+                  <div className="font-bold text-[#3730A3] flex items-center gap-1.5">
+                    Academic Indigo
+                    {ancSeverity === 'academic' && <Check className="w-3.5 h-3.5 text-[#3730A3]" />}
+                  </div>
+                  <p className="text-[10px] text-indigo-800/80 mt-0.5 leading-normal">
+                    Curriculum updates, exam schedules, placement drives, & academic notices.
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Content Body */}
+          <div>
+            <label className="block text-[11px] font-display font-bold uppercase tracking-wider text-[#0A0A0A] mb-1.5">
+              Notice Content & Description <span className="text-rose-600">*</span>
+            </label>
             <textarea
               rows={4}
               required
               value={ancContent}
               onChange={e => setAncContent(e.target.value)}
-              placeholder="Official notice details broadcasted to student, alumni, and faculty feeds..."
-              className="app-input w-full border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
+              placeholder="Provide complete announcement details, instructions, links, or contact points..."
+              className="app-input w-full border-[#E5E7EB] rounded-lg bg-[#FAFAFA] text-xs p-3 text-[#0A0A0A] focus:border-[#0A0A0A] focus:bg-white transition-colors"
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-[#E5E7EB]">
-            <Button type="button" variant="secondary" size="md" onClick={() => setShowAncModal(false)}>
+          {/* Controls: Pinning & Optional Expiry Date */}
+          <div className="p-3.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl space-y-3">
+            {/* Pin Toggle */}
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={ancIsPinned}
+                onChange={e => setAncIsPinned(e.target.checked)}
+                className="w-4 h-4 rounded text-[#0A0A0A] border-[#D1D5DB] focus:ring-[#0A0A0A]"
+              />
+              <div className="flex items-center gap-1.5">
+                <Pin className={`w-3.5 h-3.5 ${ancIsPinned ? 'text-[#0A0A0A] fill-current' : 'text-[#6B7280]'}`} />
+                <span className="font-bold text-xs text-[#111827]">Pin Announcement to Top</span>
+              </div>
+              <span className="text-[10px] text-[#6B7280] ml-auto hidden sm:inline">Stays pinned regardless of publish date</span>
+            </label>
+
+            <div className="border-t border-[#E5E7EB] pt-2.5">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={ancHasExpiry}
+                  onChange={e => {
+                    setAncHasExpiry(e.target.checked);
+                    if (!e.target.checked) setAncExpiresAt('');
+                  }}
+                  className="w-4 h-4 rounded text-[#0A0A0A] border-[#D1D5DB] focus:ring-[#0A0A0A]"
+                />
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-[#6B7280]" />
+                  <span className="font-bold text-xs text-[#111827]">Set Auto-Expiry Date</span>
+                </div>
+                <span className="text-[10px] text-[#6B7280] ml-auto hidden sm:inline">Auto-filters out of active feeds once past</span>
+              </label>
+
+              {ancHasExpiry && (
+                <div className="mt-2.5 pl-6 flex items-center gap-2">
+                  <input
+                    type="date"
+                    required={ancHasExpiry}
+                    value={ancExpiresAt}
+                    onChange={e => setAncExpiresAt(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="app-input text-xs border-[#E5E7EB] rounded-lg bg-white px-3 py-1.5 text-[#0A0A0A] font-medium"
+                  />
+                  <span className="text-[11px] text-[#6B7280]">Expires at 23:59:59 on this date</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer Actions */}
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#E5E7EB]">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              disabled={isSubmittingAnc}
+              onClick={() => setShowAncModal(false)}
+            >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" size="md">
-              Publish Broadcast
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              disabled={isSubmittingAnc}
+              className="min-w-[150px]"
+            >
+              {isSubmittingAnc ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-3.5 h-3.5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                  Saving...
+                </span>
+              ) : editingAncId ? (
+                'Save Changes'
+              ) : (
+                'Publish Broadcast'
+              )}
             </Button>
           </div>
         </form>
