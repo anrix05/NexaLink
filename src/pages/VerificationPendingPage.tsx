@@ -2,23 +2,17 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
-import { Badge, Button } from '../components/common/UIComponents';
+import { Badge, Button, FileDropzone } from '../components/common/UIComponents';
 import { uploadProofDocument } from '../lib/storage';
 import {
   Clock,
   Check,
   CheckCircle2,
-  FileText,
-  Upload,
   AlertTriangle,
   RefreshCw,
   LogOut,
   ShieldAlert,
-  ExternalLink,
-  User,
-  Building2,
-  Mail,
-  GraduationCap
+  ExternalLink
 } from 'lucide-react';
 
 interface VerificationPendingPageProps {
@@ -35,12 +29,11 @@ export const VerificationPendingPage: React.FC<VerificationPendingPageProps> = (
   const [notice, setNotice] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
 
   React.useEffect(() => {
-    document.title = "Verification Pending | NexaLink";
+    document.title = "Verification pending | NexaLink";
   }, []);
 
   if (!currentUser) return null;
 
-  // Find latest record in DataContext allUsers store
   const latestUser = allUsers.find(u => u.id === currentUser.id) || currentUser;
   const isNeedsClarification = latestUser.verificationStatus === 'Needs Clarification' || !!latestUser.clarificationRequested;
   const isRejected = latestUser.verificationStatus === 'Rejected';
@@ -49,21 +42,6 @@ export const VerificationPendingPage: React.FC<VerificationPendingPageProps> = (
   const showToast = (text: string, type: 'success' | 'info' | 'error' = 'info') => {
     setNotice({ type, text });
     setTimeout(() => setNotice(null), 4500);
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setResubmitFile(file);
-      setResubmitFileName(file.name);
-      try {
-        const res = await uploadProofDocument(file, latestUser.id);
-        setResubmitFileUrl(res.url);
-      } catch {
-        const fakeUrl = URL.createObjectURL(file);
-        setResubmitFileUrl(fakeUrl);
-      }
-    }
   };
 
   const handleResubmitProof = (e: React.FormEvent) => {
@@ -75,7 +53,6 @@ export const VerificationPendingPage: React.FC<VerificationPendingPageProps> = (
 
     resubmitUserVerification(latestUser.id, resubmitFileName, resubmitFileUrl);
     
-    // Update local session state
     updateCurrentUserState({
       ...latestUser,
       verificationStatus: 'Pending Verification',
@@ -89,7 +66,7 @@ export const VerificationPendingPage: React.FC<VerificationPendingPageProps> = (
     setResubmitFile(null);
     setResubmitFileName('');
     setResubmitFileUrl('');
-    showToast('Updated proof document submitted! Your verification is now pending admin review.', 'success');
+    showToast('Updated proof document submitted. Your verification is now pending admin review.', 'success');
   };
 
   const handleCheckStatus = () => {
@@ -97,16 +74,16 @@ export const VerificationPendingPage: React.FC<VerificationPendingPageProps> = (
     if (updated) {
       if (updated.isVerified || updated.verificationStatus === 'Verified') {
         updateCurrentUserState({ ...updated, isVerified: true, verificationStatus: 'Verified' });
-        showToast('Congratulations! Your account has been verified. Access granted.', 'success');
+        showToast('Your account has been verified. Access granted.', 'success');
         if (setActiveTab) setActiveTab('dashboard');
       } else if (updated.verificationStatus === 'Needs Clarification') {
         updateCurrentUserState(updated);
-        showToast('Action Required: Administrator requested clarification on your credentials.', 'info');
+        showToast('Action required: Administrator requested clarification on your credentials.', 'info');
       } else if (updated.verificationStatus === 'Rejected') {
         updateCurrentUserState(updated);
-        showToast(`Registration status: Rejected. Reason: ${updated.rejectionReason || 'Credential Mismatch'}`, 'error');
+        showToast(`Registration status: Rejected. Reason: ${updated.rejectionReason || 'Credential mismatch'}`, 'error');
       } else {
-        showToast('Verification status: Pending. The administrator is currently reviewing your registration.', 'info');
+        showToast('Verification status: Pending. The administrator is reviewing your registration.', 'info');
       }
     } else {
       showToast('Verification status: Pending administrator review.', 'info');
@@ -118,24 +95,23 @@ export const VerificationPendingPage: React.FC<VerificationPendingPageProps> = (
     if (setActiveTab) setActiveTab('landing');
   };
 
-  // Staggered entrance variants
   const containerVariants = {
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.12,
+        staggerChildren: 0.1,
         delayChildren: 0.05
       }
     }
   };
 
   const itemVariants = {
-    hidden: { opacity: 0, y: 16 },
+    hidden: { opacity: 0, y: 12 },
     show: {
       opacity: 1,
       y: 0,
-      transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] as const }
+      transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as const }
     }
   };
 
@@ -145,265 +121,238 @@ export const VerificationPendingPage: React.FC<VerificationPendingPageProps> = (
         variants={containerVariants}
         initial="hidden"
         animate="show"
-        className="space-y-10"
+        className="space-y-8"
       >
         {/* Notice Toast */}
         {notice && (
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`p-4 rounded-xl font-bold text-xs flex items-center gap-2 transition-all ${
+            className={`p-4 rounded-xl text-xs font-medium flex items-center gap-2 border ${
               notice.type === 'success'
-                ? 'bg-[#0A0A0A] text-white'
+                ? 'bg-emerald-50 text-emerald-950 border-emerald-200'
                 : notice.type === 'error'
-                ? 'bg-rose-950 text-rose-100 border border-rose-800'
-                : 'bg-amber-950 text-amber-100 border border-amber-800'
+                ? 'bg-rose-50 text-rose-950 border-rose-200'
+                : 'bg-amber-50 text-amber-950 border-amber-200'
             }`}
           >
             {notice.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
             ) : notice.type === 'error' ? (
-              <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+              <ShieldAlert className="w-4 h-4 text-rose-700 shrink-0" />
             ) : (
-              <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+              <Clock className="w-4 h-4 text-amber-700 shrink-0" />
             )}
             <span>{notice.text}</span>
           </motion.div>
         )}
 
-        {/* 1. STATUS AS THE VISUAL CENTERPIECE (Focal Point) */}
-        <motion.div variants={itemVariants} className="text-center space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#FAFAFA] border border-[#E5E7EB] rounded-full text-[10px] font-mono font-bold uppercase tracking-widest text-[#6B7280]">
-            <span>VIT Wadala • Institutional Gate</span>
+        {/* Status Centerpiece */}
+        <motion.div variants={itemVariants} className="text-center space-y-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#FAFAFA] border border-[#E5E7EB] rounded-full text-xs font-medium text-[#6B7280]">
+            <span>VIT Wadala · Institutional gate</span>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-display font-black text-[#0A0A0A] tracking-tight">
-            Registration Under Review
+          <h1 className="text-3xl sm:text-4xl font-display font-bold text-[#0A0A0A] tracking-tight">
+            Registration under review
           </h1>
 
-          {/* Focal Status Pill with Pulsing Live Indicator */}
           <div className="flex items-center justify-center pt-1">
             {isNeedsClarification ? (
-              <div className="inline-flex items-center gap-2.5 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-900 rounded-full text-xs font-bold shadow-sm">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-600"></span>
-                </span>
-                <span>Action Required: Clarification Requested</span>
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-[#B45309] rounded-full text-xs font-medium">
+                <span className="w-2 h-2 rounded-full bg-[#B45309]" />
+                <span>Action required: clarification requested</span>
               </div>
             ) : isRejected ? (
-              <div className="inline-flex items-center gap-2.5 px-4 py-2 bg-rose-50 border border-rose-200 text-rose-900 rounded-full text-xs font-bold shadow-sm">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-600"></span>
-                </span>
-                <span>Registration Status: Rejected</span>
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-rose-50 border border-rose-200 text-[#991B1B] rounded-full text-xs font-medium">
+                <span className="w-2 h-2 rounded-full bg-[#991B1B]" />
+                <span>Registration status: rejected</span>
               </div>
             ) : (
-              <div className="inline-flex items-center gap-2.5 px-4 py-2 bg-[#FAFAFA] border border-[#E5E7EB] text-[#0A0A0A] rounded-full text-xs font-bold shadow-sm">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-600"></span>
-                </span>
-                <span>Verification in Progress</span>
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#FAFAFA] border border-[#E5E7EB] text-[#0A0A0A] rounded-full text-xs font-medium">
+                <span className="w-2 h-2 rounded-full bg-[#065F46]" />
+                <span>Verification in progress</span>
               </div>
             )}
           </div>
         </motion.div>
 
-        {/* 2. CONNECTED STEPPER COMPONENT (Horizontal connected line with node draw & pulse) */}
-        <motion.div variants={itemVariants} className="py-4">
+        {/* Stepper */}
+        <motion.div variants={itemVariants} className="py-2">
           <div className="relative flex items-center justify-between max-w-xl mx-auto">
-            {/* Background Line Track */}
             <div className="absolute top-4 left-6 right-6 h-0.5 bg-[#E5E7EB] -z-0" />
-
-            {/* Animated Solid Line Draw (Step 1 to Step 2) */}
             <motion.div
               initial={{ scaleX: 0 }}
               animate={{ scaleX: 1 }}
-              transition={{ duration: 0.6, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 0.5, delay: 0.2 }}
               className="absolute top-4 left-6 w-1/2 h-0.5 bg-[#0A0A0A] origin-left -z-0"
             />
 
-            {/* Step 1 Node: Registration (Completed) */}
-            <div className="relative z-10 flex flex-col items-center text-center group cursor-default">
-              <div className="w-8 h-8 rounded-full bg-[#0A0A0A] text-white flex items-center justify-center font-bold text-xs shadow-sm">
-                <Check className="w-4 h-4 text-white stroke-[3]" />
+            {/* Step 1: Registration */}
+            <div className="relative z-10 flex flex-col items-center text-center">
+              <div className="w-8 h-8 rounded-full bg-[#0A0A0A] text-white flex items-center justify-center font-medium text-xs">
+                <Check className="w-4 h-4 text-white stroke-[2.5]" />
               </div>
-              <div className="mt-3 space-y-0.5">
-                <span className="block font-display font-bold text-xs text-[#0A0A0A] uppercase tracking-wider">
+              <div className="mt-2 space-y-0.5">
+                <span className="block font-medium text-xs text-[#0A0A0A]">
                   1. Registration
                 </span>
-                <span className="block text-[11px] text-[#6B7280] font-medium">
+                <span className="block text-[11px] text-[#6B7280]">
                   Completed
                 </span>
               </div>
             </div>
 
-            {/* Step 2 Node: Verification (Active Step with Gentle Continuous Pulse) */}
-            <div className="relative z-10 flex flex-col items-center text-center group cursor-default">
-              <div className="relative flex items-center justify-center">
-                {/* Continuous Pulse Ring */}
-                <motion.div
-                  animate={{ scale: [1, 1.35, 1], opacity: [0.4, 0.8, 0.4] }}
-                  transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-                  className="absolute w-9 h-9 rounded-full bg-amber-400/40"
-                />
-                <div className="w-8 h-8 rounded-full bg-white border-2 border-[#0A0A0A] flex items-center justify-center relative z-10">
-                  <div className="w-2.5 h-2.5 rounded-full bg-[#0A0A0A]" />
-                </div>
+            {/* Step 2: Verification */}
+            <div className="relative z-10 flex flex-col items-center text-center">
+              <div className="w-8 h-8 rounded-full bg-white border-2 border-[#0A0A0A] flex items-center justify-center">
+                <div className="w-2.5 h-2.5 rounded-full bg-[#0A0A0A]" />
               </div>
-              <div className="mt-3 space-y-0.5">
-                <span className="block font-display font-bold text-xs text-[#0A0A0A] uppercase tracking-wider">
+              <div className="mt-2 space-y-0.5">
+                <span className="block font-medium text-xs text-[#0A0A0A]">
                   2. Verification
                 </span>
-                <span className="block text-[11px] text-[#92400E] font-bold">
-                  In Progress
+                <span className="block text-[11px] text-[#B45309] font-medium">
+                  In progress
                 </span>
               </div>
             </div>
 
-            {/* Step 3 Node: Access Portal (Pending) */}
-            <div className="relative z-10 flex flex-col items-center text-center group cursor-default">
-              <div className="w-8 h-8 rounded-full bg-[#FAFAFA] border border-[#E5E7EB] text-[#9CA3AF] flex items-center justify-center font-bold text-xs">
+            {/* Step 3: Access portal */}
+            <div className="relative z-10 flex flex-col items-center text-center">
+              <div className="w-8 h-8 rounded-full bg-[#FAFAFA] border border-[#E5E7EB] text-[#6B7280] flex items-center justify-center text-xs">
                 <span>3</span>
               </div>
-              <div className="mt-3 space-y-0.5">
-                <span className="block font-display font-bold text-xs text-[#9CA3AF] uppercase tracking-wider">
-                  3. Access Portal
+              <div className="mt-2 space-y-0.5">
+                <span className="block font-medium text-xs text-[#6B7280]">
+                  3. Access portal
                 </span>
-                <span className="block text-[11px] text-[#9CA3AF] font-medium">
-                  Pending Unlock
+                <span className="block text-[11px] text-[#6B7280]">
+                  Pending unlock
                 </span>
               </div>
             </div>
           </div>
         </motion.div>
 
-        {/* 3. EXPLANATION MESSAGE & SECURITY POLICY (Plain typography, no cards) */}
-        <motion.div variants={itemVariants} className="text-center max-w-lg mx-auto space-y-2">
-          <p className="text-xs text-[#374151] leading-relaxed font-medium">
-            VIT Wadala Administrators are verifying your academic enrollment & credentials against institutional records. You will receive full portal access as soon as your account is approved.
+        {/* Security Policy Description */}
+        <motion.div variants={itemVariants} className="text-center max-w-lg mx-auto space-y-1.5">
+          <p className="text-xs text-[#374151] leading-relaxed">
+            VIT Wadala administrators are verifying your academic enrollment and credentials against institutional records. You will receive full portal access upon verification.
           </p>
-          <p className="text-[11px] text-[#9CA3AF] font-mono">
-            Security Policy: Unverified accounts are restricted from accessing institutional rosters, mentorship workflows, and direct messaging.
+          <p className="text-[11px] text-[#6B7280]">
+            Security policy: Unverified accounts cannot access institutional rosters, mentorship workflows, or direct messaging.
           </p>
         </motion.div>
 
-        {/* Action Required: Clarification Box if requested by Admin */}
+        {/* Action Required: Clarification Box */}
         {isNeedsClarification && (
-          <motion.div variants={itemVariants} className="bg-[#FFFBEB] border border-[#FCD34D] rounded-xl p-5 space-y-4">
-            <div className="flex items-center gap-2 text-[#B45309] font-display font-bold text-xs uppercase tracking-wider">
+          <motion.div variants={itemVariants} className="bg-amber-50/60 border border-amber-200 rounded-xl p-5 space-y-4">
+            <div className="flex items-center gap-2 text-[#B45309] font-medium text-xs">
               <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>Action Required: Administrator Requested Clarification</span>
+              <span>Action required: administrator requested clarification</span>
             </div>
 
             {clarificationPrompt && (
-              <div className="bg-white/80 border border-[#FDE68A] rounded-lg p-3 text-xs text-[#92400E] font-medium">
-                <strong>Admin Instructions:</strong> “{clarificationPrompt}”
+              <div className="bg-white border border-amber-200 rounded-lg p-3 text-xs text-[#78350F]">
+                <strong>Admin note:</strong> “{clarificationPrompt}”
               </div>
             )}
 
-            <form onSubmit={handleResubmitProof} className="space-y-3">
-              <div>
-                <label className="block text-[11px] font-display font-bold uppercase tracking-wider text-[#78350F] mb-1">
-                  Upload Updated Proof Document (ID Card / Admit Card / Degree Certificate)
-                </label>
-                <div className="flex items-center gap-3">
-                  <label className="cursor-pointer">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      icon={<Upload className="w-3.5 h-3.5" />}
-                      className="pointer-events-none"
-                    >
-                      {resubmitFileName || 'Select Proof File (PDF / Image)'}
-                    </Button>
-                    <input
-                      type="file"
-                      accept="image/*,.pdf"
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
-                  </label>
-                  {resubmitFileName && (
-                    <span className="text-[11px] font-mono text-[#92400E] truncate max-w-xs">
-                      {resubmitFileName}
-                    </span>
-                  )}
-                </div>
-              </div>
+            <form onSubmit={handleResubmitProof} className="space-y-4">
+              <FileDropzone
+                label="Upload updated proof document"
+                accept="image/*,.pdf"
+                maxSizeMB={5}
+                selectedFile={resubmitFile}
+                helperText="ID card, admit card, or degree certificate scan."
+                onFileSelect={async file => {
+                  setResubmitFile(file);
+                  setResubmitFileName(file.name);
+                  try {
+                    const res = await uploadProofDocument(file, latestUser.id);
+                    setResubmitFileUrl(res.url);
+                  } catch {
+                    const fakeUrl = URL.createObjectURL(file);
+                    setResubmitFileUrl(fakeUrl);
+                  }
+                }}
+                onFileRemove={() => {
+                  setResubmitFile(null);
+                  setResubmitFileName('');
+                  setResubmitFileUrl('');
+                }}
+              />
 
               <Button
                 type="submit"
                 variant="primary"
-                size="sm"
-                className="w-full sm:w-auto"
+                size="md"
                 disabled={!resubmitFileName}
               >
-                Submit Updated Proof to Admin
+                Submit updated proof to admin
               </Button>
             </form>
           </motion.div>
         )}
 
-        {/* 4. SIMPLIFIED SUBMITTED PROFILE (Quiet reference list, no card borders) */}
+        {/* Submitted Profile Summary */}
         <motion.div variants={itemVariants} className="space-y-3 pt-4 border-t border-[#E5E7EB]">
           <div className="flex items-center justify-between pb-1">
-            <h2 className="text-xs font-display font-bold uppercase tracking-wider text-[#6B7280]">
-              Submitted Registration Profile
+            <h2 className="text-xs font-semibold uppercase tracking-[0.06em] text-[#6B7280]">
+              Submitted registration profile
             </h2>
-            <span className="text-[10px] font-mono text-[#9CA3AF]">
+            <span className="text-[11px] font-mono text-[#6B7280]">
               Ref ID: #{latestUser.id.slice(0, 8)}
             </span>
           </div>
 
-          <div className="divide-y divide-[#E5E7EB]">
+          <div className="divide-y divide-[#E5E7EB] border-t border-b border-[#E5E7EB]">
             <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-[#6B7280] font-medium">Full Name</span>
-              <span className="font-bold text-[#0A0A0A]">{latestUser.name}</span>
+              <span className="text-[#6B7280]">Full name</span>
+              <span className="font-medium text-[#0A0A0A]">{latestUser.name}</span>
             </div>
 
             <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-[#6B7280] font-medium">Role Requested</span>
-              <span className="font-bold text-[#0A0A0A] capitalize">{latestUser.role}</span>
+              <span className="text-[#6B7280]">Role requested</span>
+              <span className="font-medium text-[#0A0A0A] capitalize">{latestUser.role}</span>
             </div>
 
             <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-[#6B7280] font-medium">Department</span>
-              <span className="font-bold text-[#0A0A0A]">{latestUser.department}</span>
+              <span className="text-[#6B7280]">Department</span>
+              <span className="font-medium text-[#0A0A0A]">{latestUser.department}</span>
             </div>
 
             <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-[#6B7280] font-medium">Primary Email</span>
-              <span className="font-mono font-medium text-[#0A0A0A]">{latestUser.email}</span>
+              <span className="text-[#6B7280]">Primary email</span>
+              <span className="font-mono text-[#0A0A0A]">{latestUser.email}</span>
             </div>
 
             <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-[#6B7280] font-medium">ID / Enrollment No</span>
-              <span className="font-mono font-medium text-[#0A0A0A]">
+              <span className="text-[#6B7280]">ID / enrollment number</span>
+              <span className="font-mono text-[#0A0A0A]">
                 {(latestUser as any).enrollmentNo || (latestUser as any).employeeId || (latestUser as any).prn || '22101A0099'}
               </span>
             </div>
 
-            {/* Proof Document Status Row */}
             <div className="py-2.5 flex items-center justify-between gap-3 text-xs">
-              <span className="text-[#6B7280] font-medium">Proof Document</span>
+              <span className="text-[#6B7280]">Proof document</span>
               <div>
                 {latestUser.verificationDocumentUrl || latestUser.verificationDocumentName || (latestUser as any).proofDocumentName ? (
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-[#0A0A0A] font-medium max-w-[180px] sm:max-w-xs truncate">
+                    <span className="font-mono text-[#0A0A0A] max-w-[180px] sm:max-w-xs truncate">
                       {latestUser.verificationDocumentName || (latestUser as any).proofDocumentName || 'Proof_Document.pdf'}
                     </span>
                     <Badge variant="emerald" size="sm">
-                      ✓ On File
+                      On file
                     </Badge>
                     {latestUser.verificationDocumentUrl && (
                       <a
                         href={latestUser.verificationDocumentUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs font-bold text-[#0A0A0A] hover:underline"
+                        className="inline-flex items-center gap-1 text-xs text-[#0A0A0A] hover:underline"
+                        title="View document"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
@@ -411,32 +360,41 @@ export const VerificationPendingPage: React.FC<VerificationPendingPageProps> = (
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <span className="text-[#9CA3AF] italic">No document on file</span>
+                    <span className="text-[#6B7280] italic">No document on file</span>
                     {!isNeedsClarification && (
-                      <form onSubmit={handleResubmitProof} className="inline-flex items-center gap-2">
-                        <label className="cursor-pointer">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            icon={<Upload className="w-3.5 h-3.5" />}
-                            className="pointer-events-none"
-                          >
-                            {resubmitFileName ? resubmitFileName : 'Attach Document'}
-                          </Button>
-                          <input
-                            type="file"
-                            accept="image/*,.pdf"
-                            onChange={handleFileChange}
-                            className="hidden"
-                          />
-                        </label>
-                        {resubmitFileName && (
-                          <Button type="submit" variant="primary" size="sm">
-                            Submit
-                          </Button>
-                        )}
-                      </form>
+                      <label className="cursor-pointer">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="pointer-events-none"
+                        >
+                          Attach document
+                        </Button>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          onChange={async e => {
+                            if (e.target.files && e.target.files[0]) {
+                              const file = e.target.files[0];
+                              try {
+                                const res = await uploadProofDocument(file, latestUser.id);
+                                resubmitUserVerification(latestUser.id, file.name, res.url);
+                                updateCurrentUserState({
+                                  ...latestUser,
+                                  verificationStatus: 'Pending Verification',
+                                  proofDocumentName: file.name,
+                                  verificationDocumentUrl: res.url
+                                });
+                                showToast('Document attached successfully.', 'success');
+                              } catch {
+                                showToast('Failed to upload file.', 'error');
+                              }
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </label>
                     )}
                   </div>
                 )}
@@ -445,35 +403,35 @@ export const VerificationPendingPage: React.FC<VerificationPendingPageProps> = (
           </div>
         </motion.div>
 
-        {/* 5. ACTION CONTROLS & QUIET SECONDARY LINKS */}
-        <motion.div variants={itemVariants} className="pt-4 flex flex-col items-center gap-4 text-center">
+        {/* Action Controls */}
+        <motion.div variants={itemVariants} className="pt-2 flex flex-col items-center gap-3 text-center">
           <Button
             onClick={handleCheckStatus}
             variant="primary"
             size="lg"
-            icon={<RefreshCw className="w-4 h-4" />}
             className="w-full sm:w-auto"
           >
-            Check Verification Status
+            <RefreshCw className="w-4 h-4 mr-2" />
+            <span>Check verification status</span>
           </Button>
 
           <button
             onClick={handleLogout}
-            className="text-xs font-bold text-[#6B7280] hover:text-[#0A0A0A] underline underline-offset-4 transition cursor-pointer flex items-center gap-1.5"
+            className="text-xs font-medium text-[#6B7280] hover:text-[#0A0A0A] underline transition cursor-pointer flex items-center gap-1.5 touch-target-44"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span>Sign Out / Back to Login</span>
+            <span>Sign out / Return to login</span>
           </button>
         </motion.div>
 
-        {/* 6. EXPECTED TIMELINE & ESCALATION CONTACT (Plain quiet text) */}
-        <motion.div variants={itemVariants} className="pt-6 border-t border-[#E5E7EB] text-center space-y-1 text-xs text-[#6B7280]">
-          <p className="font-medium">
-            Expected Timeline: Typically reviewed within 1–2 business days by the institutional registrar.
+        {/* Expected Timeline */}
+        <motion.div variants={itemVariants} className="pt-4 border-t border-[#E5E7EB] text-center space-y-1 text-xs text-[#6B7280]">
+          <p>
+            Expected timeline: Typically reviewed within 1–2 business days by institutional administration.
           </p>
           <p>
-            Questions about your verification? Contact{' '}
-            <a href="mailto:alumni@vit.edu.in" className="font-bold text-[#0A0A0A] underline hover:text-[#2563EB]">
+            Questions? Contact{' '}
+            <a href="mailto:alumni@vit.edu.in" className="font-medium text-[#0A0A0A] underline">
               alumni@vit.edu.in
             </a>
           </p>
@@ -483,5 +441,3 @@ export const VerificationPendingPage: React.FC<VerificationPendingPageProps> = (
     </div>
   );
 };
-
-

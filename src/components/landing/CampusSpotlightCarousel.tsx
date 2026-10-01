@@ -209,10 +209,10 @@ export const CampusSpotlightCarousel: React.FC = () => {
                     handleSelect(index);
                   }
                 }}
-                className={`relative cursor-pointer transition-all duration-300 h-full rounded-2xl p-2 bg-white border border-[#E5E7EB] shrink-0 select-none ${
+                className={`relative cursor-pointer transition-all duration-300 h-full rounded-xl p-1.5 sm:p-2 bg-white border shrink-0 select-none ${
                   isActive
-                    ? 'flex-[3.4] shadow-2xl ring-1 ring-slate-900/10'
-                    : 'flex-1 opacity-80 hover:opacity-100 shadow-md hover:shadow-lg'
+                    ? 'flex-[3.4] border-[#0A0A0A]'
+                    : 'flex-1 opacity-80 hover:opacity-100 border-[#E5E7EB]'
                 } ${index > 0 ? '-ml-6 md:-ml-8' : ''}`}
                 style={{
                   zIndex,
@@ -225,7 +225,7 @@ export const CampusSpotlightCarousel: React.FC = () => {
                 aria-current={isActive ? 'true' : undefined}
               >
                 {/* Framed Image Container */}
-                <div className="relative w-full h-full overflow-hidden rounded-xl bg-slate-100">
+                <div className="relative w-full h-full overflow-hidden rounded-lg bg-[#FAFAFA]">
                   <img
                     src={photo.src}
                     alt={photo.alt}
@@ -233,7 +233,7 @@ export const CampusSpotlightCarousel: React.FC = () => {
                     loading="lazy"
                   />
 
-                  {/* Soft gradient scrim at bottom for caption legibility when spotlighted */}
+                  {/* Soft scrim at bottom for caption legibility when spotlighted */}
                   <AnimatePresence>
                     {isActive && (
                       <motion.div
@@ -241,12 +241,12 @@ export const CampusSpotlightCarousel: React.FC = () => {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/75 via-black/30 to-transparent pointer-events-none"
+                        className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none"
                       />
                     )}
                   </AnimatePresence>
 
-                  {/* Exclusive Spotlight Caption (conditionally shown ONLY on the spotlighted card) */}
+                  {/* Exclusive Spotlight Caption */}
                   <AnimatePresence>
                     {isActive && (
                       <motion.div
@@ -258,10 +258,10 @@ export const CampusSpotlightCarousel: React.FC = () => {
                           delay: shouldReduceMotion ? 0 : 0.16,
                           ease: [0.16, 1, 0.3, 1],
                         }}
-                        className="absolute bottom-4 left-4 right-4 bg-[#0A0A0A]/90 backdrop-blur-md text-white text-xs font-display font-bold px-3.5 py-2.5 rounded-xl uppercase tracking-widest flex items-center justify-between border border-white/15 shadow-xl"
+                        className="absolute bottom-3 left-3 right-3 bg-[#0A0A0A]/95 backdrop-blur-md text-white text-xs font-medium px-3 py-2 rounded-lg flex items-center justify-between border border-white/20"
                       >
-                        <span className="truncate mr-2">{photo.title}</span>
-                        <span className="font-mono text-neutral-400 text-[10px] shrink-0">
+                        <span className="truncate mr-2 font-medium">{photo.title}</span>
+                        <span className="text-[#D1D5DB] text-[11px] shrink-0 font-normal">
                           {photo.location}
                         </span>
                       </motion.div>
