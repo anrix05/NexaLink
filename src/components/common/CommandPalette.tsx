@@ -19,6 +19,7 @@ import {
   Sparkles,
   X
 } from 'lucide-react';
+import { replayIntro } from '../../lib/intro';
 
 export interface CommandPaletteProps {
   isOpen: boolean;
@@ -67,21 +68,20 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
     if (currentRole === 'admin') {
       navs.push(
-        { id: 'nav-dash', title: 'Institutional Command Dashboard', subtitle: 'Overview metrics, analytics & broadcasts', tab: 'dashboard', icon: <Compass className="w-4 h-4" /> },
-        { id: 'nav-console', title: 'Governance & Verification Queue', subtitle: 'Audit enrollments, role changes & moderation', tab: 'admin-console', icon: <ShieldCheck className="w-4 h-4" /> },
-        { id: 'nav-reports', title: 'Reports & Accreditation Export', subtitle: 'Institutional accreditation audit data export in PDF & Excel', tab: 'reports', icon: <FileSpreadsheet className="w-4 h-4" /> },
-        { id: 'nav-events', title: 'Events & Talks Management', subtitle: 'Institutional workshops & talks calendar', tab: 'events', icon: <Calendar className="w-4 h-4" /> },
-        { id: 'nav-settings', title: 'Admin Settings & Security', subtitle: 'Account preferences & system configuration', tab: 'settings', icon: <Settings className="w-4 h-4" /> }
+        { id: 'nav-dash', title: 'Home', subtitle: 'Overview metrics, analytics & broadcasts', tab: 'dashboard', icon: <Compass className="w-4 h-4" /> },
+        { id: 'nav-opps', title: 'Opportunities', subtitle: 'Jobs, internships & events moderation', tab: 'opportunities', icon: <Briefcase className="w-4 h-4" /> },
+        { id: 'nav-console', title: 'Audit & verification', subtitle: 'Audit enrollments, role changes & moderation', tab: 'admin-console', icon: <ShieldCheck className="w-4 h-4" /> },
+        { id: 'nav-reports', title: 'Reports & accreditation', subtitle: 'Institutional accreditation audit data export in PDF & Excel', tab: 'reports', icon: <FileSpreadsheet className="w-4 h-4" /> },
+        { id: 'nav-settings', title: 'Settings', subtitle: 'Account preferences & system configuration', tab: 'settings', icon: <Settings className="w-4 h-4" /> }
       );
     } else {
       navs.push(
-        { id: 'nav-dash', title: 'Member Dashboard', subtitle: 'Personal metrics, updates & feeds', tab: 'dashboard', icon: <Compass className="w-4 h-4" /> },
-        { id: 'nav-dir', title: 'Alumni & Member Directory', subtitle: 'Search verified profiles, companies & skills', tab: 'directory', icon: <GraduationCap className="w-4 h-4" /> },
-        { id: 'nav-jobs', title: currentRole === 'student' ? 'Opportunities & Internships' : 'Opportunity Sharing Portal', subtitle: 'Jobs, internships & research collaborations', tab: 'jobs', icon: <Briefcase className="w-4 h-4" /> },
-        { id: 'nav-mentor', title: currentRole === 'student' ? 'Mentorship & Guidance' : currentRole === 'faculty' ? 'Research & Guidance Asks' : 'Mentorship Requests Inbox', subtitle: '1-on-1 advice, reviews & connections', tab: 'mentorship', icon: <BookOpen className="w-4 h-4" /> },
-        { id: 'nav-events', title: 'Events & Reunions', subtitle: 'Campus workshops, talks & networking', tab: 'events', icon: <Calendar className="w-4 h-4" /> },
-        { id: 'nav-msg', title: 'NexaChats Messaging', subtitle: 'Direct 1-on-1 communication', tab: 'messaging', icon: <MessageSquare className="w-4 h-4" /> },
-        { id: 'nav-settings', title: 'Profile & Settings', subtitle: 'Account preferences, privacy & profile', tab: 'settings', icon: <Settings className="w-4 h-4" /> }
+        { id: 'nav-dash', title: 'Home', subtitle: 'Personal metrics, updates & feeds', tab: 'dashboard', icon: <Compass className="w-4 h-4" /> },
+        { id: 'nav-dir', title: 'Directory', subtitle: 'Search verified profiles, companies & skills', tab: 'directory', icon: <GraduationCap className="w-4 h-4" /> },
+        { id: 'nav-opps', title: 'Opportunities', subtitle: 'Jobs, internships & event talks', tab: 'opportunities', icon: <Briefcase className="w-4 h-4" /> },
+        { id: 'nav-mentor', title: 'Guidance', subtitle: '1-on-1 advice, reviews & connections', tab: 'mentorship', icon: <BookOpen className="w-4 h-4" /> },
+        { id: 'nav-msg', title: 'Chats', subtitle: 'Direct 1-on-1 communication', tab: 'messaging', icon: <MessageSquare className="w-4 h-4" /> },
+        { id: 'nav-settings', title: 'Profile & settings', subtitle: 'Account preferences, privacy & profile', tab: 'settings', icon: <Settings className="w-4 h-4" /> }
       );
     }
 
@@ -213,6 +213,19 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       );
     }
 
+    // Universal Action: Replay Intro Animation
+    items.push({
+      id: 'act-replay-intro',
+      category: 'Action',
+      title: 'Replay Intro Animation',
+      subtitle: 'Play the NexaLink brand logo intro sequence',
+      icon: <Sparkles className="w-4 h-4 text-amber-500" />,
+      perform: () => {
+        onClose();
+        replayIntro();
+      }
+    });
+
     // 3. Directory Member Profiles (available for student/alumni/faculty directory navigation)
     if (currentRole !== 'admin') {
       studentList.slice(0, 8).forEach(s => {
@@ -316,7 +329,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: -8 }}
             transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className="relative bg-white border-0 sm:border sm:border-[#E5E7EB] rounded-none sm:rounded-2xl max-w-2xl w-full h-full sm:h-auto max-h-full sm:max-h-[75vh] shadow-2xl overflow-hidden z-10 flex flex-col pt-safe pb-safe"
+            className="relative bg-white border-0 sm:border sm:border-[#E5E7EB] rounded-none sm:rounded-xl max-w-2xl w-full h-full sm:h-auto max-h-full sm:max-h-[75vh] overflow-hidden z-10 flex flex-col pt-safe pb-safe"
           >
             {/* Input Header */}
             <div className="p-3.5 sm:p-4 border-b border-[#E5E7EB] flex items-center gap-3 bg-white shrink-0">
@@ -328,12 +341,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                 onChange={e => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Type a command, page name, or member..."
-                className="w-full text-sm sm:text-xs font-medium text-[#0A0A0A] placeholder:text-[#9CA3AF] bg-transparent focus:outline-none"
+                className="w-full text-sm sm:text-xs font-medium text-[#0A0A0A] placeholder:text-[#6B7280] bg-transparent focus:outline-none"
               />
               <button
                 type="button"
                 onClick={onClose}
-                className="text-[10px] font-mono font-bold text-[#9CA3AF] hover:text-[#0A0A0A] px-2 py-1 sm:px-1.5 sm:py-0.5 rounded border border-[#E5E7EB] shrink-0 cursor-pointer flex items-center gap-1 touch-target-44"
+                className="text-[10px] font-mono font-medium text-[#6B7280] hover:text-[#0A0A0A] px-2 py-1 sm:px-1.5 sm:py-0.5 rounded border border-[#E5E7EB] shrink-0 cursor-pointer flex items-center gap-1 touch-target-44"
               >
                 <X className="w-3.5 h-3.5 sm:hidden" />
                 <span className="hidden sm:inline">ESC</span>
@@ -343,7 +356,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             {/* Results List */}
             <div className="flex-1 max-h-[calc(100vh-120px)] sm:max-h-[380px] overflow-y-auto p-2 custom-scrollbar space-y-1 momentum-scroll">
               {filteredItems.length === 0 ? (
-                <div className="py-12 text-center text-[#9CA3AF] font-mono text-xs">
+                <div className="py-12 text-center text-[#6B7280] font-sans text-xs">
                   No matching commands or members found.
                 </div>
               ) : (
@@ -358,13 +371,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       transition={{ duration: 0.12, delay: index * 0.015 }}
                       onClick={() => item.perform()}
                       onMouseEnter={() => setSelectedIndex(index)}
-                      className="relative p-3 px-3.5 rounded-xl flex items-center justify-between cursor-pointer select-none"
+                      className="relative p-2.5 px-3 rounded-lg flex items-center justify-between cursor-pointer select-none"
                     >
                       {isSelected && (
                         <motion.div
                           layoutId="commandHighlight"
-                          transition={{ type: 'spring', stiffness: 450, damping: 22 }}
-                          className="absolute inset-0 bg-[#0A0A0A] rounded-xl z-0"
+                          transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                          className="absolute inset-0 bg-[#0A0A0A] rounded-lg z-0"
                         />
                       )}
 
@@ -375,11 +388,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                           {item.icon}
                         </div>
                         <div className="min-w-0">
-                          <p className={`font-bold text-xs truncate ${isSelected ? 'text-white' : 'text-[#0A0A0A]'}`}>
+                          <p className={`font-medium text-xs truncate ${isSelected ? 'text-white' : 'text-[#0A0A0A]'}`}>
                             {item.title}
                           </p>
                           {item.subtitle && (
-                            <p className={`text-[11px] truncate ${isSelected ? 'text-[#D1D5DB]' : 'text-[#6B6B6B]'}`}>
+                            <p className={`text-[11px] truncate ${isSelected ? 'text-[#D1D5DB]' : 'text-[#6B7280]'}`}>
                               {item.subtitle}
                             </p>
                           )}
@@ -387,12 +400,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       </div>
 
                       <div className="relative z-10 flex items-center gap-2 shrink-0 ml-3">
-                        <span className={`text-[9px] font-mono uppercase font-bold px-1.5 py-0.5 rounded ${
-                          isSelected ? 'bg-[#222222] text-[#D1D5DB]' : 'bg-[#F3F4F6] text-[#6B6B6B]'
+                        <span className={`text-[10px] font-sans font-medium px-2 py-0.5 rounded capitalize ${
+                          isSelected ? 'bg-[#222222] text-[#D1D5DB]' : 'bg-[#F3F4F6] text-[#6B7280]'
                         }`}>
                           {item.category}
                         </span>
-                        <ArrowRight className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-[#9CA3AF]'}`} />
+                        <ArrowRight className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-[#6B7280]'}`} />
                       </div>
                     </motion.div>
                   );
@@ -401,13 +414,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             </div>
 
             {/* Footer Navigation Hints */}
-            <div className="p-2.5 px-4 bg-[#FAFAFA] border-t border-[#E5E7EB] flex items-center justify-between text-[10px] font-mono text-[#6B7280]">
+            <div className="p-2.5 px-4 bg-[#FAFAFA] border-t border-[#E5E7EB] flex items-center justify-between text-[11px] text-[#6B7280] font-sans">
               <div className="flex items-center gap-3">
                 <span>↑↓ Navigate</span>
                 <span>↵ Select</span>
                 <span>ESC Close</span>
               </div>
-              <span>COMMAND PALETTE</span>
+              <span>Command palette</span>
             </div>
           </motion.div>
         </div>

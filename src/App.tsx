@@ -12,6 +12,7 @@ import { MessagingPage } from './pages/messaging/MessagingPage';
 import { ReportsExportPage } from './pages/admin/ReportsExportPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { AcceptAdminInvitePage } from './pages/admin/AcceptAdminInvitePage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { StudentDashboard } from './pages/student/StudentDashboard';
 import { AlumniDashboard } from './pages/alumni/AlumniDashboard';
 import { FacultyDashboard } from './pages/faculty/FacultyDashboard';
@@ -27,24 +28,45 @@ import { NotFoundPage } from './pages/NotFoundPage';
 import { PrivacyPolicyPage } from './pages/legal/PrivacyPolicyPage';
 import { TermsOfServicePage } from './pages/legal/TermsOfServicePage';
 import { DataGovernancePage } from './pages/legal/DataGovernancePage';
+import { IntroOverlay } from './components/intro/IntroOverlay';
 import type { AlumniProfile } from './types';
 
 const MainContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('landing');
   const [opportunitiesSubTab, setOpportunitiesSubTab] = useState<'jobs' | 'events'>('jobs');
   const [mentorshipSubTab, setMentorshipSubTab] = useState<'find' | 'my-sent' | 'incoming' | 'requests' | undefined>(undefined);
+  const [reportsSubTab, setReportsSubTab] = useState<'analytics' | 'export'>('analytics');
   const [selectedMentorForBooking, setSelectedMentorForBooking] = useState<AlumniProfile | null>(null);
   const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => typeof window !== 'undefined' && window.innerWidth < 1024);
   const [adminBypassWarning, setAdminBypassWarning] = useState<boolean>(false);
-  const { currentRole, currentUser, isAuthenticated, welcomeRevealName, clearWelcomeReveal, isCheckingSession } = useAuth();
+  const { currentRole, currentUser, isAuthenticated, welcomeRevealName, clearWelcomeReveal, isCheckingSession, isRecoveryMode } = useAuth();
 
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
+    const subtabParam = params.get('subtab');
     if (tabParam) {
-      setActiveTab(tabParam);
+      if (tabParam === 'analytics' || tabParam === 'reports') {
+        if (subtabParam === 'exporter' || subtabParam === 'export') {
+          setReportsSubTab('export');
+        } else if (subtabParam === 'analytics') {
+          setReportsSubTab('analytics');
+        }
+        setActiveTab('reports');
+      } else {
+        setActiveTab(tabParam);
+      }
+    } else if (typeof window !== 'undefined' && (window.location.pathname === '/reset-password' || window.location.pathname.startsWith('/reset-password'))) {
+      setActiveTab('reset-password');
     }
   }, []);
+
+  // When in Supabase password recovery mode, keep the user routed and gated on reset-password
+  React.useEffect(() => {
+    if (isRecoveryMode) {
+      setActiveTab('reset-password');
+    }
+  }, [isRecoveryMode]);
 
   React.useEffect(() => {
     window.scrollTo(0, 0);
@@ -58,18 +80,18 @@ const MainContent: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Auto-redirect authenticated users away from AuthPage back to dashboard
+  // Auto-redirect authenticated users away from AuthPage back to dashboard (only when not in recovery mode)
   React.useEffect(() => {
-    if (isAuthenticated && currentUser && activeTab === 'auth') {
+    if (isAuthenticated && currentUser && !isRecoveryMode && activeTab === 'auth') {
       setActiveTab('dashboard');
     }
-  }, [isAuthenticated, currentUser, activeTab]);
+  }, [isAuthenticated, currentUser, activeTab, isRecoveryMode]);
 
   if (isCheckingSession) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#171717] mb-4"></div>
-        <p className="text-[#6B7280] font-mono text-xs font-bold uppercase tracking-wider">Verifying Session...</p>
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#0A0A0A] mb-4"></div>
+        <p className="text-[#6B7280] font-sans text-xs font-medium">Verifying session...</p>
       </div>
     );
   }
@@ -92,6 +114,15 @@ const MainContent: React.FC = () => {
       setActiveTab('mentorship');
       return;
     }
+    if (tab === 'reports' || tab === 'analytics') {
+      if (subTab === 'exporter' || subTab === 'export') {
+        setReportsSubTab('export');
+      } else if (subTab === 'analytics') {
+        setReportsSubTab('analytics');
+      }
+      setActiveTab('reports');
+      return;
+    }
     if (subTab && (subTab === 'jobs' || subTab === 'events')) {
       setOpportunitiesSubTab(subTab as any);
     }
@@ -102,6 +133,10 @@ const MainContent: React.FC = () => {
   const isUnverified = !isLoggedOut && currentUser && (currentUser.isVerified === false || currentUser.verificationStatus === 'Pending Verification' || currentUser.verificationStatus === 'Needs Clarification');
 
   const renderActiveView = () => {
+    if (activeTab === 'reset-password') {
+      return <ResetPasswordPage setActiveTab={handleTabChange} />;
+    }
+
     if (activeTab === 'privacy') {
       return <PrivacyPolicyPage setActiveTab={handleTabChange} />;
     }
@@ -146,7 +181,8 @@ const MainContent: React.FC = () => {
       case 'messaging':
         return <MessagingPage />;
       case 'reports':
-        return <ReportsExportPage />;
+      case 'analytics':
+        return <ReportsExportPage initialSubTab={reportsSubTab} />;
       case 'settings':
         return <SettingsPage />;
       case 'feedback':
@@ -168,7 +204,7 @@ const MainContent: React.FC = () => {
     }
   };
 
-  const isPortalTab = !isLoggedOut && activeTab !== 'landing' && activeTab !== 'auth';
+  const isPortalTab = !isLoggedOut && activeTab !== 'landing' && activeTab !== 'auth' && activeTab !== 'reset-password' && activeTab !== 'admin-invite' && activeTab !== 'privacy' && activeTab !== 'terms' && activeTab !== 'data-governance';
   const showAdminMobileInterstitial = isPortalTab && currentRole === 'admin' && isMobileScreen && !adminBypassWarning;
 
   // Responsive motion variants: horizontal slide on mobile tab changes, subtle vertical lift on desktop
@@ -213,6 +249,17 @@ const MainContent: React.FC = () => {
               className="w-full max-w-full min-w-0"
             >
               <AuthPage setActiveTab={setActiveTab} />
+            </motion.div>
+          ) : activeTab === 'reset-password' ? (
+            <motion.div
+              key="reset-password"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full max-w-full min-w-0"
+            >
+              <ResetPasswordPage setActiveTab={setActiveTab} />
             </motion.div>
           ) : activeTab === 'admin-invite' ? (
             <motion.div
@@ -296,7 +343,9 @@ const MainContent: React.FC = () => {
             /* Unified App Portal Layout with Responsive Shell & Bottom Nav Accommodation */
             <div
               key="portal-wrapper"
-              className={`w-full max-w-[1720px] mx-auto px-3 sm:px-5 lg:px-6 py-4 pb-20 lg:pb-6 ${
+              className={`w-full ${
+                currentRole === 'admin' ? 'app-container-wide' : 'app-container'
+              } py-4 pb-20 lg:pb-6 ${
                 currentRole === 'admin' && isMobileScreen && adminBypassWarning ? 'overflow-x-auto min-w-[1024px]' : ''
               }`}
             >
@@ -350,9 +399,15 @@ const MainContent: React.FC = () => {
 };
 
 export function App() {
+  const [shouldMountIntro] = useState<boolean>(() => {
+    if (typeof document === 'undefined') return false;
+    return document.documentElement.dataset.intro === 'play';
+  });
+
   return (
     <AuthProvider>
       <DataProvider>
+        {shouldMountIntro && <IntroOverlay />}
         <MainContent />
       </DataProvider>
     </AuthProvider>
