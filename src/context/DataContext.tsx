@@ -28,7 +28,6 @@ import type {
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { subscribeToChatMessages, subscribeToNotifications } from '../lib/realtime';
 import { parseAnnouncementMeta, serializeAnnouncementContent } from '../components/common/InstitutionalAnnouncementFeed';
-import { INITIAL_ANNOUNCEMENTS, INITIAL_APPLICATIONS, INITIAL_RSVPS } from '../data/mockData';
 import { validateEventLeadTime, checkVenueConflict, generateCheckinCode } from '../utils/eventTimeUtils';
 
 const generateUUID = () => {
@@ -210,8 +209,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [facultyList, setFacultyList] = useState<FacultyProfile[]>([]);
   const [jobsList, setJobsList] = useState<JobListing[]>([]);
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
-  const [eventRsvps, setEventRsvps] = useState<EventRsvp[]>(INITIAL_RSVPS);
-  const [opportunityApplications, setOpportunityApplications] = useState<OpportunityApplication[]>(INITIAL_APPLICATIONS);
+  const [eventRsvps, setEventRsvps] = useState<EventRsvp[]>([]);
+  const [opportunityApplications, setOpportunityApplications] = useState<OpportunityApplication[]>([]);
   const [mentorshipRequests, setMentorshipRequests] = useState<MentorshipRequest[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>(() => {
     try {
@@ -226,7 +225,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       // ignore
     }
-    return INITIAL_ANNOUNCEMENTS;
+    return [];
   });
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);

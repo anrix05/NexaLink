@@ -20,7 +20,6 @@ import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import type { MentorshipGuidancePurpose, UserRole, ChatMessage, MessageAttachment, ReplySnippet } from '../../types';
 import { Avatar } from '../../utils/avatarHelper';
-import { generate200MessageThread } from '../../data/mockData';
 import { formatMessageTime, formatConversationPreview } from '../../features/messaging/utils/timeFormatters';
 import { validateChatAttachment, MAX_FILES_PER_MESSAGE } from '../../features/messaging/utils/fileValidation';
 import { processChatImage } from '../../features/messaging/utils/imageProcessor';
@@ -921,10 +920,11 @@ export const MessagingPage: React.FC = () => {
                   <div className="flex justify-center mb-4">
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         if (benchmarkThreadMessages) {
                           setBenchmarkThreadMessages(null);
                         } else {
+                          const { generate200MessageThread } = await import('../../data/mockData');
                           setBenchmarkThreadMessages(generate200MessageThread(currentUserId, activeContact.id, activeContact.name));
                         }
                       }}

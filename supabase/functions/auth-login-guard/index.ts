@@ -20,39 +20,66 @@ serve(async (req: Request) => {
       });
     }
 
+    // Extract client IP address reliably from reverse proxy headers
+    const clientIp = (
+      req.headers.get('cf-connecting-ip') ??
+      req.headers.get('x-real-ip') ??
+      req.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
+      '127.0.0.1'
+    ).trim();
+
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Hash email to preserve privacy in audit/attempt logs
+    // Hash email to preserve user privacy in storage
     const encoder = new TextEncoder();
     const data = encoder.encode(email.toLowerCase().trim());
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const emailHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
-    // Check failed attempts in the last 15 minutes
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-    const { data: attempts, error } = await supabaseAdmin
+
+    // 1. IP + Email Bound Lockout: Only lock out attempts from the offending IP address
+    // This prevents malicious actors from causing denial-of-service on victim accounts.
+    const { data: ipEmailAttempts, error: ipEmailError } = await supabaseAdmin
       .from('auth_attempts')
       .select('id')
       .eq('email_hash', emailHash)
+      .eq('ip_address', clientIp)
       .eq('success', false)
       .gte('attempted_at', fifteenMinutesAgo);
 
-    if (error) {
-      console.error('Error querying auth_attempts:', error);
+    if (ipEmailError) {
+      console.error('Error querying auth_attempts by IP + Email:', ipEmailError);
     }
 
-    const failedCount = attempts?.length || 0;
+    const failedForIpAndEmail = ipEmailAttempts?.length || 0;
 
-    if (failedCount >= 5) {
+    // 2. Global IP Brute-Force Guard (protects against credential stuffing across emails)
+    const { data: globalIpAttempts, error: globalIpError } = await supabaseAdmin
+      .from('auth_attempts')
+      .select('id')
+      .eq('ip_address', clientIp)
+      .eq('success', false)
+      .gte('attempted_at', fifteenMinutesAgo);
+
+    if (globalIpError) {
+      console.error('Error querying auth_attempts by IP globally:', globalIpError);
+    }
+
+    const failedForIpGlobally = globalIpAttempts?.length || 0;
+
+    // Enforce lockout if this IP has 5 failed attempts for this email, or 20 total failed attempts
+    if (failedForIpAndEmail >= 5 || failedForIpGlobally >= 20) {
       return new Response(
         JSON.stringify({
           locked: true,
-          error: 'Too many failed login attempts. Account temporarily locked for 15 minutes.',
+          error: 'Too many failed login attempts from your network. Temporary 15-minute cool-down enforced.',
           retryAfterSeconds: 900,
+          ipBound: true,
         }),
         {
           status: 429,
@@ -64,7 +91,7 @@ serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         locked: false,
-        remainingAttempts: Math.max(0, 5 - failedCount),
+        remainingAttempts: Math.max(0, 5 - failedForIpAndEmail),
       }),
       {
         status: 200,
