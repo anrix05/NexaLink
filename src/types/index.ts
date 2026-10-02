@@ -195,7 +195,7 @@ export interface MentorshipRequest {
   message: string;
   requestedDate: string;
   expiryDate?: string;
-  status: 'Pending' | 'Accepted' | 'Declined' | 'Completed' | 'Expired';
+  status: 'Pending' | 'Accepted' | 'Declined' | 'Completed' | 'Expired' | 'Withdrawn';
   requestType?: 'MENTORSHIP' | 'NETWORKING' | 'COLLABORATION';
   meetingNotes?: string;
   scheduledTime?: string;
@@ -203,6 +203,10 @@ export interface MentorshipRequest {
   proposedTimeSlot?: string;
   declineReason?: string;
   feedback?: MentorshipFeedback;
+  seenAt?: string;
+  slots?: { date: string; timeSlot: string }[];
+  shareProfile?: boolean;
+  resumePath?: string;
 }
 
 export type OpportunityType =
@@ -212,6 +216,46 @@ export type OpportunityType =
   | 'Scholarship'
   | 'Industrial Training'
   | 'Workshop';
+
+export type OpportunityLifecycleStatus =
+  | 'draft'
+  | 'pending_review'
+  | 'changes_requested'
+  | 'published'
+  | 'closed'
+  | 'filled'
+  | 'expired'
+  | 'rejected';
+
+export type OpportunityWorkMode = 'On-site' | 'Hybrid' | 'Remote';
+
+export type CompensationPeriod = 'per_year' | 'per_month';
+
+export type OpportunityApplicationStatus = 'submitted' | 'viewed' | 'shortlisted' | 'not_selected';
+
+export interface OpportunityEligibility {
+  departments: DepartmentCode[];
+  gradYears?: number[];
+  minCgpa?: number;
+  strict?: boolean;
+}
+
+export interface OpportunityApplication {
+  id: string;
+  opportunityId: string;
+  applicantId: string;
+  applicantName: string;
+  applicantEmail: string;
+  applicantDepartment: DepartmentCode;
+  applicantYear: string;
+  appliedAt: string;
+  status: OpportunityApplicationStatus;
+  statusUpdatedAt?: string;
+  studentNote?: string;
+  resumePath?: string;
+  posterNote?: string;
+  matchScore?: number;
+}
 
 export interface JobListing {
   id: string;
@@ -235,6 +279,104 @@ export interface JobListing {
   status: 'Active' | 'Closed' | 'Pending Approval';
   moderationStatus?: 'Approved' | 'Pending Approval' | 'Rejected';
   rejectionReason?: string;
+  
+  // Extended Host-Side Attributes
+  lifecycleStatus?: OpportunityLifecycleStatus;
+  workMode?: OpportunityWorkMode;
+  compensationDisclosed?: boolean;
+  compensationMin?: number;
+  compensationMax?: number;
+  compensationPeriod?: CompensationPeriod;
+  compensationCurrency?: string;
+  durationMonths?: number;
+  startDate?: string;
+  openings?: number;
+  referralOpenings?: number;
+  eligibility?: OpportunityEligibility;
+  applyMethod?: 'nexalink' | 'external';
+  externalUrl?: string;
+  closesAt?: string;
+  viewsCount?: number;
+  filledAt?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewNote?: string;
+}
+
+export type EventLifecycleStatus =
+  | 'draft'
+  | 'pending_review'
+  | 'changes_requested'
+  | 'published'
+  | 'completed'
+  | 'cancelled'
+  | 'rejected'
+  | 'withdrawn';
+
+export type EventMode = 'on_campus' | 'online' | 'hybrid';
+
+export interface EventAudience {
+  roles?: UserRole[];
+  departments?: DepartmentCode[];
+  graduationYears?: number[];
+  minCgpa?: number;
+}
+
+export interface EventAgendaItem {
+  time: string;
+  item: string;
+  speaker?: string;
+}
+
+export interface EventSpeaker {
+  id: string;
+  eventId?: string;
+  memberId?: string;
+  name: string;
+  title: string;
+  organization: string;
+  photoUrl?: string;
+  isExternal?: boolean;
+  status?: 'invited' | 'confirmed' | 'declined';
+}
+
+export type EventRsvpStatus =
+  | 'registered'
+  | 'waitlisted'
+  | 'pending_approval'
+  | 'cancelled'
+  | 'attended'
+  | 'no_show';
+
+export interface EventRsvp {
+  id: string;
+  eventId: string;
+  userId: string;
+  status: EventRsvpStatus;
+  waitlistPosition?: number;
+  answers?: Record<string, string>;
+  attendedAt?: string;
+  joinedAt?: string;
+  certificateId?: string;
+  createdAt: string;
+}
+
+export interface Venue {
+  id: string;
+  name: string;
+  building: string;
+  capacity: number;
+  active: boolean;
+}
+
+export interface EventAnnouncement {
+  id: string;
+  eventId: string;
+  senderId: string;
+  senderName: string;
+  subject: string;
+  body: string;
+  createdAt: string;
 }
 
 export type EventType =
@@ -273,10 +415,106 @@ export interface EventItem {
   capacityLimit?: number;
   waitlistUserIds?: string[];
   feedbackEntries?: EventFeedback[];
+
+  // Extended Host-Side Attributes
+  startsAt?: string;
+  endsAt?: string;
+  registrationClosesAt?: string;
+  mode?: EventMode;
+  venueId?: string;
+  venueRoom?: string;
+  meetingUrl?: string;
+  summary?: string;
+  coverImagePath?: string;
+  lifecycleStatus?: EventLifecycleStatus;
+  waitlistEnabled?: boolean;
+  approvalRequired?: boolean;
+  certificatesEnabled?: boolean;
+  hostId?: string;
+  hostRole?: UserRole;
+  hostName?: string;
+  coHostIds?: string[];
+  sponsorFacultyId?: string;
+  sponsorDepartment?: DepartmentCode;
+  audience?: EventAudience;
+  agenda?: EventAgendaItem[];
+  speakers?: EventSpeaker[];
+  tags?: string[];
+  questions?: string[];
+  version?: number;
+  cancelReason?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewNote?: string;
+  checkinCode?: string;
+  checkinOpensAt?: string;
+  materialsUrl?: string;
+  recordingUrl?: string;
+}
+
+export interface MessageAttachment {
+  id: string;
+  messageId: string;
+  conversationId: string;
+  uploaderId: string;
+  storagePath: string;
+  thumbPath?: string | null;
+  fileName: string;
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf';
+  sizeBytes: number;
+  width?: number | null;
+  height?: number | null;
+  scanStatus: 'pending' | 'ok' | 'rejected';
+  signedUrl?: string;
+  thumbSignedUrl?: string;
+  createdAt?: string;
+}
+
+export interface MessageReaction {
+  messageId: string;
+  userId: string;
+  emoji: string;
+  createdAt?: string;
+}
+
+export interface ReplySnippet {
+  id: string;
+  name: string;
+  content: string;
+  isDeleted?: boolean;
+}
+
+export interface ConversationItem {
+  id: string;
+  userA: string;
+  userB: string;
+  status: 'requested' | 'active' | 'declined' | 'blocked';
+  contextType?: 'directory' | 'mentorship' | 'opportunity' | 'event' | null;
+  contextId?: string | null;
+  lastMessageAt: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface ConversationInboxItem {
+  conversationId: string;
+  otherUserId: string;
+  otherUserName: string;
+  otherUserAvatar: string;
+  otherUserRole: UserRole | string;
+  otherUserHeadline: string;
+  otherUserOnline: boolean;
+  lastMessageAt: string;
+  lastMessagePreview: string;
+  unreadCount: number;
+  isStarred: boolean;
+  isMuted: boolean;
+  status: 'requested' | 'active' | 'declined' | 'blocked';
 }
 
 export interface ChatMessage {
   id: string;
+  conversationId?: string;
   senderId: string;
   senderName: string;
   senderRole: UserRole;
@@ -288,6 +526,7 @@ export interface ChatMessage {
   category?: MentorshipGuidancePurpose;
   attachmentName?: string;
   attachmentUrl?: string;
+  attachments?: MessageAttachment[];
   isReported?: boolean;
   reportedAt?: string;
   reportedBy?: string;
@@ -299,7 +538,14 @@ export interface ChatMessage {
   voiceNoteUrl?: string;
   voiceNoteDuration?: number;
   status?: 'sending' | 'sent' | 'delivered' | 'failed' | 'read';
-  replyTo?: { id: string; name: string; content: string } | null;
+  clientMessageId?: string;
+  errorReason?: 'offline' | 'forbidden' | 'rate_limited' | 'too_long' | 'too_many_files' | 'bad_file' | 'blocked' | 'not_verified' | 'duplicate' | 'unknown';
+  replyTo?: ReplySnippet | null;
+  replyToId?: string | null;
+  editedAt?: string | null;
+  deletedAt?: string | null;
+  deliveredAt?: string | null;
+  readAt?: string | null;
 }
 
 export type NotificationType =

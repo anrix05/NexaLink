@@ -59,7 +59,8 @@ All screens across Student, Alumni, Faculty, and Admin workspaces build upon sta
 - Global search trigger (`⌘K / Ctrl+K`), notification bell trigger, and user profile avatar dropdown.
 
 ### 3.3 `SidebarNav.tsx`
-- Width: Fixed 240px across all four roles.
+- Width: Fixed 240px across all four roles by default.
+- **Route-Aware Adaptive Rail:** When the active route is `messaging` on viewports between 1024px and 1279px (`lg:max-xl`), `SidebarNav` automatically collapses into a **72px icon rail** (`w-[72px] xl:w-[240px]`). This eliminates crowded dual-column compression and grants the 340px conversation list and 720px message canvas generous horizontal breathing room.
 - Right hairline border (`border-r border-[#E5E7EB]`).
 - Active state indicated by a left active bar indicator (3px solid `#0A0A0A`) with subtle `#FAFAFA` background fill.
 - System operational status indicator housed cleanly in the sidebar footer.
@@ -94,9 +95,32 @@ All screens across Student, Alumni, Faculty, and Admin workspaces build upon sta
 - Houses secondary context: upcoming deadlines, calendar snapshot, mentee capacity stepper, and department overview.
 
 ### 3.11 `UnderlineTabs.tsx`
-- Accessible tab switcher with animated bottom underline indicator, replacing bulky segmented button groups.
+- Accessible tab switcher with animated bottom underline indicator (`layoutId`), replacing bulky segmented button groups.
+- Height: 44px with 1px bottom hairline (`border-b border-[#E5E7EB]`). Supports numeric unread count badges.
 
-### 3.12 `CapacityMeter.tsx` & `Switch.tsx`
+### 3.12 `ThreadHeader.tsx`
+- Height: strictly locked to 72px (`h-[72px] min-h-[72px] max-h-[72px] px-5 border-b border-[#E5E7EB]`) for mathematically continuous hairline alignment with the conversation list header.
+- Avatar with online presence dot rendered **strictly when `contact.online === true`** (clean avatar otherwise).
+- Subtitle: 13px/20px leading (`text-[#6B7280]`) with subtle `" · Online"` text suffix when active.
+- Right action buttons: standardized 36×36 ghost icon buttons with 8px radius (`w-9 h-9 rounded-lg hover:bg-[#F3F4F6] text-[#6B7280] hover:text-[#0A0A0A]`).
+
+### 3.13 `Composer` & Attachment Trays
+- Container Geometry: centered `max-w-[720px] mx-auto` wrapped in `#F3F4F6` background with 14px radius (`rounded-[14px]`).
+- Focus Architecture: Container uses `:focus-within` ring (`focus-within:ring-2 focus-within:ring-[#0A0A0A]`) with zero default border. Inner `<textarea>` is completely transparent (`bg-transparent border-0 outline-none ring-0 shadow-none focus-visible:!outline-none`) with `style={{ outline: 'none' }}` to eliminate nested focus outlines.
+- Action Buttons:
+  - Send button: 36px circular pill (`w-9 h-9 rounded-full bg-[#0A0A0A] text-white`).
+  - Attach & Emoji triggers: 36×36 ghost icon buttons (`w-9 h-9 rounded-lg hover:bg-neutral-200/60`).
+- Keyboard Affordance: Desktop-only helper text `"Press Enter to send, Shift + Enter for a new line"` rendered strictly when `isComposerFocused`.
+
+### 3.14 `AttachmentGrid.tsx` & `AttachmentPdfCard.tsx`
+- Zero-CLS image layout: calculated aspect-ratio grid (1, 2, 3, or 4 tiles) rendered outside black bubbles with instant Lightbox view.
+- PDF cards: standalone documents displaying filename, readable byte size (`1.8 MB`), and direct download/preview triggers.
+
+### 3.15 `ReactionChips.tsx` & `ReactionBar.tsx`
+- Micro-pill design (`text-xs bg-[#FAFAFA] border border-[#E5E7EB] rounded-full px-2 py-0.5`).
+- 1-reaction-per-user-per-message policy with active black accent indicator.
+
+### 3.16 `CapacityMeter.tsx` & `Switch.tsx`
 - `CapacityMeter`: Segmented visual stepper indicating active advisory capacity (e.g., "Mentoring 2 of 5") with immediate decrement/increment controls.
 - `Switch`: Accessible toggle control for advisory availability with emerald active state.
 
@@ -144,22 +168,40 @@ All screens across Student, Alumni, Faculty, and Admin workspaces build upon sta
 - 3-step connected horizontal timeline (Submitted → In review → Decision).
 - Supabase Realtime auto-advance with `AnimatedCheckIcon` upon approval.
 
+### 4.7 Enterprise Messenger Workspace (`MessagingPage.tsx`)
+- **Dual-Pane Geometry & Hairline Alignment:**
+  - Left Conversation Pane: strictly 340px width (`w-full md:w-[340px] border-r border-[#E5E7EB]`).
+  - Pane Header: strictly locked to 72px (`h-[72px] min-h-[72px] max-h-[72px] px-5 border-b border-[#E5E7EB]`), aligning perfectly with the Thread Header.
+  - Tabs: 44px minimal underline tabs (`All`, `Unread`, `Starred`) with animated indicator.
+  - Search: 40px height, 8px radius (`rounded-lg`), `#F3F4F6` background, borderless.
+  - Rows: 72px height, 44px avatars, online-only green presence dot, and selected state featuring `#F3F4F6` fill with 2px left black bar (`border-l-2 border-[#0A0A0A]`). No horizontal row divider lines.
+- **Thread Reading Canvas:**
+  - Centered column: `max-w-[720px] mx-auto w-full px-6 py-6`.
+  - Max bubble width: strictly restricted to `max-w-[70%]` (max 504px, guaranteeing ≤ 80 characters per line for optimal reading ergonomics).
+  - 5-Minute Sender Clustering: consecutive messages from the same sender within 5 minutes are grouped with `mt-0.5` (2px); inter-group gap is `mt-4` (16px).
+  - Bubble Radii: `rounded-[18px]` standard. Only the trailing bubble in a cluster receives the 6px tail corner (`rounded-br-[6px]` for sent, `rounded-bl-[6px]` for received).
+  - Metadata Line: rendered strictly once per group below the last bubble (`isGroupEnd`). Formatted as `11px #6B7280`.
+  - Delivery Status: status word + ticks (`2:37 am · Sent ✓` / `Read ✓✓`) appear **only on the very last sent message of the thread**.
+  - Soft-Delete Tombstone: quiet, muted italic text with trash icon (no background box, no borders, no ticks).
+  - Edited Indicator: relocated from inside bubble to metadata line (`Edited · 12:50 am`).
+  - DEV QA Fixture: 200-message benchmark toggle button for instant virtualized scroll testing.
+
 ---
 
 ## 5. Responsive Strategy: 4 Fluid Tiers
 
 | Tier | Range | Target Devices | Layout Behavior |
 | :--- | :--- | :--- | :--- |
-| **Phone** | `<640px` | iPhone SE, iPhone 14/15/16, Pixel, Galaxy | Single-column canvas, fixed `BottomNav`, bottom sheet modals, full-width buttons. |
-| **Tablet** | `640–1023px` | iPad, iPad Mini, Galaxy Tab | 2-column cards, modal dialogs, fixed `BottomNav`, top bar search. |
-| **Compact Desktop** | `1024–1279px` | iPad Pro landscape, MacBook Air 13" | Fixed 240px `SidebarNav`, single main content canvas, full command palette. |
-| **Full Desktop** | `≥1280px` | iMac, 1080p/4K monitors, MacBook Pro 16" | Fixed 240px `SidebarNav`, main content canvas + 320px `RightRail`, split `MasterDetail` queues. |
+| **Phone** | `<640px` | iPhone SE, iPhone 14/15/16, Pixel, Galaxy | Single-column canvas, fixed `BottomNav`, bottom sheet modals, full-width buttons. In Messages: single-pane thread view with back arrow to conversation list. |
+| **Tablet** | `640–1023px` | iPad, iPad Mini, Galaxy Tab | 2-column cards, modal dialogs, fixed `BottomNav`, top bar search. In Messages: dual-column layout with 340px list and flexible thread. |
+| **Compact Desktop** | `1024–1279px` | iPad Pro landscape, MacBook Air 13" | Fixed 240px `SidebarNav` (default). **Route Exception:** On `/messages`, `SidebarNav` auto-collapses to a **72px icon rail** (`w-[72px] xl:w-[240px]`), allocating full space to the 340px list and 720px thread. |
+| **Full Desktop** | `≥1280px` | iMac, 1080p/4K monitors, MacBook Pro 16" | Fixed 240px `SidebarNav`, main content canvas + 320px `RightRail`, split `MasterDetail` queues. In Messages: 240px sidebar + 340px list + 720px centered thread canvas. |
 
 ---
 
 ## 6. Accessibility & Motion Standards
 
 1. **Axe-Core Compliance:** Zero serious or critical violations across all views.
-2. **Keyboard Navigation:** Complete tab-order coverage, visible `:focus-visible` rings (`ring-2 ring-[#0A0A0A] ring-offset-2`), and `Esc` dismissal for sheets/modals.
+2. **Keyboard Navigation:** Complete tab-order coverage, visible `:focus-visible` rings (`ring-2 ring-[#0A0A0A] ring-offset-2`), and `Esc` dismissal for sheets/modals. Composite inputs (such as the message composer) maintain a single focus ring on the outer container.
 3. **Reduced Motion:** All Framer Motion variants respect `useReducedMotion()`. When enabled, transforms are reduced to instant opacity transitions.
 4. **Touch Targets:** Strict minimum 44×44px interactive bounding box on mobile devices.

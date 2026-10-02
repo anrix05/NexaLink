@@ -281,6 +281,30 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['starred_conversations']['Insert']>;
         Relationships: [];
       };
+      conversation_participants: {
+        Row: {
+          id: string;
+          user_id: string;
+          contact_id: string;
+          is_starred: boolean;
+          is_muted: boolean;
+          last_read_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          contact_id: string;
+          is_starred?: boolean;
+          is_muted?: boolean;
+          last_read_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['conversation_participants']['Insert']>;
+        Relationships: [];
+      };
       chat_messages: {
         Row: {
           id: string;
@@ -306,6 +330,8 @@ export interface Database {
           voice_note_url: string | null;
           voice_note_duration: number | null;
           reply_to: any | null;
+          client_message_id: string | null;
+          conversation_id: string | null;
         };
         Insert: {
           id?: string;
@@ -331,6 +357,8 @@ export interface Database {
           voice_note_url?: string | null;
           voice_note_duration?: number | null;
           reply_to?: any | null;
+          client_message_id?: string | null;
+          conversation_id?: string | null;
         };
         Update: Partial<Database['public']['Tables']['chat_messages']['Insert']>;
         Relationships: [];
@@ -379,7 +407,7 @@ export interface Database {
           message: string;
           requested_date: string;
           expiry_date: string | null;
-          status: 'Pending' | 'Accepted' | 'Declined' | 'Completed' | 'Expired';
+          status: 'Pending' | 'Accepted' | 'Declined' | 'Completed' | 'Expired' | 'Withdrawn';
           request_type: string | null;
           meeting_notes: string | null;
           scheduled_time: string | null;
@@ -387,6 +415,8 @@ export interface Database {
           proposed_time_slot: string | null;
           decline_reason: string | null;
           feedback: MentorshipFeedback | null;
+          seen_at: string | null;
+          slots: any | null;
         };
         Insert: {
           id?: string;
@@ -407,7 +437,7 @@ export interface Database {
           message: string;
           requested_date?: string;
           expiry_date?: string | null;
-          status?: 'Pending' | 'Accepted' | 'Declined' | 'Completed' | 'Expired';
+          status?: 'Pending' | 'Accepted' | 'Declined' | 'Completed' | 'Expired' | 'Withdrawn';
           request_type?: string | null;
           meeting_notes?: string | null;
           scheduled_time?: string | null;
@@ -415,6 +445,8 @@ export interface Database {
           proposed_time_slot?: string | null;
           decline_reason?: string | null;
           feedback?: MentorshipFeedback | null;
+          seen_at?: string | null;
+          slots?: any | null;
         };
         Update: Partial<Database['public']['Tables']['mentorship_requests']['Insert']>;
         Relationships: [];
@@ -588,7 +620,127 @@ export interface Database {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      send_message: {
+        Args: {
+          p_client_message_id: string;
+          p_receiver_id: string;
+          p_content: string;
+          p_category?: string | null;
+          p_attachment_name?: string | null;
+          p_attachment_url?: string | null;
+        };
+        Returns: {
+          success: boolean;
+          duplicate?: boolean;
+          message_id?: string;
+          timestamp?: string;
+          status?: string;
+          error_code?: string;
+          message?: string;
+        };
+      };
+      send_message_v2: {
+        Args: {
+          p_conversation_id: string;
+          p_client_message_id: string;
+          p_content: string;
+          p_reply_to_id?: string | null;
+          p_attachments?: Json;
+        };
+        Returns: {
+          success: boolean;
+          duplicate?: boolean;
+          message_id?: string;
+          timestamp?: string;
+          status?: string;
+          error_code?: string;
+          message?: string;
+        };
+      };
+      get_or_create_conversation: {
+        Args: {
+          p_other_user_id: string;
+          p_context_type?: string | null;
+          p_context_id?: string | null;
+        };
+        Returns: {
+          success: boolean;
+          conversation_id: string;
+          status: string;
+          error_code?: string;
+          message?: string;
+        };
+      };
+      toggle_reaction: {
+        Args: {
+          p_message_id: string;
+          p_emoji: string;
+        };
+        Returns: {
+          success: boolean;
+          action: 'added' | 'removed' | 'replaced';
+          emoji?: string;
+          error_code?: string;
+        };
+      };
+      mark_conversation_read: {
+        Args: {
+          p_conversation_id: string;
+        };
+        Returns: {
+          success: boolean;
+          timestamp?: string;
+        };
+      };
+      ack_delivered: {
+        Args: {
+          p_message_ids: string[];
+        };
+        Returns: {
+          success: boolean;
+        };
+      };
+      edit_message: {
+        Args: {
+          p_message_id: string;
+          p_new_content: string;
+        };
+        Returns: {
+          success: boolean;
+          edited_at?: string;
+          error_code?: string;
+          message?: string;
+        };
+      };
+      delete_message: {
+        Args: {
+          p_message_id: string;
+        };
+        Returns: {
+          success: boolean;
+          deleted_at?: string;
+          error_code?: string;
+          message?: string;
+        };
+      };
+      get_inbox: {
+        Args: Record<string, never>;
+        Returns: {
+          conversation_id: string;
+          other_user_id: string;
+          other_user_name: string;
+          other_user_avatar: string;
+          other_user_role: string;
+          other_user_headline: string;
+          other_user_online: boolean;
+          last_message_at: string;
+          last_message_preview: string;
+          unread_count: number;
+          is_starred: boolean;
+          is_muted: boolean;
+          status: string;
+        }[];
+      };
     };
     Enums: {
       user_role: UserRole;
@@ -596,7 +748,7 @@ export interface Database {
       verification_status: AccountVerificationStatus;
       opportunity_status: 'Active' | 'Closed' | 'Pending Approval';
       moderation_status: 'Approved' | 'Pending Approval' | 'Rejected';
-      mentorship_status: 'Pending' | 'Accepted' | 'Declined' | 'Completed' | 'Expired';
+      mentorship_status: 'Pending' | 'Accepted' | 'Declined' | 'Completed' | 'Expired' | 'Withdrawn';
       event_status: 'Upcoming' | 'Completed' | 'Cancelled';
       admin_invite_status: 'pending' | 'accepted' | 'revoked';
       role_transition_status: 'pending' | 'approved' | 'rejected';

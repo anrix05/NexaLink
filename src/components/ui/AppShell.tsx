@@ -30,7 +30,11 @@ export const AppShell: React.FC<AppShellProps> = ({
         <main
           id="main-content"
           tabIndex={-1}
-          className={`flex-1 min-w-0 px-4 sm:px-8 lg:px-10 py-6 sm:py-8 pb-24 lg:pb-12 focus:outline-none ${className}`}
+          className={`flex-1 min-w-0 ${
+            activeTab === 'messaging'
+              ? 'p-0 overflow-hidden'
+              : 'px-4 sm:px-8 lg:px-10 py-6 sm:py-8 pb-24 lg:pb-12'
+          } focus:outline-none ${className}`}
         >
           {children}
         </main>

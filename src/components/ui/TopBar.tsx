@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { NexaMark } from '../brand/NexaMark';
 import { StatusBadge } from './StatusBadge';
+import { Avatar } from '../../utils/avatarHelper';
 import { CommandPalette } from '../common/CommandPalette';
 import {
   Search,
@@ -63,14 +64,8 @@ export const TopBar: React.FC<TopBarProps> = ({
     setActiveTab('dashboard');
   };
 
-  const getRoleBadgeTone = (role: string) => {
-    switch (role) {
-      case 'alumni': return 'emerald';
-      case 'student': return 'indigo';
-      case 'faculty': return 'indigo';
-      case 'admin': return 'rose';
-      default: return 'neutral';
-    }
+  const getRoleBadgeTone = (_role: string) => {
+    return 'indigo' as const;
   };
 
   return (
@@ -198,17 +193,11 @@ export const TopBar: React.FC<TopBarProps> = ({
                   aria-label="User menu"
                   className="flex items-center gap-2 p-1 rounded-lg hover:bg-[#F3F4F6] transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0A0A0A]"
                 >
-                  {currentUser.avatar ? (
-                    <img
-                      src={currentUser.avatar}
-                      alt={currentUser.name}
-                      className="w-8 h-8 rounded-full object-cover border border-[#E5E7EB]"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-[#0A0A0A] text-white flex items-center justify-center text-xs font-semibold">
-                      {currentUser.name ? currentUser.name.slice(0, 2).toUpperCase() : 'NL'}
-                    </div>
-                  )}
+                  <Avatar
+                    src={currentUser.avatar}
+                    name={currentUser.name || 'User'}
+                    size="sm"
+                  />
                   <ChevronDown className="w-3.5 h-3.5 text-[#6B7280] hidden sm:block" />
                 </button>
 
@@ -220,7 +209,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                           {currentUser.name}
                         </span>
                         <StatusBadge
-                          label={currentRole}
+                          label={currentRole.charAt(0).toUpperCase() + currentRole.slice(1).toLowerCase()}
                           tone={getRoleBadgeTone(currentRole)}
                           size="sm"
                         />
@@ -261,10 +250,10 @@ export const TopBar: React.FC<TopBarProps> = ({
                           setProfileMenuOpen(false);
                           logout();
                         }}
-                        className="w-full px-3 py-2 text-xs text-left text-[#991B1B] hover:bg-[#FEE2E2]/40 rounded-lg flex items-center gap-2.5 transition-colors cursor-pointer"
+                        className="w-full px-3 py-2 text-xs text-left text-[#0A0A0A] hover:bg-[#FAFAFA] rounded-lg flex items-center gap-2.5 transition-colors cursor-pointer"
                       >
-                        <LogOut className="w-4 h-4 text-[#991B1B]" />
-                        <span>Log out</span>
+                        <LogOut className="w-4 h-4 text-[#6B7280]" />
+                        <span>Sign out</span>
                       </button>
                     </div>
                   </div>

@@ -24,6 +24,7 @@ import { GateShell } from './components/gate/GateShell';
 import { BottomNav } from './components/common/BottomNav';
 import { AdminMobileInterstitial } from './components/admin/AdminMobileInterstitial';
 import { OpportunitiesPage } from './pages/opportunities/OpportunitiesPage';
+import { EventsPage } from './pages/events/EventsPage';
 import { WelcomeReveal } from './components/common/WelcomeReveal';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { PrivacyPolicyPage } from './pages/legal/PrivacyPolicyPage';
@@ -31,13 +32,41 @@ import { TermsOfServicePage } from './pages/legal/TermsOfServicePage';
 import { DataGovernancePage } from './pages/legal/DataGovernancePage';
 import { IntroOverlay } from './components/intro/IntroOverlay';
 import { StyleguidePage } from './pages/dev/StyleguidePage';
+import { PublicCertificateVerifyPage } from './pages/verify/PublicCertificateVerifyPage';
 import type { AlumniProfile } from './types';
 
+const getInitialActiveTab = (): string => {
+  if (typeof window === 'undefined') return 'landing';
+  if (window.location.pathname.startsWith('/verify')) return 'verify';
+  if (window.location.pathname.startsWith('/reset-password')) return 'reset-password';
+  if (window.location.pathname.startsWith('/dev/styleguide') || window.location.pathname.startsWith('/styleguide')) return 'styleguide';
+  const params = new URLSearchParams(window.location.search);
+  const tabParam = params.get('tab');
+  if (tabParam) {
+    if (tabParam === 'jobs' || tabParam === 'opportunities') return 'opportunities';
+    if (tabParam === 'events') return 'events';
+    if (tabParam === 'mentorship' || tabParam === 'guidance') return 'mentorship';
+    if (tabParam === 'reports' || tabParam === 'analytics') return 'reports';
+    if (tabParam === 'messages' || tabParam === 'chat' || tabParam === 'messaging') return 'messaging';
+    if (tabParam === 'moderation') return 'moderation';
+    return tabParam;
+  }
+  return 'landing';
+};
+
+const getInitialReportsSubTab = (): 'analytics' | 'export' => {
+  if (typeof window === 'undefined') return 'analytics';
+  const params = new URLSearchParams(window.location.search);
+  const sub = params.get('subtab');
+  if (sub === 'export' || sub === 'exporter') return 'export';
+  return 'analytics';
+};
+
 const MainContent: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<string>('landing');
+  const [activeTab, setActiveTab] = useState<string>(getInitialActiveTab);
   const [opportunitiesSubTab, setOpportunitiesSubTab] = useState<'jobs' | 'events'>('jobs');
   const [mentorshipSubTab, setMentorshipSubTab] = useState<'find' | 'my-sent' | 'incoming' | 'requests' | undefined>(undefined);
-  const [reportsSubTab, setReportsSubTab] = useState<'analytics' | 'export'>('analytics');
+  const [reportsSubTab, setReportsSubTab] = useState<'analytics' | 'export'>(getInitialReportsSubTab);
   const [selectedMentorForBooking, setSelectedMentorForBooking] = useState<AlumniProfile | null>(null);
   const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => typeof window !== 'undefined' && window.innerWidth < 1024);
   const [adminBypassWarning, setAdminBypassWarning] = useState<boolean>(false);
@@ -57,11 +86,20 @@ const MainContent: React.FC = () => {
           setReportsSubTab('analytics');
         }
         setActiveTab('reports');
+      } else if (tabParam === 'guidance' || tabParam === 'mentorship') {
+        if (subtabParam) {
+          setMentorshipSubTab(subtabParam as any);
+        }
+        setActiveTab('mentorship');
+      } else if (tabParam === 'messages' || tabParam === 'chat' || tabParam === 'messaging') {
+        setActiveTab('messaging');
       } else {
         setActiveTab(tabParam);
       }
     } else if (typeof window !== 'undefined' && (window.location.pathname === '/reset-password' || window.location.pathname.startsWith('/reset-password'))) {
       setActiveTab('reset-password');
+    } else if (typeof window !== 'undefined' && (window.location.pathname.startsWith('/verify'))) {
+      setActiveTab('verify');
     } else if (typeof window !== 'undefined' && (window.location.pathname === '/dev/styleguide' || window.location.pathname === '/styleguide')) {
       setActiveTab('styleguide');
     }
@@ -103,17 +141,15 @@ const MainContent: React.FC = () => {
   }
 
   const handleTabChange = (tab: string, subTab?: string) => {
-    if (tab === 'jobs') {
-      setOpportunitiesSubTab('jobs');
+    if (tab === 'jobs' || tab === 'opportunities') {
       setActiveTab('opportunities');
       return;
     }
     if (tab === 'events') {
-      setOpportunitiesSubTab('events');
-      setActiveTab('opportunities');
+      setActiveTab('events');
       return;
     }
-    if (tab === 'mentorship') {
+    if (tab === 'mentorship' || tab === 'guidance') {
       if (subTab) {
         setMentorshipSubTab(subTab as any);
       }
@@ -129,8 +165,9 @@ const MainContent: React.FC = () => {
       setActiveTab('reports');
       return;
     }
-    if (subTab && (subTab === 'jobs' || subTab === 'events')) {
-      setOpportunitiesSubTab(subTab as any);
+    if (tab === 'messages' || tab === 'messaging' || tab === 'chat') {
+      setActiveTab('messaging');
+      return;
     }
     setActiveTab(tab);
   };
@@ -159,6 +196,10 @@ const MainContent: React.FC = () => {
       return <StyleguidePage setActiveTab={handleTabChange} />;
     }
 
+    if (activeTab === 'verify') {
+      return <PublicCertificateVerifyPage setActiveTab={handleTabChange} />;
+    }
+
     if (isLoggedOut) {
       return <LandingPage setActiveTab={handleTabChange} />;
     }
@@ -178,12 +219,12 @@ const MainContent: React.FC = () => {
           />
         );
       case 'opportunities':
-        return <OpportunitiesPage initialSubTab={opportunitiesSubTab} />;
       case 'jobs':
-        return <OpportunitiesPage initialSubTab="jobs" />;
+        return <OpportunitiesPage setActiveTab={handleTabChange} />;
       case 'events':
-        return <OpportunitiesPage initialSubTab="events" />;
+        return <EventsPage />;
       case 'mentorship':
+      case 'guidance':
         return (
           <MentorshipPage
             selectedMentorForBooking={selectedMentorForBooking}
@@ -232,11 +273,11 @@ const MainContent: React.FC = () => {
     }
   };
 
-  const isPortalTab = !isLoggedOut && !isUnverified && activeTab !== 'landing' && activeTab !== 'auth' && activeTab !== 'reset-password' && activeTab !== 'admin-invite' && activeTab !== 'privacy' && activeTab !== 'terms' && activeTab !== 'data-governance';
+  const isPortalTab = !isLoggedOut && !isUnverified && activeTab !== 'landing' && activeTab !== 'auth' && activeTab !== 'reset-password' && activeTab !== 'admin-invite' && activeTab !== 'privacy' && activeTab !== 'terms' && activeTab !== 'data-governance' && activeTab !== 'styleguide' && activeTab !== 'verify';
   const showAdminMobileInterstitial = isPortalTab && currentRole === 'admin' && isMobileScreen && !adminBypassWarning;
 
   // Intercept unverified accounts and isolate in minimal GateShell (no sidebar, no search, no bell)
-  if (isUnverified && activeTab !== 'privacy' && activeTab !== 'terms' && activeTab !== 'data-governance' && activeTab !== 'auth') {
+  if (isUnverified && activeTab !== 'privacy' && activeTab !== 'terms' && activeTab !== 'data-governance' && activeTab !== 'auth' && activeTab !== 'verify') {
     return (
       <GateShell>
         <VerificationPendingPage setActiveTab={setActiveTab} />
@@ -270,7 +311,7 @@ const MainContent: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {!welcomeRevealName && !isPortalTab && (
+      {!welcomeRevealName && !isPortalTab && activeTab !== 'verify' && (
         <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
       )}
 
@@ -364,6 +405,17 @@ const MainContent: React.FC = () => {
               >
                 <DataGovernancePage setActiveTab={setActiveTab} />
               </motion.div>
+            ) : activeTab === 'verify' ? (
+              <motion.div
+                key="verify"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                className="w-full max-w-full min-w-0"
+              >
+                <PublicCertificateVerifyPage setActiveTab={setActiveTab} />
+              </motion.div>
             ) : isLoggedOut || activeTab === 'landing' ? (
               <motion.div
                 key="landing"
@@ -400,8 +452,8 @@ const MainContent: React.FC = () => {
         </main>
       )}
 
-      {/* Footer rendered for public and verified portal pages only (hidden for unverified pending view) */}
-      {!isUnverified && !isPortalTab && <Footer setActiveTab={setActiveTab} isPublicPage={true} />}
+      {/* Footer rendered for public and verified portal pages only (hidden for unverified pending and verify views) */}
+      {!isUnverified && !isPortalTab && activeTab !== 'verify' && <Footer setActiveTab={setActiveTab} isPublicPage={true} />}
     </div>
   );
 };

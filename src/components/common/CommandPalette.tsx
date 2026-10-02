@@ -144,7 +144,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         {
           id: 'act-req-mentor',
           category: 'Action',
-          title: 'Request 1-on-1 Guidance',
+          title: 'Request 1-on-1 Mentorship',
           subtitle: 'Book mentorship session with alumni',
           icon: <BookOpen className="w-4 h-4 text-emerald-600" />,
           perform: () => {
@@ -180,7 +180,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         {
           id: 'act-mentorship-inbox',
           category: 'Action',
-          title: 'Review Guidance Asks',
+          title: 'Review Mentorship Requests',
           subtitle: 'Manage incoming student requests',
           icon: <BookOpen className="w-4 h-4 text-purple-600" />,
           perform: () => {

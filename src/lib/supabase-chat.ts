@@ -16,6 +16,8 @@ export const uploadChatAttachmentToStorage = async (file: File | Blob, pathPrefi
 };
 
 export const fetchAllUserMessages = async (userId: string) => {
+  const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+  if (!isValidUUID(userId)) return [];
   const { data, error } = await supabase
     .from('chat_messages')
     .select('*')
@@ -38,6 +40,8 @@ export const fetchReportedMessages = async () => {
 };
 
 export const markThreadAsReadInDB = async (currentUserId: string, contactId: string) => {
+  const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+  if (!isValidUUID(currentUserId) || !isValidUUID(contactId)) return;
   const { error } = await supabase
     .from('chat_messages')
     .update({ is_read: true })
@@ -49,26 +53,34 @@ export const markThreadAsReadInDB = async (currentUserId: string, contactId: str
 };
 
 export const fetchStarredConversations = async (userId: string) => {
-  const { data, error } = await supabase
-    .from('starred_conversations')
-    .select('contact_id')
-    .eq('user_id', userId);
-
-  if (error) throw error;
-  return data.map(d => d.contact_id);
+  const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+  if (!isValidUUID(userId)) return [];
+  try {
+    const { data, error } = await supabase
+      .from('conversation_participants')
+      .select('contact_id')
+      .eq('user_id', userId)
+      .eq('is_starred', true);
+    if (error) return [];
+    return (data || []).map(d => d.contact_id);
+  } catch {
+    return [];
+  }
 };
 
 export const toggleStarredConversationInDB = async (userId: string, contactId: string, isCurrentlyStarred: boolean) => {
-  if (isCurrentlyStarred) {
-    const { error } = await supabase
-      .from('starred_conversations')
-      .delete()
-      .match({ user_id: userId, contact_id: contactId });
-    if (error) throw error;
-  } else {
-    const { error } = await supabase
-      .from('starred_conversations')
-      .insert({ user_id: userId, contact_id: contactId });
-    if (error) throw error;
+  const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+  if (!isValidUUID(userId) || !isValidUUID(contactId)) return;
+  try {
+    await supabase
+      .from('conversation_participants')
+      .upsert({
+        user_id: userId,
+        contact_id: contactId,
+        is_starred: !isCurrentlyStarred,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id,contact_id' });
+  } catch (err) {
+    console.warn('[toggleStarredConversationInDB error]', err);
   }
 };

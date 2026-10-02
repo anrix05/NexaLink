@@ -256,7 +256,7 @@ export const SettingsPage: React.FC = () => {
     { id: 'profile' as const, label: 'Profile Details', icon: <User className="w-3.5 h-3.5" /> },
     { id: 'privacy' as const, label: 'Field Privacy', icon: <Eye className="w-3.5 h-3.5" /> },
     ...(currentRole === 'alumni'
-      ? [{ id: 'capacity' as const, label: 'Advisor Capacity', icon: <Sliders className="w-3.5 h-3.5" /> }]
+      ? [{ id: 'capacity' as const, label: 'Mentorship Capacity', icon: <Sliders className="w-3.5 h-3.5" /> }]
       : []),
     { id: 'notifications' as const, label: 'Notifications', icon: <Bell className="w-3.5 h-3.5" /> },
     { id: 'security' as const, label: 'Security', icon: <Shield className="w-3.5 h-3.5" /> }
@@ -697,7 +697,7 @@ export const SettingsPage: React.FC = () => {
         <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-6 space-y-5 sm:space-y-6 text-xs shadow-none">
           <div className="border-b border-[#E5E7EB] pb-3 sm:pb-4">
             <h2 className="text-xs sm:text-sm font-semibold text-[#0A0A0A] flex items-center gap-2">
-              <Sliders className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0A0A0A]" /> Advisor Mentee Capacity & Availability Limits
+              <Sliders className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0A0A0A]" /> Mentorship Capacity & Availability Limits
             </h2>
             <p className="text-[#6B7280] font-medium mt-0.5 sm:mt-1 line-clamp-2 sm:line-clamp-none">
               Prevent request overwhelm by setting a maximum capacity for active student mentees.

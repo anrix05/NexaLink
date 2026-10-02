@@ -1,0 +1,222 @@
+/**
+ * NexaLink Messaging v2 - Thread Header & Privacy Lock Popover
+ * Replaces old "Private" pill with subtle lock icon button and popover modal.
+ */
+
+import React, { useState } from 'react';
+import { Avatar } from '../../../utils/avatarHelper';
+import {
+  Lock,
+  Search,
+  MoreVertical,
+  Star,
+  BellOff,
+  UserX,
+  Flag,
+  UserCheck,
+  X,
+  ShieldCheck,
+  ChevronDown
+} from 'lucide-react';
+import type { ContactItem } from '../../../pages/messaging/MessagingPage';
+
+interface ThreadHeaderProps {
+  contact: ContactItem;
+  isStarred: boolean;
+  isMuted: boolean;
+  onToggleStar: () => void;
+  onToggleMute: () => void;
+  onToggleThreadSearch: () => void;
+  onViewProfile?: () => void;
+  onReportConversation?: () => void;
+  onBlockUser?: () => void;
+  onBackMobile?: () => void;
+}
+
+export const ThreadHeader: React.FC<ThreadHeaderProps> = ({
+  contact,
+  isStarred,
+  isMuted,
+  onToggleStar,
+  onToggleMute,
+  onToggleThreadSearch,
+  onViewProfile,
+  onReportConversation,
+  onBlockUser,
+  onBackMobile
+}) => {
+  const [showPrivacyPopover, setShowPrivacyPopover] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+
+  return (
+    <div className="h-[72px] min-h-[72px] max-h-[72px] border-b border-[#E5E7EB] bg-white px-5 flex items-center justify-between shrink-0 relative z-20">
+      {/* Left: Avatar & Contact Meta */}
+      <div className="flex items-center gap-3 min-w-0">
+        {onBackMobile && (
+          <button
+            type="button"
+            onClick={onBackMobile}
+            className="md:hidden p-2 text-[#6B7280] hover:text-[#0A0A0A] hover:bg-[#F3F4F6] rounded-lg -ml-1 transition-colors cursor-pointer"
+            aria-label="Back to conversations"
+          >
+            <span className="text-base font-semibold">←</span>
+          </button>
+        )}
+
+        <div className="relative shrink-0 cursor-pointer" onClick={onViewProfile}>
+          <Avatar
+            src={contact.avatarUrl}
+            name={contact.name}
+            size={40}
+            className="border border-[#E5E7EB]"
+          />
+          {contact.online && (
+            <span
+              className="w-2.5 h-2.5 rounded-full absolute bottom-0 right-0 ring-2 ring-white bg-[#0A0A0A]"
+            />
+          )}
+        </div>
+
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <h3
+              onClick={onViewProfile}
+              className="font-semibold text-base leading-6 text-[#0A0A0A] truncate cursor-pointer hover:underline"
+            >
+              {contact.name}
+            </h3>
+
+            {/* Subtle Private Lock Icon Button (Replaces old pill!) */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowPrivacyPopover(!showPrivacyPopover)}
+                className="p-1 text-[#6B7280] hover:text-[#0A0A0A] rounded-md hover:bg-neutral-100 transition-colors cursor-pointer"
+                title="Private & Encrypted"
+                aria-label="Privacy Information"
+              >
+                <Lock className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Privacy Popover */}
+              {showPrivacyPopover && (
+                <div
+                  className="absolute left-0 mt-1 w-64 p-3 bg-white border border-[#E5E7EB] rounded-2xl shadow-xl z-50 text-xs text-[#0A0A0A] space-y-2 animate-in fade-in zoom-in-95 duration-150"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between pb-1 border-b border-[#F3F4F6]">
+                    <div className="flex items-center gap-1.5 font-semibold text-[#0A0A0A]">
+                      <ShieldCheck className="w-4 h-4 text-[#0A0A0A]" />
+                      <span>Private Conversation</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowPrivacyPopover(false)}
+                      className="text-[#9CA3AF] hover:text-[#0A0A0A]"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-[#6B7280] leading-relaxed">
+                    Only you and <strong className="text-[#0A0A0A]">{contact.name}</strong> can read messages and attachments sent in this thread. Messages you report are reviewed by verified administrators.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <p className="text-[13px] leading-5 text-[#6B7280] truncate mt-0.5">
+            {contact.type === 'alumni' ? 'Alumni' : contact.type === 'faculty' ? 'Faculty' : 'Student'} · {contact.company} · {contact.designation}{contact.online ? ' · Online' : ''}
+          </p>
+        </div>
+      </div>
+
+      {/* Right: 36px Ghost Icon Buttons */}
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          type="button"
+          onClick={onToggleThreadSearch}
+          className="w-9 h-9 rounded-lg text-[#6B7280] hover:text-[#0A0A0A] hover:bg-[#F3F4F6] flex items-center justify-center transition-colors cursor-pointer"
+          title="Search in conversation"
+          aria-label="Search conversation"
+        >
+          <Search className="w-4 h-4" />
+        </button>
+
+        <button
+          type="button"
+          onClick={onToggleStar}
+          className={`w-9 h-9 rounded-lg flex items-center justify-center hover:bg-[#F3F4F6] transition-colors cursor-pointer ${
+            isStarred ? 'text-[#0A0A0A]' : 'text-[#6B7280] hover:text-[#0A0A0A]'
+          }`}
+          title={isStarred ? 'Unstar conversation' : 'Star conversation'}
+          aria-label={isStarred ? 'Unstar conversation' : 'Star conversation'}
+        >
+          <Star className={`w-4 h-4 ${isStarred ? 'fill-current' : ''}`} />
+        </button>
+
+        {/* Overflow Menu */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowMenu(!showMenu)}
+            className="w-9 h-9 rounded-lg text-[#6B7280] hover:text-[#0A0A0A] hover:bg-[#F3F4F6] flex items-center justify-center transition-colors cursor-pointer"
+            title="More actions"
+            aria-label="More actions"
+          >
+            <MoreVertical className="w-4 h-4" />
+          </button>
+
+          {showMenu && (
+            <div
+              className="absolute right-0 mt-1 w-48 bg-white border border-[#E5E7EB] rounded-2xl shadow-xl p-1.5 z-50 text-xs text-[#0A0A0A] space-y-0.5 animate-in fade-in duration-100"
+              onClick={() => setShowMenu(false)}
+            >
+              {onViewProfile && (
+                <button
+                  type="button"
+                  onClick={onViewProfile}
+                  className="w-full px-2.5 py-1.5 text-left rounded-xl hover:bg-[#FAFAFA] transition-colors flex items-center gap-2 cursor-pointer"
+                >
+                  <UserCheck className="w-3.5 h-3.5 text-[#6B7280]" />
+                  <span>View profile</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={onToggleMute}
+                className="w-full px-2.5 py-1.5 text-left rounded-xl hover:bg-[#FAFAFA] transition-colors flex items-center gap-2 cursor-pointer"
+              >
+                <BellOff className="w-3.5 h-3.5 text-[#6B7280]" />
+                <span>{isMuted ? 'Unmute notifications' : 'Mute notifications'}</span>
+              </button>
+
+              {onReportConversation && (
+                <button
+                  type="button"
+                  onClick={onReportConversation}
+                  className="w-full px-2.5 py-1.5 text-left rounded-xl hover:bg-rose-50 text-rose-700 transition-colors flex items-center gap-2 cursor-pointer"
+                >
+                  <Flag className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Report conversation</span>
+                </button>
+              )}
+
+              {onBlockUser && (
+                <button
+                  type="button"
+                  onClick={onBlockUser}
+                  className="w-full px-2.5 py-1.5 text-left rounded-xl hover:bg-rose-50 text-rose-700 transition-colors flex items-center gap-2 cursor-pointer"
+                >
+                  <UserX className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Block user</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

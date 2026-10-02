@@ -57,9 +57,15 @@ NexaLink is engineered as a modern, accredited institutional platform for Vidyal
 - **`CampusEvent`:**  
   `id`, `title`, `description`, `category` (`'Alumni Meet' | 'Guest Lecture' | 'Technical Workshop' | 'Placement Drive' | 'Research Seminar'`), `date`, `time`, `location`, `speakerName`, `speakerRole`, `speakerCompany`, `organizerDepartment`, `capacity`, `registeredCount`, `waitlistCount`, `isVirtual`, `meetingUrl`, `materialsUrl`.
 - **`MentorshipRequest`:**  
-  `id`, `studentId`, `studentName`, `studentDepartment`, `studentEmail`, `mentorId`, `mentorName`, `mentorRole`, `purpose`, `proposedDate`, `timeslot`, `notes`, `status` (`'pending' | 'accepted' | 'declined' | 'completed'`), `createdAt`, `feedback`, `rating`.
-- **`ChatMessage`:**  
-  `id`, `senderId`, `receiverId`, `content`, `timestamp`, `category`, `isRead`, `attachmentName`, `attachmentUrl`, `senderRole`, `isReported`, `reportReason`.
+  `id`, `studentId`, `studentName`, `studentDepartment`, `studentEmail`, `mentorId`, `mentorName`, `mentorRole`, `purpose`, `proposedDate`, `timeslot`, `notes`, `status` (`'pending' | 'accepted' | 'declined' | 'completed'`), `createdAt`, `feedback`, `rating`, `seenAt` (timestamp preventing phantom unread badge notifications).
+- **`ChatMessage` (Messaging v2):**  
+  `id`, `senderId`, `receiverId`, `content`, `timestamp`, `category`, `isRead`, `status` (`'sending' | 'sent' | 'delivered' | 'read' | 'failed'`), `attachments` (`MessageAttachment[]`), `replyTo` (`ReplySnippet`), `reactions` (`MessageReaction[]`), `editedAt` (`string | null`), `deletedAt` (`string | null`), `clientMsgId` (`string`), `errorReason` (`string`), `isReported`, `reportReason`.
+- **`MessageAttachment`:**  
+  `id`, `messageId`, `conversationId`, `uploaderId`, `storagePath`, `fileName`, `mimeType`, `sizeBytes`, `scanStatus` (`'ok' | 'flagged' | 'pending'`), `signedUrl`.
+- **`ReplySnippet`:**  
+  `id`, `name`, `content`, `isDeleted`.
+- **`MessageReaction`:**  
+  `emoji`, `userId`.
 - **`InstitutionalAnnouncement`:**  
   `id`, `title`, `content`, `category` (`'General' | 'Academic' | 'Placement' | 'Alumni' | 'Urgent'`), `targetAudience` (`'all' | 'students' | 'alumni' | 'faculty'`), `authorId`, `authorName`, `createdAt`, `expiresAt`, `isPinned`, `priority`.
 - **`RoleTransitionRequest`:**  
@@ -84,7 +90,12 @@ NexaLink is engineered as a modern, accredited institutional platform for Vidyal
 | `approveRoleTransition(requestId, adminId)` | Promotes student to alumni profile preserving original user ID, message history, and mentorship logs. |
 | `inviteNewAdmin(email, adminId)` | Generates single-use `AdminInvite` token; enforces safety checks before active admin step-down. |
 | `acceptAdminInvite(inviteId, name, password)` | Consumes invitation token and provisions active Admin account. |
-| `reportMessage(messageId, reason)` | Flags P2P message for administrative safety review (`isReported: true`) without compromising non-reported thread privacy. |
+| `sendMessage(targetUserId, text, category, attachmentName, senderIdentity, attachments, replyTo)` | Optimistically dispatches outbound message, formats attachments, enqueues background cloud sync, and tracks delivery status. |
+| `deleteMessage(messageId)` | Soft-deletes message for everyone within the 60-minute window (`deletedAt = now()`), leaving quiet tombstone. |
+| `editMessage(messageId, newContent)` | Edits message content within the 15-minute window (`editedAt = now()`), displaying `(edited)` indicator in metadata. |
+| `toggleReaction(messageId, emoji)` | Enforces 1-reaction-per-user policy with immediate optimistic toggling. |
+| `retryFailedMessage / deleteFailedMessage` | Outbox management for messages failed during offline drops or rate-limit rejections. |
+| `reportMessage(messageId, reason)` | Flags P2P message for administrative safety review (`isReported: true`) and creates moderation snapshot with ±10 context messages. |
 | `dismissMessageReport / actionMessageReport` | Moderates reported message (clears report flag, issues warning, or purges violating message). |
 | `updateCurrentUserState(updates)` | Synchronizes mutated user properties across active memory and storage immediately. |
 
@@ -93,25 +104,41 @@ NexaLink is engineered as a modern, accredited institutional platform for Vidyal
 ## 4. Backend Cloud Architecture & Supabase Integration (Phase 5)
 
 ### 4.1 Database Layer (PostgreSQL)
-- **14 Relational Tables:** `users`, `alumni_profiles`, `student_profiles`, `faculty_profiles`, `admin_profiles`, `opportunities`, `opportunity_applications`, `campus_events`, `event_rsvps`, `mentorship_requests`, `chat_messages`, `institutional_announcements`, `audit_logs`, `role_transition_requests`, `admin_invites`.
+- **17 Relational Tables:** `users`, `profile_contacts`, `alumni_profiles`, `student_profiles`, `faculty_profiles`, `admin_profiles`, `opportunities`, `opportunity_applications`, `campus_events`, `event_attendees`, `mentorship_requests`, `mentorship_reviews`, `chat_conversations`, `chat_messages`, `message_reports`, `auth_attempts`, `admin_invites`, `audit_logs`.
+- **Database Migrations Ledger:**
+  - `20261001000001_v3_core_schema.sql`: Core 17 relational tables, RLS policies, audit chains.
+  - `20261001000002_storage_hardening.sql`: Bucket security, signed URLs, and MIME constraints.
+  - `20261002000001_v3_flows_and_moderation.sql`: Moderation reporting snapshots, role transition triggers.
+  - `20261002000002_chat_and_mentorship_hardening.sql`: Chat reactions, soft deletes, mentorship seen-at timestamps.
+  - `20261003000001_messaging_v2_core.sql`: Client message ID UUID idempotency, attachment metadata models, 15m edit windows.
 - **Row-Level Security (RLS):**
   - Users can read/update their own profile data.
   - Directory reads are restricted to verified users.
   - Private P2P chat messages are strictly readable by sender and recipient only; admins can only view messages where `is_reported = true`.
   - Administrative tables (`audit_logs`, `admin_invites`) require authenticated `admin` role.
 
-### 4.2 Storage Persistence Architecture
+### 4.2 Storage Persistence Architecture & Chat Attachment Pipeline
 - **Supabase Storage Buckets:**
   - `avatars`: Public read, authenticated user write for profile avatars.
-  - `proof-documents`: Restricted read (uploader and admin), authenticated user write for college IDs and degree certificates.
+  - `proof-documents`: Restricted read (uploader and admin), authenticated user write for college IDs and degree certificates (60s signed URLs).
   - `resumes`: Authenticated student write, mentor/recruiter read for career opportunities.
-  - `chat-attachments`: Scoped to conversation participants.
+  - `chat-attachments`: Scoped strictly to conversation participants.
   - `event-certificates`: Browser-generated event certificates stored for download history.
-- **Instant Persistence Flow:** Avatar and document uploads run through `uploadAvatar` / `uploadProofDocument` (`storage.ts`), immediately saving to Supabase Storage and calling `updateCurrentUserState()` to update the database record and local session synchronously, preventing loss on page reload.
+- **Chat Attachment Pipeline:**
+  - Drag-and-drop & clipboard paste listener.
+  - Pre-upload validation: max 10MB per file, allowed MIME types (JPEG, PNG, WebP, PDF), max 4 files per send.
+  - Image processing: async client-side canvas downsampling, thumbnail generation for instant previews, and WebP/JPEG compression.
+  - Zero Cumulative Layout Shift (CLS = 0): images render with reserved aspect-ratio grids outside message bubbles.
+  - Lightbox: click-to-expand full-screen image previewer with download capabilities.
 
-### 4.3 Realtime Subscriptions (NexaChats)
+### 4.3 Realtime Subscriptions & Optimistic Sync (NexaChats v2)
 - Realtime WebSocket updates powered by Supabase `postgres_changes` listening to `INSERT` and `UPDATE` events on `chat_messages`.
-- Seamless message delivery tracking (`sending` -> `delivered` -> `read`).
+- Optimistic Outbox Architecture:
+  1. Client generates UUID `clientMsgId`.
+  2. Local state updates immediately with status `sending`.
+  3. Attachments upload asynchronously with per-item progress indicators.
+  4. Message payload is committed to `chat_messages`.
+  5. Realtime subscription receives postgres notification, deduplicating via `clientMsgId` and transitioning status: `sending` -> `sent` -> `delivered` -> `read`.
 
 ---
 
@@ -126,14 +153,25 @@ NexaLink is engineered as a modern, accredited institutional platform for Vidyal
    - An in-memory reference flag (`isMockSessionRef`) prevents Supabase Auth state change listeners from triggering unwanted token refresh redirects or logging out local development mock sessions.
 4. **Tree-Shaking Mock Data:**
    - Static imports of `mockData.ts` are converted into dynamic `import()` calls gated by `import.meta.env.DEV`, ensuring 30+ KB of dummy data is completely eliminated from the production client bundle.
-5. **Defensive Recommendation Engine & Null Guards:**
-   - Null-safe validations (`if (!student || !target) return ...`) across `recommendationEngine.ts` (`calculateAlumniMatch`, `calculateFacultyMatch`, `calculateOpportunityMatch`).
-   - Early unmount returns (`if (!currentUser) return null;`) across dashboard and navigation shell components (`StudentDashboard.tsx`, `AlumniDashboard.tsx`, `FacultyDashboard.tsx`, `SidebarNav.tsx`, `BottomNav.tsx`) to guard against session teardown race conditions.
-6. **Session Security & Root Route Protection:**
-   - `logout()` triggers immutable session nulling (`currentUser = null`, `isAuthenticated = false`, and purges `sessionStorage`).
-   - Public legal pages (Terms, Privacy, Data Governance) are explicitly un-gated in the root router (`App.tsx`).
-   - `isPublicView` guarantees `Navbar.tsx` only renders public links on public views.
-   - Global scroll restoration (`window.scrollTo(0, 0)`) executes on all `activeTab` transitions.
-7. **Rate Limiting & Password Security:**
-   - 5 consecutive failed login attempts trigger a 15-minute temporary lockout.
-   - Secure OTP reset verification (`482910` demo / production gateway).
+5. **Route-Aware Adaptive Rail Collapse:**
+   - On `/messages`, `SidebarNav` auto-collapses to a 72px icon rail on viewports between 1024px and 1279px (`lg:max-xl`), preventing column cramping and maintaining standard 340px conversation list and 720px thread reading canvas.
+6. **Message Lifecycle & Moderation Protection:**
+   - Text editing is strictly limited to 15 minutes post-send with `(edited)` indicator in the metadata line.
+   - Deletion is strictly limited to 60 minutes post-send, creating a quiet soft-delete tombstone (`deletedAt`).
+   - Moderation reporting captures an immutable snapshot of ±10 surrounding messages in `message_reports` for context audit.
+7. **Phantom Unread Badge Suppression:**
+   - Mentorship requests track `seenAt` timestamp to prevent false positive badge counts on the navigation sidebar when requests are already approved.
+8. **Composite Input Focus Architecture:**
+   - Message composer eliminates inner textarea outlines (`style={{ outline: 'none' }}`), focusing strictly via the outer 14px container ring (`focus-within:ring-2 focus-within:ring-[#0A0A0A]`).
+9. **200-Message QA Benchmark Fixture:**
+   - Embedded `generate200MessageThread()` export in DEV mode generating diverse payloads (attachments, code, emojis, URLs, replies, edits, soft-deletes) to test virtualized scroll stability and cluster tail accuracy.
+10. **Defensive Recommendation Engine & Null Guards:**
+    - Null-safe validations (`if (!student || !target) return ...`) across `recommendationEngine.ts` (`calculateAlumniMatch`, `calculateFacultyMatch`, `calculateOpportunityMatch`).
+    - Early unmount returns (`if (!currentUser) return null;`) across dashboard and navigation shell components to guard against session teardown race conditions.
+11. **Session Security & Root Route Protection:**
+    - `logout()` triggers immutable session nulling (`currentUser = null`, `isAuthenticated = false`, and purges `sessionStorage`).
+    - Public legal pages (Terms, Privacy, Data Governance) are explicitly un-gated in the root router (`App.tsx`).
+    - `isPublicView` guarantees `Navbar.tsx` only renders public links on public views.
+12. **Rate Limiting & Password Security:**
+    - 5 consecutive failed login attempts trigger a 15-minute temporary lockout via `auth-login-guard`.
+    - Secure OTP reset verification (`482910` demo / production gateway).

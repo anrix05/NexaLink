@@ -35,6 +35,7 @@ import {
 import { UserManagementTable } from '../../components/admin/UserManagementTable';
 import { VerificationQueueMasterDetail, type VerificationItem } from '../../components/admin/VerificationQueueMasterDetail';
 import { AdminVisualAnalytics } from './AdminVisualAnalytics';
+import { AdminModerationQueue } from '../../components/admin/AdminModerationQueue';
 import {
   PageHeader,
   FocusPanel,
@@ -60,6 +61,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
     studentList,
     facultyList,
     jobsList,
+    eventsList,
+    reviewEvent,
+    reviewOpportunity,
     mentorshipRequests,
     pendingUsersList,
     auditLogs,
@@ -132,10 +136,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
   const [ancIsPinned, setAncIsPinned] = useState(false);
   const [isSubmittingAnc, setIsSubmittingAnc] = useState(false);
 
-  const pendingJobs = jobsList.filter(j => j.moderationStatus === 'Pending Approval');
+  const pendingJobs = jobsList.filter(j => j.moderationStatus === 'Pending Approval' || j.lifecycleStatus === 'pending_review' || j.lifecycleStatus === 'changes_requested');
+  const pendingEvents = eventsList.filter(e => e.lifecycleStatus === 'pending_review' || e.lifecycleStatus === 'changes_requested');
   const pendingTransitions = roleTransitionRequests.filter(r => r.status === 'pending');
   const pastGradStudents = getStudentsPastGraduation();
   const reportedMessages = getReportedMessages();
+  const totalModerationCount = pendingEvents.length + pendingJobs.length + reportedMessages.length;
 
   const showNotification = (msg: string) => {
     setNotice(msg);
@@ -386,7 +392,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
           { id: 'overview', label: 'Command center' },
           { id: 'approvals', label: 'Verification queue', count: totalPendingQueue },
           { id: 'users', label: 'User roster', count: allUsersTable.length },
-          { id: 'moderation', label: 'Opportunity moderation', count: pendingJobs.length },
+          { id: 'moderation', label: 'Moderation queue', count: totalModerationCount },
           { id: 'announcements', label: 'Announcements', count: announcements.filter(a => !a.isRetracted).length },
           { id: 'reports', label: 'Reported messages', count: reportedMessages.length },
           { id: 'graduation', label: 'Graduation tool' },
@@ -843,66 +849,52 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
         </div>
       )}
 
-      {/* VIEW 4: OPPORTUNITY MODERATION */}
+      {/* VIEW 4: UNIFIED MODERATION QUEUE (EVENTS, OPPORTUNITIES, REPORTED MESSAGES) */}
       {activeAdminTab === 'moderation' && (
-        <div className="space-y-4">
-          <Section
-            title="Opportunity moderation queue"
-            count={pendingJobs.length}
-            description="Verify internships, jobs, research projects, and referral listings submitted by alumni and faculty before publication."
-            noTopHairline
-          >
-            {pendingJobs.length === 0 ? (
-              <EmptyState
-                icon={<Briefcase className="w-5 h-5 text-[#0A0A0A]" />}
-                title="All opportunities moderated"
-                sentence="No job, internship, or research listings are currently awaiting administrative approval."
-              />
-            ) : (
-              <div className="space-y-4">
-                {pendingJobs.map(job => (
-                  <div key={job.id} className="p-5 bg-white border border-[#E5E7EB] rounded-xl space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-semibold text-[#0A0A0A] text-sm">{job.title}</h4>
-                          <StatusBadge tone="indigo" label={job.type} />
-                        </div>
-                        <p className="text-xs text-[#6B7280] mt-0.5">
-                          {job.company} · Posted by <strong className="text-[#0A0A0A]">{job.postedByAlumniName}</strong>
-                        </p>
-                      </div>
-                      <span className="text-xs font-semibold text-[#0A0A0A] tabular-nums">{job.stipendOrSalary}</span>
-                    </div>
-
-                    <p className="text-xs text-[#374151] bg-[#FAFAFA] p-3 rounded-lg border border-[#E5E7EB] leading-relaxed">
-                      "{job.description}"
-                    </p>
-
-                    <div className="flex items-center justify-end gap-2 pt-1 border-t border-[#E5E7EB]">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          moderateOpportunity(job.id, 'Rejected', 'Role criteria did not meet institutional safety guidelines.');
-                          showNotification('Opportunity submission rejected.');
-                        }}
-                        className="px-3 py-1.5 border border-[#6B7280] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-lg transition-colors cursor-pointer"
-                      >
-                        Reject
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleApproveJob(job.id)}
-                        className="px-3.5 py-1.5 bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-medium rounded-lg transition-colors cursor-pointer"
-                      >
-                        Approve & publish live
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Section>
+        <div className="space-y-6">
+          <PageHeader
+            eyebrow="Governance"
+            title="Moderation queue"
+            subtitle="Central review queue for institutional events, career opportunities, and reported communications."
+          />
+          <AdminModerationQueue
+            pendingEvents={pendingEvents}
+            pendingJobs={pendingJobs}
+            reportedMessages={reportedMessages}
+            allEvents={eventsList}
+            onApproveEvent={(id) => {
+              reviewEvent(id, 'approve');
+              showNotification('Event approved and published live to institutional calendars.');
+            }}
+            onRequestEventChanges={(id, note) => {
+              reviewEvent(id, 'request_changes', note);
+              showNotification('Feedback and change request sent to event host.');
+            }}
+            onRejectEvent={(id, reason) => {
+              reviewEvent(id, 'reject', reason);
+              showNotification('Event submission rejected.');
+            }}
+            onApproveJob={(id) => {
+              reviewOpportunity(id, 'approve');
+              showNotification('Opportunity approved and published live.');
+            }}
+            onRequestJobChanges={(id, note) => {
+              reviewOpportunity(id, 'request_changes', note);
+              showNotification('Feedback and change request sent to poster.');
+            }}
+            onRejectJob={(id, reason) => {
+              reviewOpportunity(id, 'reject', reason);
+              showNotification('Opportunity rejected.');
+            }}
+            onDismissReport={(id) => {
+              dismissMessageReport(id, 'user-admin-1');
+              showNotification('Report dismissed.');
+            }}
+            onActionReport={(id) => {
+              actionMessageReport(id, 'user-admin-1', 'warn_user');
+              showNotification('Message violation actioned.');
+            }}
+          />
         </div>
       )}
 

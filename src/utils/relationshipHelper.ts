@@ -20,9 +20,9 @@ export function getRequestTypeConfig(fromRole: string, toRole: string): RequestT
   // Student -> Alumni / Faculty (Mentorship)
   if (from === 'student') {
     return {
-      label: 'Request Guidance',
+      label: 'Request Mentorship',
       requestType: 'MENTORSHIP',
-      description: 'Mentorship request from student to advisor',
+      description: 'Mentorship request from student to mentor',
       badgeBg: 'bg-[#F3F4F6] text-[#374151] border-[#E5E7EB]',
       purposeOptions: [
         'Career Guidance',
@@ -72,7 +72,7 @@ export function getRequestTypeConfig(fromRole: string, toRole: string): RequestT
 
   // Default fallback
   return {
-    label: 'Request Guidance',
+    label: 'Request Mentorship',
     requestType: 'MENTORSHIP',
     description: 'General mentorship request',
     badgeBg: 'bg-[#F3F4F6] text-[#374151] border-[#E5E7EB]',

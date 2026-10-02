@@ -46,7 +46,7 @@ export const FeaturesStackingCards: React.FC<FeaturesStackingCardsProps> = ({ on
                   <GraduationCap className="w-5 h-5" />
                 </div>
                 <div className="space-y-2">
-                  <span className="text-xs font-medium text-[#6B7280] font-sans">01 · Guidance</span>
+                  <span className="text-xs font-medium text-[#6B7280] font-sans">01 · Mentorship</span>
                   <h3 className="text-2xl sm:text-3xl font-display font-bold text-[#0A0A0A]">
                     1:1 structured mentorship
                   </h3>

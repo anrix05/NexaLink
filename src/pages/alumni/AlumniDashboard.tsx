@@ -242,7 +242,7 @@ const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniPr
                     : 'No ratings yet'
                 },
                 {
-                  label: 'Active advisories',
+                  label: 'Active mentees',
                   value: `${activeMenteesCount} / ${maxMentees}`,
                   subtext: activeMenteesCount >= maxMentees ? 'Capacity full' : `${maxMentees - activeMenteesCount} slots open`
                 }
@@ -254,7 +254,7 @@ const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniPr
           <Section
             title="Requests waiting for your response"
             count={pendingRequests.length}
-            description="Student guidance requests pending your approval or decline."
+            description="Student mentorship requests pending your approval or decline."
           >
             {pendingRequests.length === 0 ? (
               <EmptyState

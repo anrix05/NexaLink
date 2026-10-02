@@ -362,8 +362,8 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
           {
             label: 'Active requests',
             value: activeStudentRequests.length,
-            subtext: activeStudentRequests.length > 0 ? 'Guidance & research' : 'No requests yet',
-            onClick: () => setActiveTab('mentorship', 'my-sent'),
+            subtext: activeStudentRequests.length > 0 ? 'Mentorship & research' : 'No requests yet',
+            onClick: () => setActiveTab('mentorship', 'requests'),
             trend: activeStudentRequests.length > 0 ? { value: `${activeStudentRequests.length} active`, positive: true } : undefined
           },
           {

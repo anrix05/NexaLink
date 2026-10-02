@@ -59,12 +59,22 @@ const parseRecoveryUrlState = () => {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentRole, setCurrentRole] = useState<UserRole>('student');
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const wasAuthenticatedRef = useRef<boolean>(false);
-  const isMockSessionRef = useRef<boolean>(false);
-  const [isCheckingSession, setIsCheckingSession] = useState<boolean>(true);
+  const getInitialUser = () => {
+    if (typeof window === 'undefined') return null;
+    const saved = localStorage.getItem('nexalink_auth_user');
+    if (saved) {
+      try { return JSON.parse(saved); } catch { return null; }
+    }
+    return null;
+  };
+
+  const initialUser = getInitialUser();
+  const [currentRole, setCurrentRole] = useState<UserRole>(initialUser?.role || 'student');
+  const [currentUser, setCurrentUser] = useState<any>(initialUser);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!initialUser);
+  const wasAuthenticatedRef = useRef<boolean>(!!initialUser);
+  const isMockSessionRef = useRef<boolean>(!!initialUser);
+  const [isCheckingSession, setIsCheckingSession] = useState<boolean>(!initialUser);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [welcomeRevealName, setWelcomeRevealName] = useState<string | null>(null);
   const [notificationCount, setNotificationCount] = useState<number>(3);
@@ -108,6 +118,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Sync Supabase Auth Session on Mount
   useEffect(() => {
     if (!isSupabaseConfigured()) {
+      const savedMock = localStorage.getItem('nexalink_auth_user');
+      if (savedMock) {
+        try {
+          const parsed = JSON.parse(savedMock);
+          setCurrentUser(parsed);
+          setCurrentRole(parsed.role || 'student');
+          setIsAuthenticated(true);
+          isMockSessionRef.current = true;
+        } catch {
+          // ignore
+        }
+      }
       setIsCheckingSession(false);
       return;
     }

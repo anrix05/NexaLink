@@ -8,6 +8,8 @@ import type {
   EventItem,
   MentorshipRequest,
   ChatMessage,
+  MessageAttachment,
+  ReplySnippet,
   Announcement,
   NotificationItem,
   MentorshipGuidancePurpose,
@@ -16,12 +18,18 @@ import type {
   EventFeedback,
   UserRole,
   RoleTransitionRequest,
-  AdminInvite
+  AdminInvite,
+  EventRsvp,
+  OpportunityApplication,
+  OpportunityApplicationStatus,
+  EventLifecycleStatus,
+  OpportunityLifecycleStatus
 } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { subscribeToChatMessages, subscribeToNotifications } from '../lib/realtime';
 import { parseAnnouncementMeta, serializeAnnouncementContent } from '../components/common/InstitutionalAnnouncementFeed';
-import { INITIAL_ANNOUNCEMENTS } from '../data/mockData';
+import { INITIAL_ANNOUNCEMENTS, INITIAL_APPLICATIONS, INITIAL_RSVPS } from '../data/mockData';
+import { validateEventLeadTime, checkVenueConflict, generateCheckinCode } from '../utils/eventTimeUtils';
 
 const generateUUID = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -63,6 +71,8 @@ interface DataContextType {
   pendingUsersList: (StudentProfile | AlumniProfile | FacultyProfile)[];
   jobsList: JobListing[];
   eventsList: EventItem[];
+  eventRsvps: EventRsvp[];
+  opportunityApplications: OpportunityApplication[];
   mentorshipRequests: MentorshipRequest[];
   announcements: Announcement[];
   notifications: NotificationItem[];
@@ -87,15 +97,48 @@ interface DataContextType {
   addEvent: (event: Omit<EventItem, 'id' | 'rsvpsCount' | 'registeredUserIds' | 'status'>) => void;
   rsvpEvent: (eventId: string, userId: string) => void;
   submitEventFeedback: (eventId: string, userId: string, userName: string, rating: number, comment: string) => void;
+
+  // Extended Host-Side Event & Opportunity Methods
+  saveEventDraft: (eventData: Partial<EventItem>) => { success: boolean; event: EventItem };
+  submitEventForReview: (eventData: Partial<EventItem>, callerRole?: string) => { success: boolean; event: EventItem; isAutoPublished: boolean; message: string };
+  reviewEvent: (eventId: string, action: 'approve' | 'request_changes' | 'reject', note?: string) => void;
+  updateEvent: (eventId: string, patch: Partial<EventItem>, callerRole?: string) => { requiresReview: boolean; event: EventItem };
+  cancelEvent: (eventId: string, reason: string) => void;
+  openEventCheckin: (eventId: string) => { checkinCode: string; opensAt: string };
+  checkInToEvent: (eventId: string, userId: string, code: string) => { success: boolean; message: string };
+  markAttendanceManual: (eventId: string, userId: string, attended: boolean) => void;
+  messageEventRegistrants: (eventId: string, subject: string, body: string) => { success: boolean };
+  saveOpportunityDraft: (jobData: Partial<JobListing>) => { success: boolean; job: JobListing };
+  submitOpportunityForReview: (jobData: Partial<JobListing>, callerRole?: string) => { success: boolean; job: JobListing; isAutoPublished: boolean; message: string };
+  reviewOpportunity: (jobId: string, action: 'approve' | 'request_changes' | 'reject', note?: string) => void;
+  closeOpportunity: (jobId: string, reason?: string) => void;
+  updateApplicationStatus: (applicationId: string, status: OpportunityApplicationStatus, note?: string) => void;
   sendMentorshipRequest: (req: Omit<MentorshipRequest, 'id' | 'requestedDate' | 'status'>) => void;
   updateMentorshipStatus: (requestId: string, status: 'Accepted' | 'Declined' | 'Completed' | 'Expired', notes?: string, callerRole?: string) => { success: boolean; statusCode?: number; error?: string };
   submitMentorshipFeedback: (requestId: string, rating: number, review: string) => void;
-  sendMessage: (receiverId: string, content: string, category?: MentorshipGuidancePurpose, attachmentName?: string, sender?: { id: string; name: string; role: import('../types').UserRole; avatar: string }, voiceNoteUrl?: string, voiceNoteDuration?: number) => void;
+  withdrawMentorshipRequest: (requestId: string) => void;
+  completeMentorship: (requestId: string, rating?: number, feedback?: string) => void;
+  markMentorshipSeen: (requestIdOrAll?: string) => void;
+  sendMessage: (
+    receiverId: string,
+    content: string,
+    category?: MentorshipGuidancePurpose,
+    attachmentName?: string,
+    sender?: { id: string; name: string; role: import('../types').UserRole; avatar: string },
+    attachments?: MessageAttachment[],
+    replyTo?: ReplySnippet,
+    voiceNoteUrl?: string,
+    voiceNoteDuration?: number
+  ) => void;
+  editMessage: (messageId: string, newContent: string) => void;
+  deleteMessage: (messageId: string) => void;
   reportMessage: (messageId: string, reason?: string) => void;
   starredConversations: string[];
   toggleStarConversation: (contactId: string) => void;
   toggleReaction: (messageId: string, emoji: string) => void;
   retryFailedMessage: (messageId: string) => void;
+  deleteFailedMessage: (messageId: string) => void;
+  simulateMessageError: (messageId: string, errorReason: 'offline' | 'forbidden' | 'rate_limited' | 'too_long' | 'blocked' | 'not_verified' | 'duplicate' | 'unknown') => void;
   markThreadAsRead: (contactId: string) => void;
   addAnnouncement: (anc: Omit<Announcement, 'id' | 'date'>) => Promise<void> | void;
   updateAnnouncement: (announcementId: string, updates: Partial<Announcement>) => Promise<void> | void;
@@ -167,6 +210,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [facultyList, setFacultyList] = useState<FacultyProfile[]>([]);
   const [jobsList, setJobsList] = useState<JobListing[]>([]);
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
+  const [eventRsvps, setEventRsvps] = useState<EventRsvp[]>(INITIAL_RSVPS);
+  const [opportunityApplications, setOpportunityApplications] = useState<OpportunityApplication[]>(INITIAL_APPLICATIONS);
   const [mentorshipRequests, setMentorshipRequests] = useState<MentorshipRequest[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>(() => {
     try {
@@ -216,19 +261,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('[DataContext] Error fetching users from Supabase:', uErr);
       }
 
-      if (!uErr && usersData) {
-        if (usersData.length === 0) {
-          setStudentList([]);
-          setAlumniList([]);
-          setFacultyList([]);
-          setAdminList([]);
-        } else {
-          const [studentsRes, alumniRes, facultyRes, notificationsRes] = await Promise.all([
-            supabase.from('student_profiles').select('*'),
-            supabase.from('alumni_profiles').select('*'),
-            supabase.from('faculty_profiles').select('*'),
-            currentUser ? supabase.from('notifications').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false }).limit(50) : Promise.resolve({ data: null, error: null })
-          ]);
+      if (!uErr && usersData && usersData.length > 0) {
+        const [studentsRes, alumniRes, facultyRes, notificationsRes] = await Promise.all([
+          supabase.from('student_profiles').select('*'),
+          supabase.from('alumni_profiles').select('*'),
+          supabase.from('faculty_profiles').select('*'),
+          currentUser ? supabase.from('notifications').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false }).limit(50) : Promise.resolve({ data: null, error: null })
+        ]);
 
           if (studentsRes.error || alumniRes.error || facultyRes.error) {
             console.error('Failed to load role profiles:', { studentsRes, alumniRes, facultyRes });
@@ -374,12 +413,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setAlumniList(loadedAlumni);
           setFacultyList(loadedFaculty);
           setAdminList(loadedAdmins);
+        } else {
+          if (import.meta.env.DEV) {
+            console.log('[DataContext] Supabase returned empty users or error, populating initial demo users');
+            const mockData = await import('../data/mockData');
+            setAdminList([mockData.DEMO_ADMIN, mockData.DEMO_ADMIN_2]);
+            setAdminInvites(mockData.INITIAL_ADMIN_INVITES);
+            setAlumniList(mockData.INITIAL_ALUMNI);
+            setStudentList(mockData.INITIAL_STUDENTS);
+            setFacultyList(mockData.INITIAL_TEACHERS);
+          } else {
+            setStudentList([]);
+            setAlumniList([]);
+            setFacultyList([]);
+            setAdminList([]);
+          }
         }
-      }
 
         // 2. Fetch Jobs
         const { data: jobsData, error: jErr } = await supabase.from('jobs').select('*').order('posted_date', { ascending: false });
-        if (!jErr && jobsData) {
+        if (!jErr && jobsData && jobsData.length > 0) {
           setJobsList(jobsData.map((j: any) => ({
             id: j.id,
             title: j.title,
@@ -403,11 +456,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             moderationStatus: j.moderation_status,
             rejectionReason: j.rejection_reason || undefined
           })));
+        } else if (import.meta.env.DEV) {
+          const mockData = await import('../data/mockData');
+          setJobsList(mockData.INITIAL_JOBS);
         }
 
         // 3. Fetch Events
         const { data: eventsData, error: eErr } = await supabase.from('events').select('*').order('date', { ascending: true });
-        if (!eErr && eventsData) {
+        if (!eErr && eventsData && eventsData.length > 0) {
           setEventsList(eventsData.map((e: any) => ({
             id: e.id,
             title: e.title,
@@ -429,11 +485,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             waitlistUserIds: e.waitlist_user_ids || [],
             feedbackEntries: e.feedback_entries || []
           })));
+        } else if (import.meta.env.DEV) {
+          const mockData = await import('../data/mockData');
+          setEventsList(mockData.INITIAL_EVENTS);
         }
 
         // 4. Fetch Mentorship Requests
         const { data: mrData, error: mrErr } = await supabase.from('mentorship_requests').select('*').order('requested_date', { ascending: false });
-        if (!mrErr && mrData) {
+        if (!mrErr && mrData && mrData.length > 0) {
           setMentorshipRequests(mrData.map((m: any) => ({
             id: m.id,
             studentId: m.student_id,
@@ -462,6 +521,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             declineReason: m.decline_reason || undefined,
             feedback: m.feedback || undefined
           })));
+        } else if (import.meta.env.DEV) {
+          const mockData = await import('../data/mockData');
+          setMentorshipRequests(mockData.INITIAL_MENTORSHIP_REQUESTS);
         }
 
         // 5. Fetch Announcements
@@ -529,32 +591,41 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               });
             }
 
-            setMessages(msgData.map((m: any) => ({
-              id: m.id,
-              senderId: m.sender_id,
-              senderName: m.sender_name,
-              senderRole: m.sender_role,
-              senderAvatar: m.sender_avatar,
-              receiverId: m.receiver_id,
-              content: m.content,
-              timestamp: m.timestamp,
-              isRead: m.is_read,
-              category: m.category || undefined,
-              attachmentName: m.attachment_name || undefined,
-              attachmentUrl: m.attachment_url || undefined,
-              voiceNoteUrl: m.voice_note_url || undefined,
-              voiceNoteDuration: m.voice_note_duration || undefined,
-              replyTo: m.reply_to || undefined,
-              reactions: m.reactions || [],
-              isReported: m.is_reported,
-              reportedAt: m.reported_at || undefined,
-              reportedBy: m.reported_by || undefined,
-              reportReason: m.report_reason || undefined,
-              moderationStatus: m.moderation_status || undefined,
-              moderatedBy: m.moderated_by || undefined,
-              moderatedAt: m.moderated_at || undefined,
-              status: 'sent'
-            })));
+            if (!msgData || msgData.length === 0) {
+              if (import.meta.env.DEV) {
+                const mockData = await import('../data/mockData');
+                setMessages(mockData.INITIAL_MESSAGES);
+              } else {
+                setMessages([]);
+              }
+            } else {
+              setMessages(msgData.map((m: any) => ({
+                id: m.id,
+                senderId: m.sender_id,
+                senderName: m.sender_name,
+                senderRole: m.sender_role,
+                senderAvatar: m.sender_avatar,
+                receiverId: m.receiver_id,
+                content: m.content,
+                timestamp: m.timestamp,
+                isRead: m.is_read,
+                category: m.category || undefined,
+                attachmentName: m.attachment_name || undefined,
+                attachmentUrl: m.attachment_url || undefined,
+                voiceNoteUrl: m.voice_note_url || undefined,
+                voiceNoteDuration: m.voice_note_duration || undefined,
+                replyTo: m.reply_to || undefined,
+                reactions: m.reactions || [],
+                isReported: m.is_reported,
+                reportedAt: m.reported_at || undefined,
+                reportedBy: m.reported_by || undefined,
+                reportReason: m.report_reason || undefined,
+                moderationStatus: m.moderation_status || undefined,
+                moderatedBy: m.moderated_by || undefined,
+                moderatedAt: m.moderated_at || undefined,
+                status: 'sent'
+              })));
+            }
           } catch (e) { console.error('Failed to load messages', e); }
         }
 
@@ -632,6 +703,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setFacultyList(mockData.INITIAL_TEACHERS);
             setJobsList(mockData.INITIAL_JOBS);
             setEventsList(mockData.INITIAL_EVENTS);
+            setOpportunityApplications(mockData.INITIAL_APPLICATIONS || []);
+            setEventRsvps(mockData.INITIAL_RSVPS || []);
             setMentorshipRequests(mockData.INITIAL_MENTORSHIP_REQUESTS);
             setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
             setNotifications(mockData.INITIAL_NOTIFICATIONS);
@@ -1578,29 +1651,94 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const isWaitlisted = (evt.waitlistUserIds || []).includes(userId);
 
           if (isRegistered) {
+            // Cancel RSVP with FIFO waitlist auto-promotion
+            const hasWaitlist = (evt.waitlistUserIds || []).length > 0;
+            const promotedUserId = hasWaitlist ? evt.waitlistUserIds![0] : undefined;
+            const remainingWaitlist = hasWaitlist ? evt.waitlistUserIds!.slice(1) : (evt.waitlistUserIds || []);
+            const updatedRegistered = evt.registeredUserIds.filter(id => id !== userId);
+            
+            if (promotedUserId) {
+              updatedRegistered.push(promotedUserId);
+              // Send notification to promoted member
+              setNotifications(nPrev => [
+                {
+                  id: `notif-${Date.now()}-${promotedUserId}`,
+                  user_id: promotedUserId,
+                  type: 'Event Announcement',
+                  title: 'Waitlist Promoted!',
+                  body: `A seat opened up! You are now registered for "${evt.title}".`,
+                  is_read: false,
+                  created_at: new Date().toISOString()
+                },
+                ...nPrev
+              ]);
+            }
+
             updatedEvent = {
               ...evt,
-              registeredUserIds: evt.registeredUserIds.filter(id => id !== userId),
-              rsvpsCount: evt.registeredUserIds.length - 1
+              registeredUserIds: updatedRegistered,
+              waitlistUserIds: remainingWaitlist,
+              rsvpsCount: updatedRegistered.length
             };
+
+            setEventRsvps(rPrev => {
+              const uIdx = rPrev.findIndex(r => r.eventId === eventId && r.userId === userId);
+              let next = [...rPrev];
+              if (uIdx >= 0) {
+                next[uIdx] = { ...next[uIdx], status: 'cancelled' };
+              }
+              if (promotedUserId) {
+                const pIdx = next.findIndex(r => r.eventId === eventId && r.userId === promotedUserId);
+                if (pIdx >= 0) {
+                  next[pIdx] = { ...next[pIdx], status: 'registered', waitlistPosition: undefined };
+                }
+              }
+              return next;
+            });
           } else if (isWaitlisted) {
             updatedEvent = {
               ...evt,
               waitlistUserIds: (evt.waitlistUserIds || []).filter(id => id !== userId)
             };
+            setEventRsvps(rPrev =>
+              rPrev.map(r => (r.eventId === eventId && r.userId === userId ? { ...r, status: 'cancelled' } : r))
+            );
           } else {
             const limit = evt.capacityLimit || 50;
             if (evt.registeredUserIds.length >= limit) {
+              const newWaitlist = [...(evt.waitlistUserIds || []), userId];
               updatedEvent = {
                 ...evt,
-                waitlistUserIds: [...(evt.waitlistUserIds || []), userId]
+                waitlistUserIds: newWaitlist
               };
+              setEventRsvps(rPrev => [
+                ...rPrev,
+                {
+                  id: `rsvp-${Date.now()}`,
+                  eventId,
+                  userId,
+                  status: 'waitlisted',
+                  waitlistPosition: newWaitlist.length,
+                  createdAt: new Date().toISOString()
+                }
+              ]);
             } else {
+              const newRegistered = [...evt.registeredUserIds, userId];
               updatedEvent = {
                 ...evt,
-                registeredUserIds: [...evt.registeredUserIds, userId],
-                rsvpsCount: evt.registeredUserIds.length + 1
+                registeredUserIds: newRegistered,
+                rsvpsCount: newRegistered.length
               };
+              setEventRsvps(rPrev => [
+                ...rPrev,
+                {
+                  id: `rsvp-${Date.now()}`,
+                  eventId,
+                  userId,
+                  status: 'registered',
+                  createdAt: new Date().toISOString()
+                }
+              ]);
             }
           }
           return updatedEvent;
@@ -1647,6 +1785,526 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (error) console.error('[Supabase submitEventFeedback error]', error);
       });
     }
+  };
+
+  // Host-Side Event Lifecycle Handlers
+  const saveEventDraft = (eventData: Partial<EventItem>) => {
+    const eventId = eventData.id || `evt-${Date.now()}`;
+    const existing = eventsList.find(e => e.id === eventId);
+    const draftEvent: EventItem = {
+      ...(existing || {}),
+      ...eventData,
+      id: eventId,
+      title: eventData.title || existing?.title || 'Untitled Event Draft',
+      type: eventData.type || existing?.type || 'Alumni Meet',
+      date: eventData.date || existing?.date || new Date().toISOString().split('T')[0],
+      time: eventData.time || existing?.time || '7:00 pm – 8:30 pm IST',
+      locationOrUrl: eventData.locationOrUrl || existing?.locationOrUrl || 'VIT Wadala',
+      isOnline: eventData.isOnline ?? (eventData.mode === 'online'),
+      mode: eventData.mode || existing?.mode || 'on_campus',
+      speakerName: eventData.speakerName || existing?.speakerName || '',
+      speakerDesignation: eventData.speakerDesignation || existing?.speakerDesignation || '',
+      speakerCompany: eventData.speakerCompany || existing?.speakerCompany || '',
+      description: eventData.description || existing?.description || '',
+      bannerImage: eventData.bannerImage || existing?.bannerImage || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
+      rsvpsCount: existing?.rsvpsCount || 0,
+      registeredUserIds: existing?.registeredUserIds || [],
+      status: 'Upcoming',
+      lifecycleStatus: 'draft',
+      hostId: currentUser?.id || existing?.hostId,
+      hostRole: (currentUser?.role as any) || existing?.hostRole || 'alumni',
+      hostName: currentUser?.name || existing?.hostName,
+      capacityLimit: eventData.capacityLimit || existing?.capacityLimit || 60,
+      waitlistUserIds: existing?.waitlistUserIds || [],
+      version: existing?.version ? existing.version + 1 : 1
+    };
+
+    setEventsList(prev => {
+      const idx = prev.findIndex(e => e.id === eventId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = draftEvent;
+        return next;
+      }
+      return [draftEvent, ...prev];
+    });
+
+    return { success: true, event: draftEvent };
+  };
+
+  const submitEventForReview = (eventData: Partial<EventItem>, callerRole?: string) => {
+    const role = (callerRole || currentUser?.role || 'alumni') as UserRole;
+    if (role === 'student') {
+      return {
+        success: false,
+        event: null as any,
+        isAutoPublished: false,
+        message: 'Students cannot host events directly. Events must be organized via Department Faculty or Verified Alumni.'
+      };
+    }
+
+    const eventId = eventData.id || `evt-${Date.now()}`;
+    const isCampus = eventData.mode === 'on_campus' || eventData.mode === 'hybrid';
+
+    // Lead time validation
+    if (eventData.startsAt) {
+      const leadCheck = validateEventLeadTime(eventData.startsAt, eventData.mode || 'on_campus');
+      if (!leadCheck.valid) {
+        return {
+          success: false,
+          event: null as any,
+          isAutoPublished: false,
+          message: leadCheck.message || 'Event lead time requirement not met.'
+        };
+      }
+    }
+
+    // Venue conflict check
+    if (isCampus && eventData.venueId && eventData.startsAt && eventData.endsAt) {
+      const conflictCheck = checkVenueConflict(eventData.venueId, eventData.startsAt, eventData.endsAt, eventId, eventsList);
+      if (conflictCheck.hasConflict) {
+        return {
+          success: false,
+          event: null as any,
+          isAutoPublished: false,
+          message: conflictCheck.message || 'Selected venue has a scheduling conflict.'
+        };
+      }
+    }
+
+    // Alumni on-campus sponsor department check
+    if (role === 'alumni' && isCampus && !eventData.sponsorDepartment) {
+      return {
+        success: false,
+        event: null as any,
+        isAutoPublished: false,
+        message: 'On-campus alumni events require a sponsoring academic department.'
+      };
+    }
+
+    // Rate limit check
+    if (role === 'alumni') {
+      const pendingCount = eventsList.filter(e => e.hostId === currentUser?.id && e.lifecycleStatus === 'pending_review').length;
+      if (pendingCount >= 3) {
+        return {
+          success: false,
+          event: null as any,
+          isAutoPublished: false,
+          message: 'Quota reached: You already have 3 events pending administrative review.'
+        };
+      }
+    }
+
+    // Publishing policy logic: Admin auto-publishes; Faculty auto-publishes if own department and no conflict; Alumni always pending review
+    const isAutoPublished = role === 'admin' || (role === 'faculty' && (!eventData.department || eventData.department === currentUser?.department));
+
+    const lifecycleStatus: EventLifecycleStatus = isAutoPublished ? 'published' : 'pending_review';
+    const submittedEvent: EventItem = {
+      ...eventData,
+      id: eventId,
+      title: eventData.title || 'Untitled Event',
+      type: eventData.type || 'Alumni Meet',
+      date: eventData.date || new Date().toISOString().split('T')[0],
+      time: eventData.time || '7:00 pm – 8:30 pm IST',
+      locationOrUrl: eventData.locationOrUrl || 'VIT Wadala',
+      isOnline: eventData.isOnline ?? (eventData.mode === 'online'),
+      mode: eventData.mode || 'on_campus',
+      speakerName: eventData.speakerName || '',
+      speakerDesignation: eventData.speakerDesignation || '',
+      speakerCompany: eventData.speakerCompany || '',
+      description: eventData.description || '',
+      bannerImage: eventData.bannerImage || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
+      rsvpsCount: eventData.rsvpsCount || 0,
+      registeredUserIds: eventData.registeredUserIds || [],
+      status: 'Upcoming',
+      lifecycleStatus,
+      hostId: currentUser?.id,
+      hostRole: role,
+      hostName: currentUser?.name,
+      capacityLimit: eventData.capacityLimit || 60,
+      waitlistUserIds: eventData.waitlistUserIds || [],
+      version: 1,
+      reviewedAt: isAutoPublished ? new Date().toISOString() : undefined,
+      reviewedBy: isAutoPublished ? currentUser?.id : undefined
+    };
+
+    setEventsList(prev => {
+      const idx = prev.findIndex(e => e.id === eventId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = submittedEvent;
+        return next;
+      }
+      return [submittedEvent, ...prev];
+    });
+
+    addAuditLog(
+      isAutoPublished ? 'EVENT_PUBLISHED' : 'EVENT_SUBMITTED_FOR_REVIEW',
+      currentUser?.name || 'Host',
+      `${isAutoPublished ? 'Published' : 'Submitted for administrative review'} event "${submittedEvent.title}" (${submittedEvent.type})`,
+      submittedEvent.id
+    );
+
+    return {
+      success: true,
+      event: submittedEvent,
+      isAutoPublished,
+      message: isAutoPublished
+        ? 'Event published immediately! It is now live on the campus events board.'
+        : 'Event submitted for review. An administrator reviews new events within 2 business days. You\'ll be notified.'
+    };
+  };
+
+  const reviewEvent = (eventId: string, action: 'approve' | 'request_changes' | 'reject', note?: string) => {
+    let newStatus: EventLifecycleStatus = 'published';
+    if (action === 'request_changes') newStatus = 'changes_requested';
+    if (action === 'reject') newStatus = 'rejected';
+
+    setEventsList(prev =>
+      prev.map(e => {
+        if (e.id === eventId) {
+          return {
+            ...e,
+            lifecycleStatus: newStatus,
+            reviewedBy: currentUser?.id,
+            reviewedAt: new Date().toISOString(),
+            reviewNote: note || undefined
+          };
+        }
+        return e;
+      })
+    );
+
+    addAuditLog(
+      `EVENT_${action.toUpperCase()}`,
+      currentUser?.name || 'Administrator',
+      `Admin action ${action} on event ${eventId}: ${note || 'No note provided'}`,
+      eventId
+    );
+  };
+
+  const updateEvent = (eventId: string, patch: Partial<EventItem>, callerRole?: string) => {
+    const role = (callerRole || currentUser?.role || 'alumni') as UserRole;
+    let requiresReview = false;
+
+    setEventsList(prev =>
+      prev.map(e => {
+        if (e.id === eventId) {
+          if (patch.capacityLimit !== undefined && patch.capacityLimit < e.registeredUserIds.length) {
+            throw new Error(`Capacity can't be lower than the ${e.registeredUserIds.length} people already registered.`);
+          }
+
+          const isMaterial =
+            (patch.date && patch.date !== e.date) ||
+            (patch.startsAt && patch.startsAt !== e.startsAt) ||
+            (patch.endsAt && patch.endsAt !== e.endsAt) ||
+            (patch.venueId && patch.venueId !== e.venueId) ||
+            (patch.mode && patch.mode !== e.mode) ||
+            (patch.meetingUrl && patch.meetingUrl !== e.meetingUrl) ||
+            (patch.type && patch.type !== e.type);
+
+          if (isMaterial && role === 'alumni') {
+            requiresReview = true;
+          }
+
+          const updated: EventItem = {
+            ...e,
+            ...patch,
+            version: (e.version || 1) + 1,
+            lifecycleStatus: requiresReview ? 'pending_review' : (patch.lifecycleStatus || e.lifecycleStatus || 'published')
+          };
+          return updated;
+        }
+        return e;
+      })
+    );
+
+    addAuditLog('EVENT_UPDATED', currentUser?.name || 'Host', `Updated event ${eventId}${requiresReview ? ' (Pending review for material changes)' : ''}`, eventId);
+
+    const event = eventsList.find(e => e.id === eventId)!;
+    return { requiresReview, event };
+  };
+
+  const cancelEvent = (eventId: string, reason: string) => {
+    setEventsList(prev =>
+      prev.map(e => {
+        if (e.id === eventId) {
+          return {
+            ...e,
+            lifecycleStatus: 'cancelled',
+            status: 'Cancelled',
+            cancelReason: reason
+          };
+        }
+        return e;
+      })
+    );
+    addAuditLog('EVENT_CANCELLED', currentUser?.name || 'Host', `Cancelled event ${eventId}. Reason: ${reason}`, eventId);
+  };
+
+  const openEventCheckin = (eventId: string) => {
+    const code = generateCheckinCode();
+    const opensAt = new Date().toISOString();
+    setEventsList(prev =>
+      prev.map(e => {
+        if (e.id === eventId) {
+          return {
+            ...e,
+            checkinCode: code,
+            checkinOpensAt: opensAt
+          };
+        }
+        return e;
+      })
+    );
+    return { checkinCode: code, opensAt };
+  };
+
+  const checkInToEvent = (eventId: string, userId: string, code: string) => {
+    const evt = eventsList.find(e => e.id === eventId);
+    if (!evt) return { success: false, message: 'Event not found.' };
+
+    if (evt.checkinCode && evt.checkinCode !== code.trim()) {
+      return { success: false, message: 'Invalid 6-digit event check-in code.' };
+    }
+
+    const certId = `cert-${generateUUID().substring(0, 8)}`;
+    setEventRsvps(prev => {
+      const idx = prev.findIndex(r => r.eventId === eventId && r.userId === userId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          status: 'attended',
+          attendedAt: new Date().toISOString(),
+          certificateId: certId
+        };
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          id: `rsvp-${Date.now()}`,
+          eventId,
+          userId,
+          status: 'attended',
+          attendedAt: new Date().toISOString(),
+          certificateId: certId,
+          createdAt: new Date().toISOString()
+        }
+      ];
+    });
+
+    return { success: true, message: 'Check-in verified! Attendance marked successfully.' };
+  };
+
+  const markAttendanceManual = (eventId: string, userId: string, attended: boolean) => {
+    const certId = attended ? `cert-${generateUUID().substring(0, 8)}` : undefined;
+    setEventRsvps(prev => {
+      const idx = prev.findIndex(r => r.eventId === eventId && r.userId === userId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          status: attended ? 'attended' : 'registered',
+          attendedAt: attended ? new Date().toISOString() : undefined,
+          certificateId: certId
+        };
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          id: `rsvp-${Date.now()}`,
+          eventId,
+          userId,
+          status: attended ? 'attended' : 'registered',
+          attendedAt: attended ? new Date().toISOString() : undefined,
+          certificateId: certId,
+          createdAt: new Date().toISOString()
+        }
+      ];
+    });
+  };
+
+  const messageEventRegistrants = (eventId: string, subject: string, body: string) => {
+    const evt = eventsList.find(e => e.id === eventId);
+    if (!evt) return { success: false };
+
+    const newNotifications: NotificationItem[] = evt.registeredUserIds.map(uid => ({
+      id: `notif-${Date.now()}-${uid}`,
+      user_id: uid,
+      type: 'Event Announcement',
+      title: subject,
+      body: body,
+      is_read: false,
+      created_at: new Date().toISOString()
+    }));
+
+    setNotifications(prev => [...newNotifications, ...prev]);
+    addAuditLog('EVENT_ANNOUNCEMENT_SENT', currentUser?.name || 'Host', `Broadcast announcement "${subject}" to ${evt.registeredUserIds.length} registrants of event "${evt.title}"`, eventId);
+    return { success: true };
+  };
+
+  // Host-Side Opportunity Lifecycle Handlers
+  const saveOpportunityDraft = (jobData: Partial<JobListing>) => {
+    const jobId = jobData.id || `job-${Date.now()}`;
+    const existing = jobsList.find(j => j.id === jobId);
+    const draftJob: JobListing = {
+      ...(existing || {}),
+      ...jobData,
+      id: jobId,
+      title: jobData.title || existing?.title || 'Untitled Opportunity Draft',
+      company: jobData.company || existing?.company || '',
+      companyLogo: jobData.companyLogo || existing?.companyLogo || '',
+      location: jobData.location || existing?.location || 'Mumbai',
+      type: jobData.type || existing?.type || 'Job Vacancy',
+      stipendOrSalary: jobData.stipendOrSalary || existing?.stipendOrSalary || 'Competitive',
+      department: jobData.department || existing?.department || ['CMPN'],
+      skillsRequired: jobData.skillsRequired || existing?.skillsRequired || [],
+      postedByAlumniId: currentUser?.id || existing?.postedByAlumniId || '',
+      postedByAlumniName: currentUser?.name || existing?.postedByAlumniName || '',
+      postedByRole: currentUser?.role === 'teacher' ? 'faculty' : (currentUser?.role as any) || existing?.postedByRole || 'alumni',
+      postedDate: existing?.postedDate || new Date().toISOString().split('T')[0],
+      applicationDeadline: jobData.applicationDeadline || existing?.applicationDeadline || '2026-12-31',
+      description: jobData.description || existing?.description || '',
+      requirements: jobData.requirements || existing?.requirements || [],
+      referralProvided: jobData.referralProvided ?? existing?.referralProvided ?? false,
+      applicantsCount: existing?.applicantsCount || 0,
+      status: 'Pending Approval',
+      lifecycleStatus: 'draft'
+    };
+
+    setJobsList(prev => {
+      const idx = prev.findIndex(j => j.id === jobId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = draftJob;
+        return next;
+      }
+      return [draftJob, ...prev];
+    });
+
+    return { success: true, job: draftJob };
+  };
+
+  const submitOpportunityForReview = (jobData: Partial<JobListing>, callerRole?: string) => {
+    const role = (callerRole || currentUser?.role || 'alumni') as UserRole;
+    if (role === 'student') {
+      return { success: false, job: null as any, isAutoPublished: false, message: 'Students cannot publish opportunities.' };
+    }
+
+    const jobId = jobData.id || `job-${Date.now()}`;
+    const isAutoPublished = role === 'admin' || role === 'faculty';
+    const lifecycleStatus: OpportunityLifecycleStatus = isAutoPublished ? 'published' : 'pending_review';
+
+    const submittedJob: JobListing = {
+      ...jobData,
+      id: jobId,
+      title: jobData.title || 'Untitled Opportunity',
+      company: jobData.company || 'Organization',
+      companyLogo: jobData.companyLogo || 'https://images.unsplash.com/photo-1549923746-c502d488b3ea?w=100&auto=format&fit=crop&q=80',
+      location: jobData.location || 'Mumbai / Remote',
+      type: jobData.type || 'Job Vacancy',
+      stipendOrSalary: jobData.stipendOrSalary || 'Competitive',
+      department: jobData.department || ['CMPN', 'INFT'],
+      skillsRequired: jobData.skillsRequired || [],
+      postedByAlumniId: currentUser?.id || '',
+      postedByAlumniName: currentUser?.name || '',
+      postedByRole: role === 'teacher' ? 'faculty' : (role as 'admin' | 'alumni' | 'faculty'),
+      postedDate: new Date().toISOString().split('T')[0],
+      applicationDeadline: jobData.applicationDeadline || '2026-12-31',
+      description: jobData.description || '',
+      requirements: jobData.requirements || [],
+      referralProvided: jobData.referralProvided ?? false,
+      applicantsCount: 0,
+      status: isAutoPublished ? 'Active' : 'Pending Approval',
+      moderationStatus: isAutoPublished ? 'Approved' : 'Pending Approval',
+      lifecycleStatus
+    };
+
+    setJobsList(prev => {
+      const idx = prev.findIndex(j => j.id === jobId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = submittedJob;
+        return next;
+      }
+      return [submittedJob, ...prev];
+    });
+
+    addAuditLog(
+      isAutoPublished ? 'OPPORTUNITY_PUBLISHED' : 'OPPORTUNITY_SUBMITTED_FOR_REVIEW',
+      currentUser?.name || 'Poster',
+      `${isAutoPublished ? 'Published' : 'Submitted for administrative review'} opportunity "${submittedJob.title}" at ${submittedJob.company}`,
+      submittedJob.id
+    );
+
+    return {
+      success: true,
+      job: submittedJob,
+      isAutoPublished,
+      message: isAutoPublished
+        ? 'Opportunity published live on member feeds!'
+        : 'Opportunity submitted for review. An administrator reviews new listings within 2 business days. You\'ll be notified.'
+    };
+  };
+
+  const reviewOpportunity = (jobId: string, action: 'approve' | 'request_changes' | 'reject', note?: string) => {
+    let newStatus: OpportunityLifecycleStatus = 'published';
+    if (action === 'request_changes') newStatus = 'changes_requested';
+    if (action === 'reject') newStatus = 'rejected';
+
+    setJobsList(prev =>
+      prev.map(j => {
+        if (j.id === jobId) {
+          return {
+            ...j,
+            lifecycleStatus: newStatus,
+            moderationStatus: action === 'approve' ? 'Approved' : 'Rejected',
+            status: action === 'approve' ? 'Active' : 'Closed',
+            reviewedBy: currentUser?.id,
+            reviewedAt: new Date().toISOString(),
+            reviewNote: note || undefined
+          };
+        }
+        return j;
+      })
+    );
+
+    addAuditLog(`OPPORTUNITY_${action.toUpperCase()}`, currentUser?.name || 'Administrator', `Admin action ${action} on opportunity ${jobId}: ${note || 'No note'}`, jobId);
+  };
+
+  const closeOpportunity = (jobId: string, reason?: string) => {
+    setJobsList(prev =>
+      prev.map(j => {
+        if (j.id === jobId) {
+          return {
+            ...j,
+            lifecycleStatus: 'closed',
+            status: 'Closed'
+          };
+        }
+        return j;
+      })
+    );
+    addAuditLog('OPPORTUNITY_CLOSED', currentUser?.name || 'Poster', `Closed opportunity ${jobId}. Reason: ${reason || 'Closed by poster'}`, jobId);
+  };
+
+  const updateApplicationStatus = (applicationId: string, status: OpportunityApplicationStatus, note?: string) => {
+    setOpportunityApplications(prev =>
+      prev.map(a => {
+        if (a.id === applicationId) {
+          return {
+            ...a,
+            status,
+            statusUpdatedAt: new Date().toISOString(),
+            posterNote: note ?? a.posterNote
+          };
+        }
+        return a;
+      })
+    );
   };
 
   const sendMentorshipRequest = (reqData: Omit<MentorshipRequest, 'id' | 'requestedDate' | 'status'>) => {
@@ -1710,7 +2368,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         message: newReq.message,
         requested_date: newReq.requestedDate,
         expiry_date: newReq.expiryDate || null,
-        status: newReq.status,
+        status: newReq.status as any,
         request_type: newReq.requestType || null
       }).then(({ error }) => {
         if (error) console.error('[Supabase sendMentorshipRequest error]', error);
@@ -1720,7 +2378,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateMentorshipStatus = (
     requestId: string,
-    status: 'Accepted' | 'Declined' | 'Completed' | 'Expired',
+    status: 'Accepted' | 'Declined' | 'Completed' | 'Expired' | 'Withdrawn',
     notes?: string,
     callerRole?: string
   ) => {
@@ -1786,6 +2444,64 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const withdrawMentorshipRequest = (requestId: string) => {
+    setMentorshipRequests(prev => prev.map(req => {
+      if (req.id === requestId) {
+        return { ...req, status: 'Withdrawn' };
+      }
+      return req;
+    }));
+    addAuditLog('MENTORSHIP_WITHDRAWN', currentUser?.name || 'Student', `Withdrew mentorship request ${requestId}`, requestId);
+    if (isSupabaseConfigured()) {
+      supabase.from('mentorship_requests').update({ status: 'Withdrawn' }).eq('id', requestId).then(({ error }) => {
+        if (error) console.error('[Supabase withdrawMentorshipRequest error]', error);
+      });
+    }
+  };
+
+  const completeMentorship = (requestId: string, rating?: number, feedback?: string) => {
+    const feedbackObj = rating ? { rating, review: feedback || '', date: new Date().toISOString().split('T')[0] } : undefined;
+    setMentorshipRequests(prev => prev.map(req => {
+      if (req.id === requestId) {
+        return {
+          ...req,
+          status: 'Completed',
+          ...(feedbackObj ? { feedback: feedbackObj } : {})
+        };
+      }
+      return req;
+    }));
+    addAuditLog('MENTORSHIP_COMPLETED', currentUser?.name || 'User', `Marked mentorship request ${requestId} as completed`, requestId);
+    if (isSupabaseConfigured()) {
+      const patch: any = { status: 'Completed' };
+      if (feedbackObj) patch.feedback = feedbackObj;
+      supabase.from('mentorship_requests').update(patch).eq('id', requestId).then(({ error }) => {
+        if (error) console.error('[Supabase completeMentorship error]', error);
+      });
+    }
+  };
+
+  const markMentorshipSeen = (requestIdOrAll?: string) => {
+    const now = new Date().toISOString();
+    setMentorshipRequests(prev => prev.map(req => {
+      if (!requestIdOrAll || req.id === requestIdOrAll) {
+        return { ...req, seenAt: now };
+      }
+      return req;
+    }));
+    if (isSupabaseConfigured()) {
+      if (requestIdOrAll) {
+        supabase.from('mentorship_requests').update({ seen_at: now } as any).eq('id', requestIdOrAll).then(({ error }) => {
+          if (error) console.error('[Supabase markMentorshipSeen error]', error);
+        });
+      } else if (currentUser) {
+        supabase.from('mentorship_requests').update({ seen_at: now } as any).or(`student_id.eq.${currentUser.id},mentor_id.eq.${currentUser.id}`).then(({ error }) => {
+          if (error) console.error('[Supabase markMentorshipSeen error]', error);
+        });
+      }
+    }
+  };
+
   const toggleStarConversation = (contactId: string) => {
     if (!currentUser) return;
     setStarredConversations(prev => {
@@ -1826,12 +2542,106 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
+  const editMessage = (messageId: string, newContent: string) => {
+    const trimmed = newContent.trim();
+    if (!trimmed) return;
+    const editedAt = new Date().toISOString();
+    setMessages(prev => prev.map(msg => {
+      if (msg.id === messageId) {
+        return {
+          ...msg,
+          content: trimmed,
+          editedAt
+        };
+      }
+      return msg;
+    }));
+
+    if (isSupabaseConfigured()) {
+      supabase.from('chat_messages').update({
+        content: trimmed,
+        edited_at: editedAt
+      } as any).eq('id', messageId).then(({ error }) => {
+        if (error) console.error('[Supabase editMessage error]', error);
+      });
+    }
+  };
+
+  const deleteMessage = (messageId: string) => {
+    const deletedAt = new Date().toISOString();
+    setMessages(prev => prev.map(msg => {
+      if (msg.id === messageId) {
+        return {
+          ...msg,
+          content: 'This message was deleted',
+          deletedAt,
+          attachments: []
+        };
+      }
+      return msg;
+    }));
+
+    if (isSupabaseConfigured()) {
+      supabase.from('chat_messages').update({
+        content: 'This message was deleted',
+        deleted_at: deletedAt,
+        attachment_name: null,
+        attachment_url: null
+      } as any).eq('id', messageId).then(({ error }) => {
+        if (error) console.error('[Supabase deleteMessage error]', error);
+      });
+    }
+  };
+
+  const OUTBOX_STORAGE_KEY = 'nexalink_chat_outbox';
+
+  const getPersistedOutbox = (): ChatMessage[] => {
+    try {
+      const raw = localStorage.getItem(OUTBOX_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const persistOutbox = (outboxList: ChatMessage[]) => {
+    try {
+      localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(outboxList));
+    } catch (e) {
+      console.warn('[DataContext] Error saving outbox:', e);
+    }
+  };
+
+  const addToOutbox = (msg: ChatMessage) => {
+    const current = getPersistedOutbox().filter(m => m.id !== msg.id);
+    persistOutbox([...current, msg]);
+  };
+
+  const removeFromOutbox = (msgId: string) => {
+    const current = getPersistedOutbox().filter(m => m.id !== msgId);
+    persistOutbox(current);
+  };
+
+  // Re-sync outbox into state on mount
+  useEffect(() => {
+    const outbox = getPersistedOutbox();
+    if (outbox.length > 0) {
+      setMessages(prev => {
+        const existingIds = new Set(prev.map(m => m.id));
+        const toAdd = outbox.filter(m => !existingIds.has(m.id));
+        return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+      });
+    }
+  }, []);
+
   const sendMessage = (
     receiverId: string,
     content: string,
     category?: MentorshipGuidancePurpose,
     attachmentName?: string,
     sender?: { id: string; name: string; role: UserRole; avatar: string },
+    attachments?: MessageAttachment[],
+    replyTo?: ReplySnippet,
     voiceNoteUrl?: string,
     voiceNoteDuration?: number
   ) => {
@@ -1840,22 +2650,78 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const senderRole = sender?.role ?? currentUser?.role ?? 'student';
     const senderAvatar = sender?.avatar ?? currentUser?.avatar ?? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80';
 
-    if (senderId === 'current-user-id') {
-      console.warn('[DataContext] sendMessage: sender identity not provided; falling back to placeholder.');
+    const clientMessageId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `cid-${Date.now()}`;
+    const newMsgId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `msg-${Date.now()}`;
+
+    // 1. Offline Check
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      const failedMsg: ChatMessage = {
+        id: newMsgId,
+        clientMessageId,
+        senderId,
+        senderName,
+        senderRole,
+        senderAvatar,
+        receiverId,
+        content,
+        timestamp: new Date().toISOString(),
+        isRead: false,
+        category,
+        attachmentName,
+        attachments: attachments && attachments.length > 0 ? attachments : undefined,
+        replyTo: replyTo || undefined,
+        voiceNoteUrl,
+        voiceNoteDuration,
+        status: 'failed',
+        errorReason: 'offline'
+      };
+      setMessages(prev => [...prev, failedMsg]);
+      addToOutbox(failedMsg);
+      return;
+    }
+
+    // 2. Length check
+    if (content.length > 2000) {
+      const failedMsg: ChatMessage = {
+        id: newMsgId,
+        clientMessageId,
+        senderId,
+        senderName,
+        senderRole,
+        senderAvatar,
+        receiverId,
+        content,
+        timestamp: new Date().toISOString(),
+        isRead: false,
+        category,
+        attachmentName,
+        attachments: attachments && attachments.length > 0 ? attachments : undefined,
+        replyTo: replyTo || undefined,
+        voiceNoteUrl,
+        voiceNoteDuration,
+        status: 'failed',
+        errorReason: 'too_long'
+      };
+      setMessages(prev => [...prev, failedMsg]);
+      addToOutbox(failedMsg);
+      return;
     }
 
     const newMsg: ChatMessage = {
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `msg-${Date.now()}`,
+      id: newMsgId,
+      clientMessageId,
       senderId,
       senderName,
       senderRole,
       senderAvatar,
       receiverId,
       content,
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      timestamp: new Date().toISOString(),
       isRead: false,
       category,
       attachmentName,
+      attachments: attachments && attachments.length > 0 ? attachments : undefined,
+      replyTo: replyTo || undefined,
       voiceNoteUrl,
       voiceNoteDuration,
       status: 'sending'
@@ -1863,41 +2729,81 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     setMessages(prev => [...prev, newMsg]);
 
-    if (isSupabaseConfigured()) {
-      const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
-      
-      if (!isValidUUID(senderId) || !isValidUUID(receiverId)) {
-        console.log('[DataContext] Skipping Supabase insert for mock UUIDs:', { senderId, receiverId });
-        setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'sent' } : m));
-        return;
-      }
+    const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 
-      supabase.from('chat_messages').insert({
-        id: newMsg.id,
-        sender_id: senderId,
-        sender_name: senderName,
-        sender_role: senderRole,
-        sender_avatar: senderAvatar,
-        receiver_id: receiverId,
-        content,
-        timestamp: newMsg.timestamp,
-        is_read: false,
-        category: category || null,
-        attachment_name: attachmentName || null,
-        voice_note_url: voiceNoteUrl || null,
-        voice_note_duration: voiceNoteDuration || null,
-        reactions: [],
-        is_reported: false
-      }).then(({ error }) => {
-        if (error) {
-          console.error('[Supabase sendMessage error]', error);
-          setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'failed' } : m));
-        } else {
-          setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'sent' } : m));
+    if (isSupabaseConfigured() && isValidUUID(senderId) && isValidUUID(receiverId)) {
+      (supabase.rpc as any)('send_message', {
+        p_client_message_id: clientMessageId,
+        p_receiver_id: receiverId,
+        p_content: content,
+        p_category: category || null,
+        p_attachment_name: attachmentName || null,
+        p_attachment_url: null
+      }).then(
+        ({ data, error }: any) => {
+          if (error) {
+            // Direct fallback to insert with client_message_id
+            supabase.from('chat_messages').insert({
+              id: newMsg.id,
+              client_message_id: clientMessageId,
+              sender_id: senderId,
+              sender_name: senderName,
+              sender_role: senderRole,
+              sender_avatar: senderAvatar,
+              receiver_id: receiverId,
+              content,
+              timestamp: newMsg.timestamp,
+              is_read: false,
+              category: category || null,
+              attachment_name: attachmentName || null,
+              reactions: [],
+              is_reported: false
+            } as any).then(({ error: insertErr }) => {
+              if (insertErr) {
+                if (insertErr.code === '23505') {
+                  // Idempotency: duplicate key violation means message was already written!
+                  setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'sent', errorReason: undefined } : m));
+                  removeFromOutbox(newMsg.id);
+                } else {
+                  const reason = !navigator.onLine ? 'offline' : (insertErr.code === '42501' ? 'forbidden' : 'unknown');
+                  setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'failed', errorReason: reason } : m));
+                  addToOutbox({ ...newMsg, status: 'failed', errorReason: reason });
+                }
+              } else {
+                setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'sent', errorReason: undefined } : m));
+                removeFromOutbox(newMsg.id);
+                setTimeout(() => {
+                  setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'delivered' } : m));
+                }, 1200);
+              }
+            });
+          } else if (data && (data.success || data.duplicate)) {
+            setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'sent', errorReason: undefined } : m));
+            removeFromOutbox(newMsg.id);
+            setTimeout(() => {
+              setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'delivered' } : m));
+            }, 1200);
+          } else {
+            const reason = (data?.error_code as any) || 'unknown';
+            setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'failed', errorReason: reason } : m));
+            addToOutbox({ ...newMsg, status: 'failed', errorReason: reason });
+          }
+        },
+        () => {
+          const reason = !navigator.onLine ? 'offline' : 'unknown';
+          setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'failed', errorReason: reason } : m));
+          addToOutbox({ ...newMsg, status: 'failed', errorReason: reason });
         }
-      });
+      );
     } else {
-      setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'sent' } : m));
+      // Mock / resilient local dispatch
+      removeFromOutbox(newMsg.id);
+      setTimeout(() => {
+        setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'sent', errorReason: undefined } : m));
+      }, 150);
+      setTimeout(() => {
+        setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'delivered' } : m));
+      }, 900);
     }
   };
 
@@ -1905,37 +2811,97 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const msg = messages.find(m => m.id === messageId);
     if (!msg || msg.status !== 'failed') return;
     
-    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'sending' } : m));
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'sending', errorReason: undefined } : m));
     
-    if (isSupabaseConfigured()) {
-      supabase.from('chat_messages').insert({
-        id: msg.id,
-        sender_id: msg.senderId,
-        sender_name: msg.senderName,
-        sender_role: msg.senderRole,
-        sender_avatar: msg.senderAvatar,
-        receiver_id: msg.receiverId,
-        content: msg.content,
-        timestamp: msg.timestamp,
-        is_read: false,
-        category: msg.category || null,
-        attachment_name: msg.attachmentName || null,
-        voice_note_url: msg.voiceNoteUrl || null,
-        voice_note_duration: msg.voiceNoteDuration || null,
-        reactions: [],
-        is_reported: false
-      }).then(({ error }) => {
-        if (error) {
-          console.error('[Supabase retryFailedMessage error]', error);
-          setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'failed' } : m));
-        } else {
-          setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'sent' } : m));
+    const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+
+    if (isSupabaseConfigured() && isValidUUID(msg.senderId) && isValidUUID(msg.receiverId)) {
+      (supabase.rpc as any)('send_message', {
+        p_client_message_id: msg.clientMessageId || msg.id,
+        p_receiver_id: msg.receiverId,
+        p_content: msg.content,
+        p_category: msg.category || null,
+        p_attachment_name: msg.attachmentName || null,
+        p_attachment_url: null
+      }).then(
+        ({ data, error }: any) => {
+          if (error || !data?.success) {
+            // If duplicate, it is already sent
+            if (data?.duplicate) {
+              setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'sent', errorReason: undefined } : m));
+              removeFromOutbox(messageId);
+              return;
+            }
+            const reason = !navigator.onLine ? 'offline' : ((data?.error_code as any) || 'unknown');
+            setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'failed', errorReason: reason } : m));
+            addToOutbox({ ...msg, status: 'failed', errorReason: reason });
+          } else {
+            setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'sent', errorReason: undefined } : m));
+            removeFromOutbox(messageId);
+            setTimeout(() => {
+              setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'delivered' } : m));
+            }, 1200);
+          }
+        },
+        () => {
+          const reason = !navigator.onLine ? 'offline' : 'unknown';
+          setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'failed', errorReason: reason } : m));
+          addToOutbox({ ...msg, status: 'failed', errorReason: reason });
         }
-      });
+      );
     } else {
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'sent' } : m));
+      setTimeout(() => {
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'sent', errorReason: undefined } : m));
+        removeFromOutbox(messageId);
+      }, 200);
+      setTimeout(() => {
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'delivered' } : m));
+      }, 900);
     }
   };
+
+  const deleteFailedMessage = (messageId: string) => {
+    setMessages(prev => prev.filter(m => m.id !== messageId));
+    removeFromOutbox(messageId);
+  };
+
+  const simulateMessageError = (
+    messageId: string,
+    errorReason: 'offline' | 'forbidden' | 'rate_limited' | 'too_long' | 'blocked' | 'not_verified' | 'duplicate' | 'unknown'
+  ) => {
+    if (errorReason === 'duplicate') {
+      // Duplicate key means already sent!
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'sent', errorReason: undefined } : m));
+      removeFromOutbox(messageId);
+      return;
+    }
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'failed', errorReason } : m));
+    const targetMsg = messages.find(m => m.id === messageId);
+    if (targetMsg) {
+      addToOutbox({ ...targetMsg, status: 'failed', errorReason });
+    }
+  };
+
+  // Auto-retry offline messages when network reconnects or tab is focused
+  useEffect(() => {
+    const handleReconnection = () => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+      const outbox = getPersistedOutbox();
+      const offlinePending = outbox.filter(m => m.errorReason === 'offline' || m.status === 'failed');
+      offlinePending.forEach((msg, idx) => {
+        setTimeout(() => {
+          retryFailedMessage(msg.id);
+        }, Math.min(idx * 500, 3000));
+      });
+    };
+
+    window.addEventListener('online', handleReconnection);
+    window.addEventListener('focus', handleReconnection);
+    return () => {
+      window.removeEventListener('online', handleReconnection);
+      window.removeEventListener('focus', handleReconnection);
+    };
+  }, []);
 
   const markThreadAsRead = (contactId: string) => {
     if (!currentUser) return;
@@ -2697,6 +3663,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         pendingUsersList,
         jobsList,
         eventsList,
+        eventRsvps,
+        opportunityApplications,
+        saveEventDraft,
+        submitEventForReview,
+        reviewEvent,
+        updateEvent,
+        cancelEvent,
+        openEventCheckin,
+        checkInToEvent,
+        markAttendanceManual,
+        messageEventRegistrants,
+        saveOpportunityDraft,
+        submitOpportunityForReview,
+        reviewOpportunity,
+        closeOpportunity,
+        updateApplicationStatus,
         mentorshipRequests,
         announcements,
         notifications,
@@ -2720,6 +3702,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sendMentorshipRequest,
         updateMentorshipStatus,
         submitMentorshipFeedback,
+        withdrawMentorshipRequest,
+        completeMentorship,
+        markMentorshipSeen,
         sendMessage,
         reportMessage,
         graduateStudentToAlumni,
@@ -2754,7 +3739,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         starredConversations,
         toggleStarConversation,
         toggleReaction,
+        editMessage,
+        deleteMessage,
         retryFailedMessage,
+        deleteFailedMessage,
+        simulateMessageError,
         markThreadAsRead,
         activeChatContactId,
         setActiveChatContactId,

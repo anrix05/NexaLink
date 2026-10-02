@@ -1,63 +1,81 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * NexaLink — Mentorship Hub (Phase 3 Redesign)
+ *
+ * Implements Open Canvas design system:
+ * - H1 "Mentorship" with subtitle (no icon in H1)
+ * - Flush layout without boxed form container
+ * - Underline filter tabs: Find a mentor / Requests / My mentors (Student) or Requests / Mentees (Mentor)
+ * - Recommended top 3 mentors + search chips (All / Alumni / Faculty)
+ * - 3-step empty state when search finds zero results
+ * - Requests list with Amber Pending, Emerald Accepted, Neutral Declined
+ * - Request withdrawal (status -> Withdrawn) and 3-request pending cap
+ * - Shared RequestMentorshipSheet integration
+ * - Add to calendar (.ics) and Complete mentorship with 1-5 star rating
+ */
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import type { AlumniProfile, FacultyProfile, MentorshipGuidancePurpose } from '../../types';
-import { getRequestTypeConfig } from '../../utils/relationshipHelper';
+import type { AlumniProfile, FacultyProfile, MentorshipRequest, MentorshipGuidancePurpose } from '../../types';
 import {
-  BookOpen,
   MessageSquare,
   Check,
   UserCheck,
-  Sparkles,
-  GraduationCap,
   Star,
   Clock,
-  Sliders,
-  CheckCheck,
   Send,
-  Inbox,
   Lock,
-  RefreshCw,
   AlertCircle,
   X,
   Search,
-  CheckCircle2
+  Calendar,
+  Download,
+  Plus,
+  ChevronRight,
+  ExternalLink,
+  ShieldCheck,
+  CheckCircle2,
+  Trash2,
+  SlidersHorizontal
 } from 'lucide-react';
-import { Badge, Button, SegmentedTabs, Modal, ToastNotice, EmptyState, TextField, SelectField, TextArea } from '../../components/common/UIComponents';
+import { Avatar } from '../../utils/avatarHelper';
+import { Badge, Button, Modal, ToastNotice } from '../../components/common/UIComponents';
+import { RequestMentorshipSheet, type TargetMentorInfo } from '../../components/directory/RequestMentorshipSheet';
 
 interface MentorshipPageProps {
   selectedMentorForBooking?: AlumniProfile | FacultyProfile | any | null;
-  initialSubTab?: 'find' | 'my-sent' | 'incoming' | 'requests';
+  initialSubTab?: 'find' | 'requests' | 'my-mentors' | 'mentees' | 'my-sent' | 'incoming';
   setActiveTab: (tab: string, subTab?: string) => void;
 }
 
+// ─── ADMIN MENTORSHIP GUARD ──────────────────────────────────────────────────
+
 const AdminMentorshipGuardView: React.FC = () => {
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 font-sans text-xs">
+    <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300 font-sans text-xs p-6 sm:p-8">
       <div className="border-b border-[#E5E7EB] pb-4">
-        <h1 className="text-2xl sm:text-3xl font-bold text-[#0A0A0A] tracking-tight">
-          Guidance
+        <h1 className="text-xl sm:text-2xl font-bold text-[#0A0A0A] tracking-tight">
+          Mentorship
         </h1>
-        <p className="text-sm text-[#6B7280] font-medium mt-1">
+        <p className="text-xs text-[#6B7280] font-medium mt-1">
           Peer-to-peer mentorship and research advisory relationships.
         </p>
       </div>
 
-      <div className="bg-[#FAFAFA] text-[#0A0A0A] border border-[#E5E7EB] rounded-xl p-6 flex items-start gap-4">
-        <div className="p-2.5 bg-[#F3F4F6] border border-[#E5E7EB] rounded-lg shrink-0">
+      <div className="bg-[#FAFAFA] text-[#0A0A0A] border border-[#E5E7EB] rounded-2xl p-6 flex items-start gap-4">
+        <div className="p-2.5 bg-[#F3F4F6] border border-[#E5E7EB] rounded-xl shrink-0">
           <Lock className="w-4 h-4 text-[#0A0A0A]" />
         </div>
-        <div>
-          <h2 className="text-xs font-semibold text-[#0A0A0A] mb-1">
-            Admin Role: Mentorship & Advisory Access Restricted
+        <div className="space-y-1.5">
+          <h2 className="text-xs font-semibold text-[#0A0A0A]">
+            Admin Role: Mentorship Access Restricted
           </h2>
-          <p className="text-xs text-[#6B7280] font-medium leading-relaxed">
+          <p className="text-xs text-[#6B7280] leading-relaxed">
             Administrator accounts do not participate in or inspect peer mentorship requests directly. This is a deliberate
             institutional privacy constraint — 1-on-1 mentorship interactions between Students, Alumni, and Faculty are strictly private.
           </p>
-          <p className="text-xs text-[#0A0A0A] font-medium mt-2 leading-relaxed">
-            Institutional guidance performance metrics and conversion analytics are accessible in the{' '}
-            <strong>Verification & Governance Console → Analytics</strong> tab.
+          <p className="text-xs text-[#0A0A0A] font-medium pt-1">
+            Institutional guidance performance metrics are accessible in <strong>Verification & Governance → Analytics</strong>.
           </p>
         </div>
       </div>
@@ -65,647 +83,1127 @@ const AdminMentorshipGuardView: React.FC = () => {
   );
 };
 
-const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({ selectedMentorForBooking, initialSubTab, setActiveTab }) => {
+// ─── CALENDAR ICS GENERATOR ──────────────────────────────────────────────────
+
+function downloadCalendarInvite(title: string, description: string, slotStr?: string) {
+  const now = new Date();
+  const startTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+
+  const formatICSDate = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+  const icsLines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//NexaLink//Mentorship Session//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:nexalink-${Date.now()}@vit.edu.in`,
+    `DTSTAMP:${formatICSDate(now)}`,
+    `DTSTART:${formatICSDate(startTime)}`,
+    `DTEND:${formatICSDate(endTime)}`,
+    `SUMMARY:${title}`,
+    `DESCRIPTION:${(description + (slotStr ? `\\nSelected slot: ${slotStr}` : '')).replace(/\n/g, '\\n')}`,
+    'LOCATION:Google Meet / Campus CMPN Dept',
+    'STATUS:CONFIRMED',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ];
+
+  const blob = new Blob([icsLines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${title.replace(/[^a-zA-Z0-9]/g, '_')}.ics`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ─── STANDARD MENTORSHIP PAGE ────────────────────────────────────────────────
+
+const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
+  selectedMentorForBooking,
+  initialSubTab,
+  setActiveTab
+}) => {
   const {
     alumniList,
     facultyList,
     mentorshipRequests,
-    sendMentorshipRequest,
     updateMentorshipStatus,
-    submitMentorshipFeedback
+    withdrawMentorshipRequest,
+    completeMentorship,
+    markMentorshipSeen,
+    setPendingChatUserId
   } = useData();
 
   const { currentUser, currentRole } = useAuth();
-
   const isStudent = currentRole === 'student';
-  const isFaculty = currentRole === 'faculty' || currentRole === 'teacher';
-  const isAlumni = currentRole === 'alumni';
+  const isMentor = currentRole === 'alumni' || currentRole === 'faculty' || currentRole === 'teacher';
 
-  const [activeSubTab, setActiveSubTab] = useState<'find' | 'my-sent' | 'incoming' | 'requests'>(
-    initialSubTab || (selectedMentorForBooking ? 'find' : (isStudent ? 'find' : 'incoming'))
+  // Subtabs
+  const [studentTab, setStudentTab] = useState<'find' | 'requests' | 'my-mentors'>(
+    initialSubTab === 'requests' || initialSubTab === 'my-sent' ? 'requests' : initialSubTab === 'my-mentors' ? 'my-mentors' : 'find'
+  );
+  const [mentorTab, setMentorTab] = useState<'requests' | 'mentees'>(
+    initialSubTab === 'mentees' ? 'mentees' : 'requests'
   );
 
-  useEffect(() => {
-    if (initialSubTab) {
-      setActiveSubTab(initialSubTab);
-    }
-  }, [initialSubTab]);
+  // Search & Filter state for Find a mentor
+  const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'alumni' | 'faculty'>('all');
 
-  const availableAlumniMentors = alumniList.filter(a => a.isMentoringAvailable && a.id !== currentUser.id);
-  const availableFacultyMentors = facultyList.filter(f => f.id !== currentUser.id);
+  // Shared Sheet state
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [sheetTargetMentor, setSheetTargetMentor] = useState<TargetMentorInfo | null>(null);
 
-  const [selectedTargetUser, setSelectedTargetUser] = useState<AlumniProfile | FacultyProfile | any | null>(
-    selectedMentorForBooking || null
-  );
+  // Notifications
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const initialTargetRole = selectedMentorForBooking
-    ? (selectedMentorForBooking.userType || ('graduationYear' in selectedMentorForBooking ? 'alumni' : 'faculty'))
-    : 'alumni';
+  // Mentor controls
+  const [acceptingMentees, setAcceptingMentees] = useState(true);
+  const [openSlotsCount, setOpenSlotsCount] = useState(3);
 
-  const [mentorType, setMentorType] = useState<'alumni' | 'faculty'>(initialTargetRole);
-  const [selectedMentorId, setSelectedMentorId] = useState<string>(
-    selectedMentorForBooking ? selectedMentorForBooking.id : availableAlumniMentors[0]?.id || ''
-  );
-  const [isTargetLocked, setIsTargetLocked] = useState<boolean>(!!selectedMentorForBooking);
+  // Modals
+  const [declineModalReq, setDeclineModalReq] = useState<MentorshipRequest | null>(null);
+  const [declineReason, setDeclineReason] = useState('At capacity right now');
+  const [customDeclineNote, setCustomDeclineNote] = useState('');
 
+  const [completeModalReq, setCompleteModalReq] = useState<MentorshipRequest | null>(null);
+  const [rating, setRating] = useState(5);
+  const [feedbackNotes, setFeedbackNotes] = useState('');
+
+  // Auto-open sheet if selectedMentorForBooking passed
   useEffect(() => {
     if (selectedMentorForBooking) {
-      setSelectedTargetUser(selectedMentorForBooking);
-      const role = selectedMentorForBooking.userType || ('graduationYear' in selectedMentorForBooking ? 'alumni' : 'faculty');
-      setMentorType(role);
-      setSelectedMentorId(selectedMentorForBooking.id);
-      setIsTargetLocked(true);
-      setActiveSubTab('find');
+      const target: TargetMentorInfo = {
+        id: selectedMentorForBooking.id,
+        name: selectedMentorForBooking.name,
+        userType: selectedMentorForBooking.userType || ('graduationYear' in selectedMentorForBooking ? 'alumni' : 'faculty'),
+        role: selectedMentorForBooking.designation || 'Mentor',
+        company: selectedMentorForBooking.company || selectedMentorForBooking.department || 'VIT',
+        department: selectedMentorForBooking.department,
+        avatarUrl: selectedMentorForBooking.avatar
+      };
+      setSheetTargetMentor(target);
+      setIsSheetOpen(true);
     }
   }, [selectedMentorForBooking]);
 
-  const requestConfig = getRequestTypeConfig(currentRole, mentorType);
-
-  const [purposeOfRequest, setPurposeOfRequest] = useState<MentorshipGuidancePurpose>(
-    requestConfig.purposeOptions[0] as MentorshipGuidancePurpose
-  );
-  const [areaOfGuidance, setAreaOfGuidance] = useState('');
-  const [message, setMessage] = useState('');
-  const [proposedDate, setProposedDate] = useState('');
-  const [proposedTimeSlot, setProposedTimeSlot] = useState('');
-  const [bookingSuccessMsg, setBookingSuccessMsg] = useState<string | null>(null);
-
+  // Mark unseen requests when student opens "Requests" tab
   useEffect(() => {
-    if (requestConfig.purposeOptions.length > 0 && !requestConfig.purposeOptions.includes(purposeOfRequest)) {
-      setPurposeOfRequest(requestConfig.purposeOptions[0] as MentorshipGuidancePurpose);
+    if (isStudent && studentTab === 'requests') {
+      const unreadStatuses = mentorshipRequests.filter(
+        r => r.studentId === currentUser.id && (r.status === 'Accepted' || r.status === 'Declined') && !r.seenAt
+      );
+      unreadStatuses.forEach(r => markMentorshipSeen(r.id));
     }
-  }, [mentorType, requestConfig]);
+  }, [isStudent, studentTab, mentorshipRequests, currentUser.id, markMentorshipSeen]);
 
-  // Softened Decline Modal State
-  const [declineModalReq, setDeclineModalReq] = useState<any | null>(null);
-  const [declineReasonChip, setDeclineReasonChip] = useState<string>('Not available right now');
-  const [customDeclineNote, setCustomDeclineNote] = useState<string>('');
-  const [mentorSearchQuery, setMentorSearchQuery] = useState<string>('');
+  // Available mentors list
+  const allMentors: TargetMentorInfo[] = useMemo(() => {
+    const alumni = alumniList
+      .filter(a => a.id !== currentUser.id && a.isMentoringAvailable)
+      .map(a => ({
+        id: a.id,
+        name: a.name,
+        userType: 'alumni',
+        role: a.designation || 'Software Engineer',
+        company: a.company || 'Tech Alumni',
+        department: a.department || 'CMPN',
+        avatarUrl: a.avatar || '',
+        availableSlots: (a as any).mentorshipSlots || 3,
+        skills: a.skills || []
+      }));
 
-  const filteredAlumniMentors = availableAlumniMentors.filter(a => {
-    if (!mentorSearchQuery.trim()) return true;
-    const q = mentorSearchQuery.toLowerCase();
-    return (
-      a.name.toLowerCase().includes(q) ||
-      (a.company || '').toLowerCase().includes(q) ||
-      (a.department || '').toLowerCase().includes(q) ||
-      (a.skills || []).some(s => s.toLowerCase().includes(q))
-    );
-  });
+    const faculty = facultyList
+      .filter(f => f.id !== currentUser.id)
+      .map(f => ({
+        id: f.id,
+        name: f.name,
+        userType: 'faculty',
+        role: f.designation || 'Professor',
+        company: 'Vidyalankar Institute of Technology',
+        department: f.department || 'CMPN',
+        avatarUrl: f.avatar || '',
+        availableSlots: 4,
+        skills: f.researchAreas || ['Academic Advising']
+      }));
 
-  const filteredFacultyMentors = availableFacultyMentors.filter(f => {
-    if (!mentorSearchQuery.trim()) return true;
-    const q = mentorSearchQuery.toLowerCase();
-    return (
-      f.name.toLowerCase().includes(q) ||
-      (f.designation || '').toLowerCase().includes(q) ||
-      (f.department || '').toLowerCase().includes(q)
-    );
-  });
+    return [...alumni, ...faculty];
+  }, [alumniList, facultyList, currentUser.id]);
 
-  const selectedAlumniMentor = alumniList.find(a => a.id === selectedMentorId) || availableAlumniMentors[0];
-  const selectedFacultyMentor = facultyList.find(f => f.id === selectedMentorId) || availableFacultyMentors[0];
+  // Top 3 Recommended mentors
+  const recommendedMentors = useMemo(() => {
+    return allMentors.slice(0, 3);
+  }, [allMentors]);
 
-  const handleSendRequestSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const targetMember = isTargetLocked && selectedTargetUser
-      ? selectedTargetUser
-      : (mentorType === 'alumni' ? selectedAlumniMentor : selectedFacultyMentor);
-
-    const targetMentorName = targetMember?.name || 'Selected Target Member';
-    const targetMentorOrg = targetMember?.company || targetMember?.department || 'VIT Wadala';
-    const targetMentorId = targetMember?.id || selectedMentorId;
-
-    const isImmediateConnection =
-      requestConfig.requestType === 'NETWORKING' ||
-      requestConfig.requestType === 'COLLABORATION' ||
-      currentRole !== 'student';
-
-    sendMentorshipRequest({
-      studentId: currentUser.id,
-      studentName: currentUser.name,
-      studentEmail: currentUser.email,
-      studentDepartment: currentUser.department,
-      studentYear: (currentUser as any).currentYear || 'BE',
-      studentRole: currentUser.role,
-      studentEnrollmentNo: (currentUser as any).enrollmentNo || (currentUser as any).prn || '22102A0042',
-      mentorId: targetMentorId,
-      mentorName: targetMentorName,
-      mentorRole: mentorType,
-      mentorCompanyOrDept: targetMentorOrg,
-      purposeOfRequest,
-      topic: areaOfGuidance || purposeOfRequest,
-      areaOfGuidance: areaOfGuidance || `${requestConfig.requestType} request submitted via portal`,
-      message: message || `Hello ${targetMentorName}, I would appreciate your guidance regarding ${purposeOfRequest}.`,
-      requestType: requestConfig.requestType,
-      proposedDate: proposedDate || undefined,
-      proposedTimeSlot: proposedTimeSlot || undefined
+  // Filtered mentors list
+  const filteredMentors = useMemo(() => {
+    return allMentors.filter(m => {
+      if (roleFilter === 'alumni' && m.userType !== 'alumni') return false;
+      if (roleFilter === 'faculty' && m.userType !== 'faculty') return false;
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        m.name.toLowerCase().includes(q) ||
+        (m.company && m.company.toLowerCase().includes(q)) ||
+        (m.department && m.department.toLowerCase().includes(q)) ||
+        (m.role && m.role.toLowerCase().includes(q)) ||
+        ((m as any).skills && (m as any).skills.some((s: string) => s.toLowerCase().includes(q)))
+      );
     });
+  }, [allMentors, roleFilter, searchQuery]);
 
-    setBookingSuccessMsg(
-      isImmediateConnection
-        ? `Direct Connection established with ${targetMentorName}! Messaging channel unlocked.`
-        : `Guidance request transmitted to ${targetMentorName}! You will be notified upon confirmation.`
+  // Student requests
+  const studentRequests = useMemo(() => {
+    return mentorshipRequests.filter(
+      r => r.studentId === currentUser.id && r.status !== 'Withdrawn'
+    ).sort((a, b) => new Date(b.requestedDate || 0).getTime() - new Date(a.requestedDate || 0).getTime());
+  }, [mentorshipRequests, currentUser.id]);
+
+  const studentPendingCount = studentRequests.filter(r => r.status === 'Pending').length;
+  const studentAcceptedRequests = studentRequests.filter(r => r.status === 'Accepted');
+  const studentPendingRequests = studentRequests.filter(r => r.status === 'Pending');
+  const studentDeclinedRequests = studentRequests.filter(r => r.status === 'Declined');
+
+  // Student active relationships (My Mentors)
+  const myActiveMentors = useMemo(() => {
+    return mentorshipRequests.filter(
+      r => r.studentId === currentUser.id && r.status === 'Accepted'
     );
-    setTimeout(() => setBookingSuccessMsg(null), 4500);
+  }, [mentorshipRequests, currentUser.id]);
 
-    setMessage('');
-    setAreaOfGuidance('');
-    setProposedDate('');
-    setProposedTimeSlot('');
-    setIsTargetLocked(false);
-    setSelectedTargetUser(null);
+  // Mentor incoming requests
+  const incomingMentorRequests = useMemo(() => {
+    return mentorshipRequests.filter(
+      r => r.mentorId === currentUser.id && r.status === 'Pending'
+    ).sort((a, b) => new Date(b.requestedDate || 0).getTime() - new Date(a.requestedDate || 0).getTime());
+  }, [mentorshipRequests, currentUser.id]);
+
+  // Mentor active mentees
+  const activeMentees = useMemo(() => {
+    return mentorshipRequests.filter(
+      r => r.mentorId === currentUser.id && r.status === 'Accepted'
+    );
+  }, [mentorshipRequests, currentUser.id]);
+
+  const handleOpenSheetForMentor = (mentor?: TargetMentorInfo) => {
+    setSheetTargetMentor(mentor || null);
+    setIsSheetOpen(true);
   };
 
-  const handleDeclineWithNote = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleWithdraw = (requestId: string) => {
+    withdrawMentorshipRequest(requestId);
+    setNotice('Request withdrawn successfully');
+    setTimeout(() => setNotice(null), 3000);
+  };
+
+  const handleMessageUser = (targetUserId: string) => {
+    setPendingChatUserId(targetUserId);
+    setActiveTab('messaging');
+  };
+
+  const handleAcceptRequest = (req: MentorshipRequest, slot?: string) => {
+    updateMentorshipStatus(req.id, 'Accepted', slot);
+    setNotice(`Accepted mentorship request from ${req.studentName}`);
+    setTimeout(() => setNotice(null), 3000);
+  };
+
+  const handleDeclineSubmit = () => {
     if (!declineModalReq) return;
-
-    const note = declineReasonChip === 'Custom note...'
-      ? customDeclineNote || 'Declined by mentor.'
-      : declineReasonChip;
-
-    const res = updateMentorshipStatus(declineModalReq.id, 'Declined', note, currentRole);
-    if (res.success) {
-      setBookingSuccessMsg(`Mentorship request from ${declineModalReq.studentName} has been declined with note.`);
-      setTimeout(() => setBookingSuccessMsg(null), 3500);
-    } else {
-      alert(`Role Error: ${res.error}`);
-    }
-
+    const finalReason = customDeclineNote.trim()
+      ? `${declineReason}: ${customDeclineNote.trim()}`
+      : declineReason;
+    updateMentorshipStatus(declineModalReq.id, 'Declined', undefined, finalReason);
     setDeclineModalReq(null);
     setCustomDeclineNote('');
+    setNotice('Mentorship request declined politely');
+    setTimeout(() => setNotice(null), 3000);
   };
 
-  const activeEstablishedConnections = mentorshipRequests.filter(
-    r => (r.studentId === currentUser.id || r.mentorId === currentUser.id || r.studentName.includes(currentUser.name) || r.mentorName.includes(currentUser.name)) &&
-         (r.status === 'Accepted' || r.status === 'Completed')
-  );
-
-  const mySentRequests = mentorshipRequests.filter(
-    r => r.studentId === currentUser.id || r.studentName.toLowerCase().includes(currentUser.name.toLowerCase())
-  );
-
-  const myIncomingRequests = mentorshipRequests.filter(
-    r => r.mentorId === currentUser.id || r.mentorName.toLowerCase().includes(currentUser.name.toLowerCase())
-  );
-
-  const pendingIncomingRequests = myIncomingRequests.filter(r => r.status === 'Pending');
-
-  const subTabOptions = isStudent
-    ? [
-        { id: 'find' as const, label: 'Request Guidance', icon: <Send className="w-3.5 h-3.5" /> },
-        { id: 'my-sent' as const, label: 'My Requests', count: mySentRequests.length, icon: <Inbox className="w-3.5 h-3.5" /> },
-        { id: 'requests' as const, label: 'My Mentors', count: activeEstablishedConnections.length, icon: <UserCheck className="w-3.5 h-3.5" /> }
-      ]
-    : [
-        { id: 'incoming' as const, label: 'Requests for You', count: pendingIncomingRequests.length, icon: <Sparkles className="w-3.5 h-3.5" /> },
-        { id: 'requests' as const, label: 'My Mentees', count: activeEstablishedConnections.length, icon: <UserCheck className="w-3.5 h-3.5" /> },
-        { id: 'find' as const, label: 'Offer to Mentor', icon: <Send className="w-3.5 h-3.5" /> },
-        { id: 'my-sent' as const, label: 'My Outreach', count: mySentRequests.length, icon: <Inbox className="w-3.5 h-3.5" /> }
-      ];
+  const handleCompleteSubmit = () => {
+    if (!completeModalReq) return;
+    completeMentorship(completeModalReq.id, rating, feedbackNotes.trim());
+    setCompleteModalReq(null);
+    setFeedbackNotes('');
+    setNotice('Mentorship completed. Thank you for your feedback!');
+    setTimeout(() => setNotice(null), 3000);
+  };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 pb-16 sm:pb-0 font-sans text-xs">
-      
-      {/* Header Banner */}
-      <div className="border-b border-[#E5E7EB] pb-5">
-        <h1 className="text-2xl sm:text-3xl font-bold text-[#0A0A0A] tracking-tight flex items-center gap-2">
-          <GraduationCap className="w-7 h-7 text-[#0A0A0A]" />
-          Guidance
-        </h1>
-        <p className="text-sm text-[#6B7280] font-medium mt-1">
-          {isStudent
-            ? 'Connect with alumni and faculty for 1-on-1 guidance and professional introductions.'
-            : isFaculty
-            ? 'Review requests from students and manage your advisees and research collaborations.'
-            : 'Review requests from students and manage the mentees you\'re guiding.'}
-        </p>
-      </div>
-
+    <div className="font-sans text-xs bg-white min-h-[calc(100svh-64px)] pb-16">
+      {/* Toast Notice */}
       <ToastNotice
-        message={bookingSuccessMsg}
-        onClose={() => setBookingSuccessMsg(null)}
-        className="mb-4"
+        message={notice}
+        onClose={() => setNotice(null)}
+        variant="success"
+        className="fixed top-20 right-6 z-50"
       />
 
-      {/* Sub-Navigation Segmented Tabs */}
-      <SegmentedTabs
-        options={subTabOptions}
-        activeTab={activeSubTab}
-        onChange={(tab) => setActiveSubTab(tab)}
-      />
+      {/* Main Container */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 space-y-6">
 
-      {/* TAB 1: REQUEST / OFFER GUIDANCE FORM */}
-      {activeSubTab === 'find' && (
-        <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-6 shadow-none">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E7EB] pb-4">
-            <div>
-              <h2 className="text-base font-bold text-[#0A0A0A]">
-                {isStudent ? requestConfig.label : 'Offer Guidance & Mentorship'}
-              </h2>
-              <p className="text-xs text-[#6B7280] font-medium mt-0.5">
-                {isStudent
-                  ? requestConfig.description
-                  : 'Proactively reach out to offer mentorship, research collaboration, or professional guidance.'}
-              </p>
-            </div>
-
-            {!isTargetLocked && (
-              <SegmentedTabs
-                options={[
-                  { id: 'alumni', label: 'Alumni member' },
-                  { id: 'faculty', label: 'Faculty member' }
-                ]}
-                activeTab={mentorType}
-                onChange={(t) => {
-                  setMentorType(t as any);
-                  if (t === 'alumni' && availableAlumniMentors[0]) setSelectedMentorId(availableAlumniMentors[0].id);
-                  if (t === 'faculty' && availableFacultyMentors[0]) setSelectedMentorId(availableFacultyMentors[0].id);
-                }}
-              />
-            )}
+        {/* ─── PAGE HEADER ───────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#E5E7EB] pb-6">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-[#0A0A0A] tracking-tight">
+              Mentorship
+            </h1>
+            <p className="text-xs text-[#6B7280] font-normal mt-1 max-w-2xl leading-relaxed">
+              Connect with alumni and faculty for career advice, research collaboration, and portfolio feedback.
+            </p>
           </div>
 
-          <form onSubmit={handleSendRequestSubmit} className="space-y-4">
-            {isTargetLocked && selectedTargetUser ? (
-              <div className="p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <img src={selectedTargetUser.avatar} alt={selectedTargetUser.name} className="w-10 h-10 rounded-full object-cover border border-[#E5E7EB]" />
-                  <div>
-                    <Badge variant="indigo">Target member locked</Badge>
-                    <h3 className="font-bold text-[#0A0A0A] text-sm mt-0.5">{selectedTargetUser.name}</h3>
-                    <p className="text-xs text-[#6B7280] font-medium">
-                      {selectedTargetUser.company || selectedTargetUser.department}
-                    </p>
-                  </div>
-                </div>
-                <Button variant="secondary" size="sm" onClick={() => setIsTargetLocked(false)}>
-                  Change member
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="app-label">
-                    Select target mentor
-                  </label>
-                  <span className="text-[11px] text-[#6B7280]">
-                    {mentorType === 'alumni' ? availableAlumniMentors.length : availableFacultyMentors.length} available mentors
-                  </span>
-                </div>
+          <div className="flex items-center gap-3 shrink-0">
+            {isStudent && (
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => handleOpenSheetForMentor()}
+                className="cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                <span>Request mentorship</span>
+              </Button>
+            )}
 
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-[#9CA3AF]" />
+            {isMentor && (
+              <div className="flex items-center gap-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-3.5 py-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-[#0A0A0A]">Accepting mentees</span>
+                  <button
+                    type="button"
+                    onClick={() => setAcceptingMentees(prev => !prev)}
+                    className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${
+                      acceptingMentees ? 'bg-[#0A0A0A]' : 'bg-[#E5E7EB]'
+                    }`}
+                  >
+                    <span
+                      className={`w-3.5 h-3.5 rounded-full bg-white absolute top-0.5 transition-transform ${
+                        acceptingMentees ? 'left-4.5' : 'left-0.5'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div className="h-4 w-px bg-[#E5E7EB]" />
+                <div className="flex items-center gap-1.5 text-xs text-[#6B7280]">
+                  <span>Slots:</span>
                   <input
-                    type="text"
-                    value={mentorSearchQuery}
-                    onChange={e => setMentorSearchQuery(e.target.value)}
-                    placeholder={`Search ${mentorType === 'alumni' ? 'alumni by name, company, or skills' : 'faculty by name or department'}...`}
-                    className="w-full bg-[#FAFAFA] border border-[#E5E7EB] pl-8 pr-3 py-2 rounded-lg text-xs font-semibold text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A]"
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={openSlotsCount}
+                    onChange={e => setOpenSlotsCount(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+                    className="w-10 h-7 text-center font-semibold bg-white border border-[#E5E7EB] rounded text-xs text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A]"
                   />
                 </div>
+              </div>
+            )}
+          </div>
+        </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
-                  {(mentorType === 'alumni' ? filteredAlumniMentors : filteredFacultyMentors).map(m => {
-                    const isSelected = selectedMentorId === m.id;
-                    return (
-                      <div
-                        key={m.id}
-                        onClick={() => setSelectedMentorId(m.id)}
-                        className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-start justify-between gap-2.5 ${
-                          isSelected
-                            ? 'bg-[#0A0A0A] text-white border-[#0A0A0A]'
-                            : 'bg-white text-[#0A0A0A] border-[#E5E7EB] hover:border-[#9CA3AF]'
-                        }`}
-                      >
-                        <div className="flex items-start gap-2.5 min-w-0">
-                          {m.avatar ? (
-                            <img src={m.avatar} alt={m.name} className="w-8 h-8 rounded-full object-cover shrink-0" />
-                          ) : (
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${isSelected ? 'bg-white text-[#0A0A0A]' : 'bg-[#0A0A0A] text-white'}`}>
-                              {m.name.charAt(0)}
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <span className="font-bold block truncate">{m.name}</span>
-                            <span className={`text-[11px] block truncate ${isSelected ? 'text-neutral-300' : 'text-[#6B7280]'}`}>
-                              {'company' in m ? `${m.company} (${m.designation})` : m.designation}
-                            </span>
-                            <span className={`text-[10px] block ${isSelected ? 'text-neutral-400' : 'text-[#9CA3AF]'}`}>
-                              Dept of {m.department}
-                            </span>
-                          </div>
+        {/* ─── UNDERLINE TABS ────────────────────────────────────────────── */}
+        <div className="flex items-center border-b border-[#E5E7EB] space-x-6">
+          {isStudent ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setStudentTab('find')}
+                className={`py-3 text-xs transition-colors relative cursor-pointer ${
+                  studentTab === 'find'
+                    ? 'font-semibold text-[#0A0A0A] border-b-2 border-[#0A0A0A]'
+                    : 'font-medium text-[#6B7280] hover:text-[#0A0A0A] border-b-2 border-transparent'
+                }`}
+              >
+                Find a mentor
+              </button>
+              <button
+                type="button"
+                onClick={() => setStudentTab('requests')}
+                className={`py-3 text-xs transition-colors relative cursor-pointer flex items-center gap-1.5 ${
+                  studentTab === 'requests'
+                    ? 'font-semibold text-[#0A0A0A] border-b-2 border-[#0A0A0A]'
+                    : 'font-medium text-[#6B7280] hover:text-[#0A0A0A] border-b-2 border-transparent'
+                }`}
+              >
+                <span>Requests</span>
+                {studentRequests.length > 0 && (
+                  <span className="px-1.5 py-0.2 bg-[#F3F4F6] text-[#0A0A0A] text-[10px] font-bold rounded-full border border-[#E5E7EB]">
+                    {studentRequests.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setStudentTab('my-mentors')}
+                className={`py-3 text-xs transition-colors relative cursor-pointer flex items-center gap-1.5 ${
+                  studentTab === 'my-mentors'
+                    ? 'font-semibold text-[#0A0A0A] border-b-2 border-[#0A0A0A]'
+                    : 'font-medium text-[#6B7280] hover:text-[#0A0A0A] border-b-2 border-transparent'
+                }`}
+              >
+                <span>My mentors</span>
+                {myActiveMentors.length > 0 && (
+                  <span className="px-1.5 py-0.2 bg-[#F3F4F6] text-[#0A0A0A] text-[10px] font-bold rounded-full border border-[#E5E7EB]">
+                    {myActiveMentors.length}
+                  </span>
+                )}
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setMentorTab('requests')}
+                className={`py-3 text-xs transition-colors relative cursor-pointer flex items-center gap-1.5 ${
+                  mentorTab === 'requests'
+                    ? 'font-semibold text-[#0A0A0A] border-b-2 border-[#0A0A0A]'
+                    : 'font-medium text-[#6B7280] hover:text-[#0A0A0A] border-b-2 border-transparent'
+                }`}
+              >
+                <span>Requests</span>
+                {incomingMentorRequests.length > 0 && (
+                  <span className="px-1.5 py-0.2 bg-[#FEF3C7] text-[#92400E] text-[10px] font-bold rounded-full border border-[#FDE68A]">
+                    {incomingMentorRequests.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMentorTab('mentees')}
+                className={`py-3 text-xs transition-colors relative cursor-pointer flex items-center gap-1.5 ${
+                  mentorTab === 'mentees'
+                    ? 'font-semibold text-[#0A0A0A] border-b-2 border-[#0A0A0A]'
+                    : 'font-medium text-[#6B7280] hover:text-[#0A0A0A] border-b-2 border-transparent'
+                }`}
+              >
+                <span>Mentees</span>
+                {activeMentees.length > 0 && (
+                  <span className="px-1.5 py-0.2 bg-[#F3F4F6] text-[#0A0A0A] text-[10px] font-bold rounded-full border border-[#E5E7EB]">
+                    {activeMentees.length}
+                  </span>
+                )}
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* ─── TAB CONTENT: STUDENT -> FIND A MENTOR ─────────────────────── */}
+        {isStudent && studentTab === 'find' && (
+          <div className="space-y-8 animate-in fade-in duration-200">
+            {/* Top 3 Recommended Mentors */}
+            {recommendedMentors.length > 0 && !searchQuery.trim() && roleFilter === 'all' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xs font-bold text-[#0A0A0A] uppercase tracking-wider">
+                    Recommended mentors
+                  </h2>
+                  <span className="text-[11px] text-[#6B7280]">Based on CMPN department & verified alumni network</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {recommendedMentors.map(mentor => (
+                    <div
+                      key={mentor.id}
+                      className="bg-white border border-[#E5E7EB] hover:border-[#0A0A0A] rounded-2xl p-4 transition-all duration-150 flex flex-col justify-between space-y-3"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <Avatar src={mentor.avatarUrl} name={mentor.name} size={44} className="border border-[#E5E7EB]" />
+                          <span className="px-2 py-0.5 bg-[#F3F4F6] text-[#0A0A0A] text-[10px] font-semibold rounded-full border border-[#E5E7EB] capitalize">
+                            {mentor.userType}
+                          </span>
                         </div>
-                        {isSelected && (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="font-semibold text-xs text-[#0A0A0A] truncate">{mentor.name}</h3>
+                            <ShieldCheck className="w-3.5 h-3.5 text-[#0A0A0A] shrink-0" />
+                          </div>
+                          <p className="text-[11px] text-[#6B7280] truncate mt-0.5">
+                            {mentor.role} {mentor.company ? `· ${mentor.company}` : ''}
+                          </p>
+                        </div>
+
+                        {/* Skills / Domains */}
+                        {(mentor as any).skills && (mentor as any).skills.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {((mentor as any).skills as string[]).slice(0, 3).map((skill, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-0.5 bg-[#F9FAFB] border border-[#E5E7EB] text-[#4B5563] text-[10px] rounded-md"
+                              >
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
                         )}
                       </div>
-                    );
-                  })}
+
+                      <div className="pt-2 border-t border-[#E5E7EB] flex items-center justify-between">
+                        <span className="text-[11px] text-[#6B7280] font-medium">
+                          {mentor.availableSlots} open slots
+                        </span>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => handleOpenSheetForMentor(mentor)}
+                          className="cursor-pointer"
+                        >
+                          Request
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <SelectField
-                label="Primary engagement purpose"
-                value={purposeOfRequest}
-                onChange={e => setPurposeOfRequest(e.target.value as MentorshipGuidancePurpose)}
-                options={requestConfig.purposeOptions.map(opt => ({
-                  value: opt,
-                  label: opt
-                }))}
-              />
-
-              <TextField
-                label="Specific domain or topic"
-                type="text"
-                value={areaOfGuidance}
-                onChange={e => setAreaOfGuidance(e.target.value)}
-                placeholder="e.g. Distributed Consensus, Resume Review, Higher Ed Applications"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <TextField
-                label="Proposed meeting date (optional)"
-                type="date"
-                value={proposedDate}
-                min={new Date().toISOString().split('T')[0]}
-                onChange={e => setProposedDate(e.target.value)}
-              />
-
-              <SelectField
-                label="Preferred time slot (optional)"
-                value={proposedTimeSlot}
-                onChange={e => setProposedTimeSlot(e.target.value)}
-                options={[
-                  { value: '', label: 'Flexible / anytime' },
-                  { value: 'Morning (9:00 AM - 12:00 PM)', label: 'Morning (9:00 AM - 12:00 PM)' },
-                  { value: 'Afternoon (12:00 PM - 4:00 PM)', label: 'Afternoon (12:00 PM - 4:00 PM)' },
-                  { value: 'Evening (4:00 PM - 8:00 PM)', label: 'Evening (4:00 PM - 8:00 PM)' }
-                ]}
-              />
-            </div>
-
-            <TextArea
-              label="Personal message & background context"
-              rows={4}
-              required
-              value={message}
-              onChange={e => setMessage(e.target.value)}
-              placeholder="Introduce yourself, mention your branch, year, and specific questions..."
-            />
-
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              className="w-full"
-              icon={<Send className="w-4 h-4" />}
-            >
-              {isStudent ? requestConfig.label : 'Send Guidance Offer'}
-            </Button>
-          </form>
-        </div>
-      )}
-
-      {/* TAB 2: SENT REQUESTS / OUTREACH */}
-      {activeSubTab === 'my-sent' && (
-        <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-4 shadow-none">
-          <h2 className="font-bold text-[#0A0A0A] text-base">{isStudent ? 'My requests' : 'My sent outreach'}</h2>
-          <p className="text-xs text-[#6B7280] font-medium">
-            {isStudent
-              ? 'Track the status of your outgoing mentorship and guidance requests.'
-              : 'History of outgoing mentorship offers and collaboration outreach.'}
-          </p>
-
-          {mySentRequests.length === 0 ? (
-            <EmptyState
-              icon={<Inbox className="w-6 h-6 text-[#0A0A0A]" />}
-              title={isStudent ? 'No requests sent yet' : 'No sent outreach yet'}
-              description={isStudent ? 'You haven’t submitted any mentorship requests yet. Browse the directory to find a mentor.' : 'You have not sent any outreach invitations yet.'}
-              actionLabel={isStudent ? 'Find a mentor' : undefined}
-              onAction={isStudent ? () => setActiveSubTab('find') : undefined}
-            />
-          ) : (
+            {/* Search & Filter Toolbar */}
             <div className="space-y-3">
-              {mySentRequests.map(req => (
-                <div key={req.id} className="p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Badge variant={req.status === 'Accepted' ? 'emerald' : req.status === 'Declined' ? 'rose' : 'indigo'}>
-                        {req.status}
-                      </Badge>
-                      <h3 className="font-bold text-[#0A0A0A] text-sm mt-1">To: {req.mentorName}</h3>
-                    </div>
-                    <span className="font-mono text-[#9CA3AF] text-[10px]">{req.requestedDate}</span>
-                  </div>
-
-                  {(req.proposedDate || req.proposedTimeSlot) && (
-                    <p className="text-xs font-mono font-bold text-[#0A0A0A]">
-                      Proposed Time: {req.proposedDate || 'Flexible'} ({req.proposedTimeSlot || 'Anytime'})
-                    </p>
-                  )}
-
-                  <p className="text-xs text-[#374151] font-medium">"{req.message}"</p>
-
-                  {req.status === 'Declined' && (
-                    <div className="pt-2 border-t border-[#E5E7EB] flex items-center justify-between">
-                      <span className="text-xs text-rose-700 font-medium">
-                        Decline note: {req.declineReason || 'Bandwidth constraints'}
-                      </span>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedMentorId(req.mentorId);
-                          setPurposeOfRequest(req.purposeOfRequest);
-                          setAreaOfGuidance(req.areaOfGuidance || '');
-                          setMessage(`Resubmitting request with updated timing proposal to ${req.mentorName}.`);
-                          setActiveSubTab('find');
-                        }}
-                      >
-                        Re-propose Date/Time
-                      </Button>
-                    </div>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                {/* Search */}
+                <div className="relative flex-1 max-w-md">
+                  <Search className="w-4 h-4 text-[#6B7280] absolute left-3.5 top-3 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search by mentor name, company, or domain..."
+                    className="w-full h-10 pl-10 pr-8 bg-[#F3F4F6] border-0 rounded-xl text-xs text-[#0A0A0A] placeholder:text-[#6B7280] focus:ring-1 focus:ring-[#0A0A0A] focus:outline-none"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-3 text-[#6B7280] hover:text-[#0A0A0A]"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* TAB 3: INCOMING REQUESTS FOR YOU */}
-      {activeSubTab === 'incoming' && (
-        <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-4 shadow-none">
-          <h2 className="font-bold text-[#0A0A0A] text-base">Requests for you</h2>
-          <p className="text-xs text-[#6B7280] font-medium">Review and respond to incoming guidance and mentorship requests from students or peers.</p>
-
-          {pendingIncomingRequests.length === 0 ? (
-            <EmptyState
-              icon={<Sparkles className="w-6 h-6 text-[#0A0A0A]" />}
-              title="No pending requests"
-              description="You have no pending guidance or mentorship requests from students or peers at this time."
-            />
-          ) : (
-            <div className="space-y-3">
-              {pendingIncomingRequests.map(req => (
-                <div key={req.id} className="p-5 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Badge variant="indigo">{req.purposeOfRequest}</Badge>
-                      <h3 className="font-bold text-[#0A0A0A] text-sm mt-1">From: {req.studentName} ({req.studentDepartment})</h3>
-                      <p className="text-xs text-[#6B7280] font-medium">{req.studentEmail} • PRN: <span className="font-mono">{req.studentEnrollmentNo}</span></p>
-                    </div>
-                    <Badge variant="indigo">14-day auto expiry</Badge>
-                  </div>
-                  <p className="text-xs text-[#374151] bg-white p-3 rounded-lg border border-[#E5E7EB] font-medium">
-                    "{req.message}"
-                  </p>
-                  <div className="flex items-center justify-end gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setDeclineModalReq(req)}
+                {/* Chips */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {(['all', 'alumni', 'faculty'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setRoleFilter(tab)}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer capitalize ${
+                        roleFilter === tab
+                          ? 'bg-[#0A0A0A] text-white'
+                          : 'bg-white text-[#6B7280] border border-[#E5E7EB] hover:text-[#0A0A0A]'
+                      }`}
                     >
-                      Decline Request
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => {
-                        updateMentorshipStatus(req.id, 'Accepted', 'Accepted by mentor.', currentRole);
-                        setBookingSuccessMsg(`Request accepted! NexaChats unlocked with ${req.studentName}.`);
-                        setTimeout(() => setBookingSuccessMsg(null), 3500);
-                      }}
-                    >
-                      Accept Guidance Request
-                    </Button>
-                  </div>
+                      {tab === 'all' ? `All (${allMentors.length})` : tab}
+                    </button>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              </div>
 
-      {/* TAB 4: ESTABLISHED CONNECTIONS (MY MENTORS / MY MENTEES) */}
-      {activeSubTab === 'requests' && (
-        <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-4 shadow-none">
-          <h2 className="font-bold text-[#0A0A0A] text-base">{isStudent ? 'My mentors' : 'My mentees & connections'}</h2>
-          <p className="text-xs text-[#6B7280] font-medium">
-            {isStudent
-              ? 'Active mentorship connections with alumni and faculty advisors.'
-              : 'Active mentees and guidance relationships.'}
-          </p>
-
-          {activeEstablishedConnections.length === 0 ? (
-            <EmptyState
-              icon={<UserCheck className="w-6 h-6 text-[#0A0A0A]" />}
-              title={isStudent ? 'No active mentors yet' : 'No active mentees yet'}
-              description={isStudent ? 'Once a mentor accepts your request, your active guidance relationship will appear here.' : 'Accepted guidance and mentorship requests will appear here.'}
-              actionLabel={isStudent ? 'Request guidance' : undefined}
-              onAction={isStudent ? () => setActiveSubTab('find') : undefined}
-            />
-          ) : (
-            <div className="space-y-3">
-              {activeEstablishedConnections.map(req => (
-                <div key={req.id} className="p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl flex items-center justify-between">
+              {/* Mentors Grid / Empty state */}
+              {filteredMentors.length === 0 ? (
+                /* 3-Step Empty State */
+                <div className="border border-[#E5E7EB] rounded-2xl p-8 sm:p-12 text-center max-w-lg mx-auto space-y-4 my-8">
+                  <div className="w-12 h-12 rounded-full bg-[#F3F4F6] flex items-center justify-center mx-auto text-[#0A0A0A]">
+                    <Search className="w-5 h-5" />
+                  </div>
                   <div>
-                    <Badge variant="emerald">{req.status}</Badge>
-                    <h3 className="font-bold text-[#0A0A0A] text-sm mt-1">{req.studentName} ↔ {req.mentorName}</h3>
-                    <p className="text-xs text-[#6B7280] font-medium">Topic: {req.purposeOfRequest}</p>
+                    <h3 className="font-bold text-sm text-[#0A0A0A]">No mentors found</h3>
+                    <p className="text-xs text-[#6B7280] mt-1">
+                      No verified alumni or faculty mentors matched your current filter criteria.
+                    </p>
                   </div>
+
+                  <div className="text-left bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl p-4 space-y-2 text-xs text-[#4B5563]">
+                    <p className="font-semibold text-[#0A0A0A]">Suggested next steps:</p>
+                    <ol className="list-decimal list-inside space-y-1 text-[11px] text-[#6B7280]">
+                      <li>Clear search query or switch back to the "All" filter.</li>
+                      <li>Explore the full Directory to browse alumni in specific organizations.</li>
+                      <li>Check back regularly as mentors open new weekly slots.</li>
+                    </ol>
+                  </div>
+
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => setActiveTab('messaging')}
+                    onClick={() => {
+                      setSearchQuery('');
+                      setRoleFilter('all');
+                    }}
                   >
-                    Open NexaChats
+                    Reset filters
                   </Button>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+                  {filteredMentors.map(mentor => (
+                    <div
+                      key={mentor.id}
+                      className="bg-white border border-[#E5E7EB] hover:border-[#0A0A0A] rounded-2xl p-4 transition-all duration-150 flex flex-col justify-between space-y-3"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <Avatar src={mentor.avatarUrl} name={mentor.name} size={40} className="border border-[#E5E7EB]" />
+                          <span className="px-2 py-0.5 bg-[#F3F4F6] text-[#6B7280] text-[10px] font-semibold rounded-full border border-[#E5E7EB] capitalize">
+                            {mentor.userType}
+                          </span>
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-xs text-[#0A0A0A] truncate">{mentor.name}</h3>
+                          <p className="text-[11px] text-[#6B7280] truncate mt-0.5">
+                            {mentor.role} {mentor.company ? `· ${mentor.company}` : ''}
+                          </p>
+                        </div>
 
-      {/* Decline Reason Modal */}
-      <Modal
-        isOpen={!!declineModalReq}
-        onClose={() => setDeclineModalReq(null)}
-        title="Decline Guidance Request"
-        maxWidth="sm"
-      >
-        {declineModalReq && (
-          <div className="space-y-4 font-sans text-xs">
-            <p className="text-xs text-[#6B7280]">
-              Provide a brief respectful note to <strong>{declineModalReq.studentName}</strong>:
-            </p>
+                        {(mentor as any).skills && (mentor as any).skills.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {((mentor as any).skills as string[]).slice(0, 3).map((skill, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-0.5 bg-[#F9FAFB] border border-[#E5E7EB] text-[#4B5563] text-[10px] rounded-md"
+                              >
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
 
-            <div className="space-y-2">
-              {[
-                'Not available right now',
-                'Outside my domain of expertise',
-                'Maximum mentorship bandwidth reached',
-                'Custom note...'
-              ].map(reason => (
-                <button
-                  key={reason}
-                  type="button"
-                  onClick={() => setDeclineReasonChip(reason)}
-                  className={`w-full p-2.5 rounded-lg text-left text-xs font-medium border transition-colors cursor-pointer ${
-                    declineReasonChip === reason
-                      ? 'bg-[#0A0A0A] text-white border-[#0A0A0A]'
-                      : 'bg-[#FAFAFA] text-[#374151] border-[#E5E7EB] hover:bg-[#F3F4F6]'
-                  }`}
-                >
-                  {reason}
-                </button>
-              ))}
-
-              {declineReasonChip === 'Custom note...' && (
-                <textarea
-                  rows={3}
-                  value={customDeclineNote}
-                  onChange={e => setCustomDeclineNote(e.target.value)}
-                  placeholder="Enter a brief note..."
-                  className="app-input w-full text-xs mt-2 border-[#E5E7EB] rounded-lg"
-                />
+                      <div className="pt-2 border-t border-[#E5E7EB] flex items-center justify-between">
+                        <span className="text-[11px] text-[#6B7280] font-medium">
+                          {mentor.availableSlots} open slots
+                        </span>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleOpenSheetForMentor(mentor)}
+                          className="cursor-pointer"
+                        >
+                          Request
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#E5E7EB]">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setDeclineModalReq(null)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={handleDeclineWithNote}
-              >
-                Confirm Decline
-              </Button>
             </div>
           </div>
         )}
+
+        {/* ─── TAB CONTENT: STUDENT -> REQUESTS ──────────────────────────── */}
+        {isStudent && studentTab === 'requests' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* 3-request pending limit banner */}
+            {studentPendingCount >= 3 && (
+              <div className="p-3.5 bg-[#FEF3C7] border border-[#FDE68A] text-[#92400E] rounded-2xl flex items-start gap-3">
+                <AlertCircle className="w-4 h-4 shrink-0 text-[#B45309] mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-semibold text-xs">Maximum pending requests reached (3/3)</p>
+                  <p className="text-[11px] leading-relaxed">
+                    You have 3 active pending requests. Wait for mentors to respond or withdraw an older request before contacting another mentor.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {studentRequests.length === 0 ? (
+              <div className="border border-[#E5E7EB] rounded-2xl p-12 text-center max-w-md mx-auto space-y-3">
+                <Clock className="w-8 h-8 text-[#9CA3AF] mx-auto opacity-50" />
+                <h3 className="font-bold text-sm text-[#0A0A0A]">No mentorship requests yet</h3>
+                <p className="text-xs text-[#6B7280]">
+                  When you send a mentorship request to an alumni or faculty member, its progress will appear here.
+                </p>
+                <div className="pt-2">
+                  <Button variant="primary" size="sm" onClick={() => setStudentTab('find')}>
+                    Browse mentors
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Pending Section */}
+                {studentPendingRequests.length > 0 && (
+                  <div className="space-y-3">
+                    <h2 className="text-xs font-bold text-[#0A0A0A] uppercase tracking-wider flex items-center gap-2">
+                      <span>Pending review</span>
+                      <span className="px-2 py-0.5 bg-[#FEF3C7] text-[#92400E] text-[10px] font-bold rounded-full border border-[#FDE68A]">
+                        {studentPendingRequests.length}
+                      </span>
+                    </h2>
+
+                    <div className="divide-y divide-[#E5E7EB] border border-[#E5E7EB] rounded-2xl bg-white overflow-hidden">
+                      {studentPendingRequests.map(req => (
+                        <div key={req.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="space-y-1.5 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-xs text-[#0A0A0A]">{req.mentorName}</span>
+                              <span className="px-2 py-0.5 bg-[#FEF3C7] text-[#92400E] text-[10px] font-semibold rounded-full border border-[#FDE68A]">
+                                Pending
+                              </span>
+                            </div>
+                            <p className="text-xs font-medium text-[#0A0A0A]">{req.topic || req.purposeOfRequest}</p>
+                            <p className="text-[11px] text-[#6B7280] line-clamp-2 leading-relaxed">{req.message}</p>
+                            <p className="text-[10px] text-[#9CA3AF] pt-1">
+                              Requested {new Date(req.requestedDate || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleWithdraw(req.id)}
+                              className="text-[#991B1B] hover:text-[#7F1D1D] hover:bg-[#FEE2E2]"
+                            >
+                              Withdraw request
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Accepted Section */}
+                {studentAcceptedRequests.length > 0 && (
+                  <div className="space-y-3">
+                    <h2 className="text-xs font-bold text-[#0A0A0A] uppercase tracking-wider flex items-center gap-2">
+                      <span>Accepted</span>
+                      <span className="px-2 py-0.5 bg-[#ECFDF5] text-[#065F46] text-[10px] font-bold rounded-full border border-[#A7F3D0]">
+                        {studentAcceptedRequests.length}
+                      </span>
+                    </h2>
+
+                    <div className="divide-y divide-[#E5E7EB] border border-[#E5E7EB] rounded-2xl bg-white overflow-hidden">
+                      {studentAcceptedRequests.map(req => (
+                        <div key={req.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="space-y-1.5 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-xs text-[#0A0A0A]">{req.mentorName}</span>
+                              <span className="px-2 py-0.5 bg-[#ECFDF5] text-[#065F46] text-[10px] font-semibold rounded-full border border-[#A7F3D0]">
+                                Accepted
+                              </span>
+                            </div>
+                            <p className="text-xs font-medium text-[#0A0A0A]">{req.topic || req.purposeOfRequest}</p>
+                            <p className="text-[11px] text-[#6B7280] leading-relaxed">
+                              Mentor accepted your request. Reach out via Messages to coordinate your discussion.
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => downloadCalendarInvite(`Mentorship Session with ${req.mentorName}`, req.topic || 'Mentorship')}
+                              className="cursor-pointer"
+                            >
+                              <Calendar className="w-3.5 h-3.5 mr-1 text-[#6B7280]" />
+                              <span>Add to calendar (.ics)</span>
+                            </Button>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleMessageUser(req.mentorId)}
+                              className="cursor-pointer"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5 mr-1" />
+                              <span>Message</span>
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Declined Section */}
+                {studentDeclinedRequests.length > 0 && (
+                  <div className="space-y-3">
+                    <h2 className="text-xs font-bold text-[#0A0A0A] uppercase tracking-wider flex items-center gap-2">
+                      <span>Declined</span>
+                      <span className="px-2 py-0.5 bg-[#F3F4F6] text-[#6B7280] text-[10px] font-bold rounded-full border border-[#E5E7EB]">
+                        {studentDeclinedRequests.length}
+                      </span>
+                    </h2>
+
+                    <div className="divide-y divide-[#E5E7EB] border border-[#E5E7EB] rounded-2xl bg-white overflow-hidden">
+                      {studentDeclinedRequests.map(req => (
+                        <div key={req.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="space-y-1.5 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-xs text-[#0A0A0A]">{req.mentorName}</span>
+                              <span className="px-2 py-0.5 bg-[#F3F4F6] text-[#6B7280] text-[10px] font-semibold rounded-full border border-[#E5E7EB]">
+                                Declined
+                              </span>
+                            </div>
+                            <p className="text-xs text-[#6B7280]">{req.topic || req.purposeOfRequest}</p>
+                            {(req.declineReason || req.feedback) && (
+                              <p className="text-[11px] text-[#4B5563] bg-[#F9FAFB] p-2 rounded-lg border border-[#E5E7EB]">
+                                <strong>Mentor note:</strong> {req.declineReason || (typeof req.feedback === 'string' ? req.feedback : req.feedback?.review || (req as any).feedback?.comment)}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setStudentTab('find')}
+                            >
+                              Find another mentor
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── TAB CONTENT: STUDENT -> MY MENTORS ────────────────────────── */}
+        {isStudent && studentTab === 'my-mentors' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {myActiveMentors.length === 0 ? (
+              <div className="border border-[#E5E7EB] rounded-2xl p-12 text-center max-w-md mx-auto space-y-3">
+                <UserCheck className="w-8 h-8 text-[#9CA3AF] mx-auto opacity-50" />
+                <h3 className="font-bold text-sm text-[#0A0A0A]">No active mentors yet</h3>
+                <p className="text-xs text-[#6B7280]">
+                  Once a mentor accepts your request, your active 1-on-1 mentorship relationship will appear here.
+                </p>
+                <div className="pt-2">
+                  <Button variant="primary" size="sm" onClick={() => setStudentTab('find')}>
+                    Find a mentor
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {myActiveMentors.map(rel => (
+                  <div
+                    key={rel.id}
+                    className="border border-[#E5E7EB] rounded-2xl p-5 bg-white space-y-4 flex flex-col justify-between"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h3 className="font-bold text-sm text-[#0A0A0A]">{rel.mentorName}</h3>
+                          <p className="text-xs text-[#6B7280]">{rel.mentorCompanyOrDept || 'Vidyalankar Institute of Technology'}</p>
+                        </div>
+                        <span className="px-2 py-0.5 bg-[#ECFDF5] text-[#065F46] text-[10px] font-semibold rounded-full border border-[#A7F3D0]">
+                          Active Mentorship
+                        </span>
+                      </div>
+
+                      <div className="p-3 bg-[#F9FAFB] rounded-xl border border-[#E5E7EB] text-xs space-y-1">
+                        <p className="font-semibold text-[#0A0A0A]">Topic: {rel.topic || rel.purposeOfRequest}</p>
+                        <p className="text-[#6B7280] text-[11px]">Purpose: {rel.purposeOfRequest}</p>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-[#E5E7EB] flex items-center justify-between gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setCompleteModalReq(rel)}
+                        className="cursor-pointer"
+                      >
+                        Complete session
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => handleMessageUser(rel.mentorId)}
+                        className="cursor-pointer"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 mr-1" />
+                        <span>Message</span>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── TAB CONTENT: MENTOR -> REQUESTS ───────────────────────────── */}
+        {isMentor && mentorTab === 'requests' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {incomingMentorRequests.length === 0 ? (
+              <div className="border border-[#E5E7EB] rounded-2xl p-12 text-center max-w-md mx-auto space-y-3">
+                <Clock className="w-8 h-8 text-[#9CA3AF] mx-auto opacity-50" />
+                <h3 className="font-bold text-sm text-[#0A0A0A]">No incoming requests</h3>
+                <p className="text-xs text-[#6B7280]">
+                  When students request career guidance or research advice, their inquiries will appear here for your review.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-[#E5E7EB] border border-[#E5E7EB] rounded-2xl bg-white overflow-hidden">
+                {incomingMentorRequests.map(req => (
+                  <div key={req.id} className="p-5 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-xs text-[#0A0A0A]">{req.studentName}</h3>
+                          <span className="px-2 py-0.5 bg-[#F3F4F6] text-[#4B5563] text-[10px] rounded font-medium">
+                            {req.studentDepartment || 'CMPN'} · {req.studentYear || 'BE'}
+                          </span>
+                        </div>
+                        <p className="text-xs font-medium text-[#0A0A0A] mt-0.5">
+                          {req.topic || req.purposeOfRequest}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            setDeclineModalReq(req);
+                            setDeclineReason('At capacity right now');
+                            setCustomDeclineNote('');
+                          }}
+                          className="text-[#991B1B] hover:text-[#7F1D1D] hover:bg-[#FEE2E2]"
+                        >
+                          Decline
+                        </Button>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => handleAcceptRequest(req)}
+                        >
+                          Accept
+                        </Button>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-[#4B5563] leading-relaxed bg-[#F9FAFB] p-3 rounded-xl border border-[#E5E7EB] whitespace-pre-line">
+                      {req.message}
+                    </p>
+
+                    <div className="flex items-center justify-between text-[11px] text-[#6B7280] pt-1">
+                      <span>Submitted on {new Date(req.requestedDate || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                      <a
+                        href={`/?tab=directory&profile=${req.studentId}`}
+                        className="underline hover:text-[#0A0A0A] flex items-center gap-1"
+                      >
+                        <span>View student profile</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── TAB CONTENT: MENTOR -> MENTEES ────────────────────────────── */}
+        {isMentor && mentorTab === 'mentees' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {activeMentees.length === 0 ? (
+              <div className="border border-[#E5E7EB] rounded-2xl p-12 text-center max-w-md mx-auto space-y-3">
+                <UserCheck className="w-8 h-8 text-[#9CA3AF] mx-auto opacity-50" />
+                <h3 className="font-bold text-sm text-[#0A0A0A]">No active mentees yet</h3>
+                <p className="text-xs text-[#6B7280]">
+                  When you accept student mentorship inquiries, their profiles and communications will show up here.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {activeMentees.map(mentee => (
+                  <div
+                    key={mentee.id}
+                    className="border border-[#E5E7EB] rounded-2xl p-5 bg-white space-y-4 flex flex-col justify-between"
+                  >
+                    <div className="space-y-2.5">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="font-bold text-sm text-[#0A0A0A]">{mentee.studentName}</h3>
+                          <p className="text-xs text-[#6B7280]">
+                            {mentee.studentDepartment || 'CMPN'} · {mentee.studentYear || 'BE'}
+                          </p>
+                        </div>
+                        <span className="px-2 py-0.5 bg-[#ECFDF5] text-[#065F46] text-[10px] font-semibold rounded-full border border-[#A7F3D0]">
+                          Active Mentee
+                        </span>
+                      </div>
+
+                      <div className="p-3 bg-[#F9FAFB] rounded-xl border border-[#E5E7EB] text-xs space-y-1">
+                        <p className="font-semibold text-[#0A0A0A]">Topic: {mentee.topic || mentee.purposeOfRequest}</p>
+                        <p className="text-[#6B7280] text-[11px] truncate">Email: {mentee.studentEmail}</p>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-[#E5E7EB] flex items-center justify-between">
+                      <a
+                        href={`/?tab=directory&profile=${mentee.studentId}`}
+                        className="text-xs text-[#6B7280] hover:text-[#0A0A0A] underline"
+                      >
+                        Profile
+                      </a>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => handleMessageUser(mentee.studentId)}
+                        className="cursor-pointer"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 mr-1" />
+                        <span>Message</span>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+
+      {/* ─── DECLINE REQUEST MODAL ─────────────────────────────────────── */}
+      <Modal
+        isOpen={!!declineModalReq}
+        onClose={() => setDeclineModalReq(null)}
+        title="Decline mentorship request"
+        subtitle={`Politely notify ${declineModalReq?.studentName || 'the student'} why you cannot mentor them currently.`}
+        maxWidth="md"
+      >
+        <div className="space-y-4 text-xs font-sans">
+          <div>
+            <label className="block text-xs font-semibold text-[#0A0A0A] mb-1.5">
+              Reason
+            </label>
+            <div className="space-y-2">
+              {[
+                'At capacity right now',
+                'Not my area of technical expertise',
+                'Scheduling conflicts during proposed times',
+                'Other'
+              ].map(reason => (
+                <label
+                  key={reason}
+                  className="flex items-center gap-2 p-2.5 rounded-lg border border-[#E5E7EB] hover:bg-[#F9FAFB] cursor-pointer"
+                >
+                  <input
+                    type="radio"
+                    name="declineReason"
+                    value={reason}
+                    checked={declineReason === reason}
+                    onChange={() => setDeclineReason(reason)}
+                    className="w-3.5 h-3.5 text-[#0A0A0A]"
+                  />
+                  <span className="text-xs text-[#0A0A0A]">{reason}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#0A0A0A] mb-1.5">
+              Optional encouraging note
+            </label>
+            <textarea
+              rows={3}
+              value={customDeclineNote}
+              onChange={e => setCustomDeclineNote(e.target.value)}
+              placeholder="e.g. Recommend reaching out to Professor Sharma who leads CMPN AI research..."
+              className="w-full p-2.5 rounded-lg border border-[#E5E7EB] text-xs text-[#0A0A0A] placeholder-[#9CA3AF] focus:outline-none focus:border-[#0A0A0A] resize-none"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#E5E7EB]">
+            <Button variant="secondary" size="md" onClick={() => setDeclineModalReq(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="md" onClick={handleDeclineSubmit}>
+              Submit decline
+            </Button>
+          </div>
+        </div>
       </Modal>
 
+      {/* ─── COMPLETE MENTORSHIP MODAL ──────────────────────────────────── */}
+      <Modal
+        isOpen={!!completeModalReq}
+        onClose={() => setCompleteModalReq(null)}
+        title="Complete mentorship session"
+        subtitle={`Rate your experience with ${completeModalReq?.mentorName || 'your mentor'}.`}
+        maxWidth="md"
+      >
+        <div className="space-y-4 text-xs font-sans">
+          <div>
+            <label className="block text-xs font-semibold text-[#0A0A0A] mb-2">
+              Overall rating
+            </label>
+            <div className="flex items-center gap-1.5">
+              {[1, 2, 3, 4, 5].map(starVal => (
+                <button
+                  key={starVal}
+                  type="button"
+                  onClick={() => setRating(starVal)}
+                  className="p-1 text-[#6B7280] hover:text-[#0A0A0A] transition-colors cursor-pointer"
+                >
+                  <Star
+                    className={`w-6 h-6 ${starVal <= rating ? 'fill-[#0A0A0A] text-[#0A0A0A]' : 'text-[#D1D5DB]'}`}
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#0A0A0A] mb-1.5">
+              Feedback / Key takeaways
+            </label>
+            <textarea
+              rows={3}
+              value={feedbackNotes}
+              onChange={e => setFeedbackNotes(e.target.value)}
+              placeholder="Share what was helpful or how the session contributed to your career goals..."
+              className="w-full p-2.5 rounded-lg border border-[#E5E7EB] text-xs text-[#0A0A0A] placeholder-[#9CA3AF] focus:outline-none focus:border-[#0A0A0A] resize-none"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#E5E7EB]">
+            <Button variant="secondary" size="md" onClick={() => setCompleteModalReq(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="md" onClick={handleCompleteSubmit}>
+              Complete & submit
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ─── SHARED REQUEST MENTORSHIP SHEET ────────────────────────────── */}
+      <RequestMentorshipSheet
+        isOpen={isSheetOpen}
+        onClose={() => setIsSheetOpen(false)}
+        targetUser={sheetTargetMentor}
+        onSuccess={() => {
+          setNotice('Mentorship request transmitted successfully');
+          setTimeout(() => setNotice(null), 3000);
+          setStudentTab('requests');
+        }}
+      />
     </div>
   );
 };
 
-export const MentorshipPage: React.FC<MentorshipPageProps> = (props) => {
+export const MentorshipPage: React.FC<MentorshipPageProps> = props => {
   const { currentRole } = useAuth();
   if (currentRole === 'admin') {
     return <AdminMentorshipGuardView />;
   }
   return <StandardMentorshipPage {...props} />;
 };
+export default MentorshipPage;

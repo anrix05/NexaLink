@@ -132,7 +132,7 @@ export function calculateOpportunityMatch(student: StudentProfile, job: JobListi
     matchReasons.push(`Matched Skills: ${matchedSkills.slice(0, 2).join(', ')}`);
   }
 
-  const finalScore = Math.min(99, Math.max(50, score));
+  const finalScore = Math.min(99, Math.max(0, score));
   return { item: job, score: finalScore, matchReasons };
 }
 
