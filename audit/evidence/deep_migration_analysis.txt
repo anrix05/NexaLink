@@ -1,0 +1,88 @@
+=== NexaLink Deep Migration Schema Analysis ===
+
+Total Tables Created: 25
+Tables WITHOUT RLS Enabled (1):
+  - message_reports
+
+Tables WITH RLS Enabled but WITHOUT FORCE RLS (14):
+  - admin_invites
+  - role_transition_requests
+  - login_attempts
+  - chat_messages
+  - jobs
+  - notifications
+  - starred_conversations
+  - job_applications
+  - conversation_participants
+  - conversations
+  - conversation_members
+  - message_attachments
+  - message_reactions
+  - user_blocks
+
+Functions and RPCs (38):
+  - public.handle_updated_at() [file: 20260916000001_initial_schema.sql] (Definer: false, search_path: NOT SET)
+  - public.is_admin() [file: 20260916000002_rls_policies.sql] (Definer: true, search_path: NOT SET)
+  - public.check_admin_minimum() [file: 20260916000010_purge_mock_data.sql] (Definer: false, search_path: NOT SET)
+  - public.validate_institutional_email() [file: 20260916000002_rls_policies.sql] (Definer: false, search_path: NOT SET)
+  - public.enforce_chat_update_permissions() [file: 20260916000005_realtime_chat.sql] (Definer: true, search_path: NOT SET)
+  - public.check_message_update() [file: 20260916000006_prelaunch_fixes.sql] (Definer: true, search_path: NOT SET)
+  - trg_notify_mentorship_request_fn() [file: 20260916000007_notifications_system.sql] (Definer: true, search_path: NOT SET)
+  - trg_notify_mentorship_update_fn() [file: 20260916000007_notifications_system.sql] (Definer: true, search_path: NOT SET)
+  - trg_notify_chat_message_fn() [file: 20260916000007_notifications_system.sql] (Definer: true, search_path: NOT SET)
+  - trg_notify_message_removed_fn() [file: 20260916000007_notifications_system.sql] (Definer: true, search_path: NOT SET)
+  - trg_notify_message_reported_fn() [file: 20260916000007_notifications_system.sql] (Definer: true, search_path: NOT SET)
+  - trg_notify_verification_status_fn() [file: 20260916000007_notifications_system.sql] (Definer: true, search_path: NOT SET)
+  - trg_notify_admin_invite_accepted_fn() [file: 20260916000007_notifications_system.sql] (Definer: true, search_path: NOT SET)
+  - private.is_admin() [file: 20261001000001_backend_hardening.sql] (Definer: true, search_path: public, pg_temp)
+  - private.admin_role() [file: 20261001000001_backend_hardening.sql] (Definer: true, search_path: public, pg_temp)
+  - private.is_verified() [file: 20261001000001_backend_hardening.sql] (Definer: true, search_path: public, pg_temp)
+  - private.write_audit(p_action TEXT,
+  p_details TEXT,
+  p_target_id UUID DEFAULT NULL,
+  p_is_bulk BOOLEAN DEFAULT false,
+  p_metadata JSONB DEFAULT '{}'::jsonb) [file: 20261001000001_backend_hardening.sql] (Definer: true, search_path: public, pg_temp)
+  - private.prevent_audit_tampering() [file: 20261001000001_backend_hardening.sql] (Definer: true, search_path: public, pg_temp)
+  - private.guard_user_privileged_columns() [file: 20261001000001_backend_hardening.sql] (Definer: true, search_path: public, pg_temp)
+  - public.approve_user_verification(target_user_id UUID) [file: 20261001000001_backend_hardening.sql] (Definer: true, search_path: public, pg_temp)
+  - public.reject_user_verification(target_user_id UUID, rejection_reason TEXT) [file: 20261001000001_backend_hardening.sql] (Definer: true, search_path: public, pg_temp)
+  - public.request_user_clarification(target_user_id UUID, clarification_instructions TEXT) [file: 20261001000001_backend_hardening.sql] (Definer: true, search_path: public, pg_temp)
+  - public.bulk_graduate_students(student_ids UUID[], academic_year INT DEFAULT NULL) [file: 20261001000001_backend_hardening.sql] (Definer: true, search_path: public, pg_temp)
+  - public.report_message(message_id UUID, reason TEXT) [file: 20261001000001_backend_hardening.sql] (Definer: true, search_path: public, pg_temp)
+  - public.action_message_report(report_id UUID, action_type TEXT, notes TEXT) [file: 20261001000001_backend_hardening.sql] (Definer: true, search_path: public, pg_temp)
+  - public.dismiss_message_report(report_id UUID) [file: 20261001000001_backend_hardening.sql] (Definer: true, search_path: public, pg_temp)
+  - private.prevent_last_super_admin_removal() [file: 20261001000001_backend_hardening.sql] (Definer: true, search_path: public, pg_temp)
+  - public.send_message(p_client_message_id TEXT,
+  p_receiver_id UUID,
+  p_content TEXT,
+  p_category TEXT DEFAULT NULL,
+  p_attachment_name TEXT DEFAULT NULL,
+  p_attachment_url TEXT DEFAULT NULL) [file: 20261002000002_chat_and_mentorship_hardening.sql] (Definer: true, search_path: public, auth)
+  - private.try_uuid(t TEXT) [file: 20261003000001_messaging_v2_core.sql] (Definer: false, search_path: NOT SET)
+  - private.is_conversation_member(cid UUID) [file: 20261003000001_messaging_v2_core.sql] (Definer: true, search_path: '' AS $$)
+  - public.get_or_create_conversation(p_other_user_id UUID,
+  p_context_type TEXT DEFAULT NULL,
+  p_context_id UUID DEFAULT NULL) [file: 20261003000001_messaging_v2_core.sql] (Definer: true, search_path: public, auth, pg_temp)
+  - public.send_message_v2(p_conversation_id UUID,
+  p_client_message_id UUID,
+  p_content TEXT,
+  p_reply_to_id UUID DEFAULT NULL,
+  p_attachments JSONB DEFAULT '[]'::JSONB) [file: 20261003000001_messaging_v2_core.sql] (Definer: true, search_path: public, auth, pg_temp)
+  - public.toggle_reaction(p_message_id UUID,
+  p_emoji TEXT) [file: 20261003000001_messaging_v2_core.sql] (Definer: true, search_path: public, auth, pg_temp)
+  - public.mark_conversation_read(p_conversation_id UUID) [file: 20261003000001_messaging_v2_core.sql] (Definer: true, search_path: public, auth, pg_temp)
+  - public.ack_delivered(p_message_ids UUID[]) [file: 20261003000001_messaging_v2_core.sql] (Definer: true, search_path: public, auth, pg_temp)
+  - public.edit_message(p_message_id UUID,
+  p_new_content TEXT) [file: 20261003000001_messaging_v2_core.sql] (Definer: true, search_path: public, auth, pg_temp)
+  - public.delete_message(p_message_id UUID) [file: 20261003000001_messaging_v2_core.sql] (Definer: true, search_path: public, auth, pg_temp)
+  - public.get_inbox() [file: 20261003000001_messaging_v2_core.sql] (Definer: true, search_path: public, auth, pg_temp)
+
+Message / Content Constraints Found:
+  - [20261001000001_backend_hardening.sql]: status IN ('pending', 'resolved', 'dismissed'
+  - [20261002000001_v3_flows_and_moderation.sql]: status IN ('Submitted', 'Reviewed', 'Shortlisted', 'Rejected'
+  - [20261003000001_messaging_v2_core.sql]: status IN ('requested', 'active', 'declined', 'blocked'
+  - [20261003000001_messaging_v2_core.sql]: char_length(content
+  - [20261003000001_messaging_v2_core.sql]: char_length(file_name
+  - [20261003000001_messaging_v2_core.sql]: size_bytes BETWEEN 1 AND 10485760
+  - [20261003000001_messaging_v2_core.sql]: scan_status IN ('pending', 'ok', 'rejected'
+  - [20261003000001_messaging_v2_core.sql]: octet_length(emoji

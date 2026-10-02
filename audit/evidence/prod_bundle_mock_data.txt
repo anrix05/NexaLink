@@ -1,0 +1,13 @@
+Vite Production Build Output:
+[INEFFECTIVE_DYNAMIC_IMPORT] ../My Works/NexaLink/src/data/mockData.ts is dynamically imported by ../My Works/NexaLink/src/context/AuthContext.tsx but also statically imported by ../My Works/NexaLink/src/context/DataContext.tsx, ../My Works/NexaLink/src/pages/messaging/MessagingPage.tsx, dynamic import will not move module into another chunk.
+
+Bundle Output:
+dist/assets/index-BRkm7Itp.js: 2,664.39 kB (gzip: 729.77 kB)
+
+Search for mock data in dist/assets/index-BRkm7Itp.js:
+Found 'aanya.patel@student.vit.edu.in' embedded in production JS asset.
+
+Doc Claim:
+PRD.md & architecture.md: 'Heavy mock data files (mockData.ts) are dynamically imported conditionally on import.meta.env.DEV, ensuring production client bundles remain lightweight and free of dummy demo data.'
+
+Verdict: FAIL (High) - Production client bundle bundles the entirety of mockData.ts (students, alumni, admins, benchmark messages) due to static imports in DataContext.tsx and MessagingPage.tsx.
