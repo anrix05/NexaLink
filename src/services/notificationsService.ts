@@ -23,9 +23,80 @@ export function mapRowToNotification(n: any): NotificationItem {
   };
 }
 
+export const NOTIFICATIONS_PAGE_SIZE = 20;
+
 export const notificationsService = {
+  PAGE_SIZE: NOTIFICATIONS_PAGE_SIZE,
+
   /**
-   * Fetch notifications for a user, ordered newest first
+   * Fetch lightweight unread count for navbar badge
+   */
+  async getUnreadCount(userId: string): Promise<number> {
+    if (!isSupabaseConfigured() || !isValidUuid(userId)) return 0;
+    try {
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('is_read', false);
+      if (error) return 0;
+      return count || 0;
+    } catch {
+      return 0;
+    }
+  },
+
+  /**
+   * Fetch paginated notifications with constant PAGE_SIZE = 20
+   */
+  async getNotificationsPaginated(
+    userId: string,
+    options: { page?: number; pageSize?: number; unreadOnly?: boolean; category?: string } = {}
+  ): Promise<{ items: NotificationItem[]; totalCount: number; hasMore: boolean }> {
+    const page = Math.max(1, options.page || 1);
+    const pageSize = options.pageSize || NOTIFICATIONS_PAGE_SIZE;
+    const offset = (page - 1) * pageSize;
+
+    if (!isSupabaseConfigured() || !isValidUuid(userId)) {
+      return { items: [], totalCount: 0, hasMore: false };
+    }
+
+    try {
+      let query = supabase
+        .from('notifications')
+        .select('*', { count: 'exact' })
+        .eq('user_id', userId);
+
+      if (options.unreadOnly) {
+        query = query.eq('is_read', false);
+      }
+
+      if (options.category && options.category !== 'all') {
+        query = (query as any).eq('type', options.category);
+      }
+
+      query = (query as any)
+        .order('date', { ascending: false })
+        .range(offset, offset + pageSize - 1);
+
+      const { data, count, error } = await query;
+      if (error) throw error;
+
+      const items = (data || []).map(mapRowToNotification);
+      const totalCount = count || items.length;
+
+      return {
+        items,
+        totalCount,
+        hasMore: offset + items.length < totalCount
+      };
+    } catch {
+      return { items: [], totalCount: 0, hasMore: false };
+    }
+  },
+
+  /**
+   * Fetch notifications for a user, ordered newest first (top 20)
    */
   async getNotifications(userId: string): Promise<NotificationItem[]> {
     if (!isSupabaseConfigured() || !isValidUuid(userId)) {
@@ -38,7 +109,7 @@ export const notificationsService = {
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
-        .limit(100);
+        .limit(20);
     });
 
     return (rows || []).map(mapRowToNotification);

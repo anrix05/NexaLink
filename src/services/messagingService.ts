@@ -116,7 +116,51 @@ export const messagingService = {
   },
 
   /**
-   * Fetch all messages for current user
+   * Fetch thread messages between two users using keyset pagination on timestamp (PAGE_SIZE = 20)
+   */
+  async getThreadMessages(
+    currentUserId: string,
+    contactId: string,
+    options: { limit?: number; beforeTimestamp?: string } = {}
+  ): Promise<{ messages: ChatMessage[]; nextCursor?: string; hasMore: boolean }> {
+    const limit = options.limit || 20;
+
+    if (!isSupabaseConfigured() || !isValidUuid(currentUserId) || !isValidUuid(contactId)) {
+      return { messages: [], hasMore: false };
+    }
+
+    try {
+      let query = supabase
+        .from('chat_messages')
+        .select('*')
+        .or(
+          `and(sender_id.eq.${currentUserId},receiver_id.eq.${contactId}),and(sender_id.eq.${contactId},receiver_id.eq.${currentUserId})`
+        );
+
+      if (options.beforeTimestamp) {
+        query = query.lt('timestamp', options.beforeTimestamp);
+      }
+
+      query = query.order('timestamp', { ascending: false }).limit(limit);
+
+      const rows = await runQuery<any[]>('chat_messages', async () => query);
+      const mapped = (rows || []).map(r => mapRowToChatMessage(r));
+      const hasMore = mapped.length === limit;
+      const nextCursor = hasMore && mapped.length > 0 ? mapped[mapped.length - 1].timestamp : undefined;
+
+      // Reverse so thread renders in chronological ascending order
+      return {
+        messages: mapped.reverse(),
+        nextCursor,
+        hasMore
+      };
+    } catch {
+      return { messages: [], hasMore: false };
+    }
+  },
+
+  /**
+   * Fetch all messages for current user (kept for fallback)
    */
   async getMessages(userId: string): Promise<ChatMessage[]> {
     if (!isSupabaseConfigured() || !isValidUuid(userId)) {

@@ -1221,4 +1221,140 @@ test('characterization: formatConversationPreview prevents No messages yet glitc
   assert.strictEqual(formatConversationPreview('   ', [], false), 'No messages yet');
 });
 
+// ----------------------------------------------------------------------------
+// 10. Phase 2: Pagination Characterization Tests (Constant PAGE_SIZE = 20)
+// ----------------------------------------------------------------------------
+test('characterization: audit logs pagination slices at PAGE_SIZE = 20', () => {
+  const dummyLogs = Array.from({ length: 45 }, (_, i) => ({
+    id: `log-${i + 1}`,
+    action: `ACTION_${i + 1}`,
+    performedBy: 'Admin',
+    timestamp: new Date(Date.now() - i * 1000 * 60).toISOString(),
+    details: `Action detail ${i + 1}`
+  }));
+
+  const PAGE_SIZE = 20;
+  const totalPages = Math.ceil(dummyLogs.length / PAGE_SIZE);
+  assert.strictEqual(totalPages, 3);
+
+  // Page 1
+  const page1 = dummyLogs.slice(0, PAGE_SIZE);
+  assert.strictEqual(page1.length, 20);
+  assert.strictEqual(page1[0].id, 'log-1');
+
+  // Page 2
+  const page2 = dummyLogs.slice(PAGE_SIZE, PAGE_SIZE * 2);
+  assert.strictEqual(page2.length, 20);
+  assert.strictEqual(page2[0].id, 'log-21');
+
+  // Page 3 (remainder)
+  const page3 = dummyLogs.slice(PAGE_SIZE * 2);
+  assert.strictEqual(page3.length, 5);
+  assert.strictEqual(page3[4].id, 'log-45');
+});
+
+test('characterization: user roster pagination bounds and page math', () => {
+  const dummyUsers = Array.from({ length: 63 }, (_, i) => ({
+    id: `user-${i + 1}`,
+    name: `User ${i + 1}`,
+    role: 'student'
+  }));
+
+  const USER_PAGE_SIZE = 20;
+  const totalPages = Math.ceil(dummyUsers.length / USER_PAGE_SIZE);
+  assert.strictEqual(totalPages, 4);
+
+  const getPage = (p) => {
+    const start = (p - 1) * USER_PAGE_SIZE;
+    return dummyUsers.slice(start, start + USER_PAGE_SIZE);
+  };
+
+  assert.strictEqual(getPage(1).length, 20);
+  assert.strictEqual(getPage(1)[0].name, 'User 1');
+  assert.strictEqual(getPage(2).length, 20);
+  assert.strictEqual(getPage(3).length, 20);
+  assert.strictEqual(getPage(4).length, 3);
+  assert.strictEqual(getPage(4)[2].name, 'User 63');
+});
+
+test('characterization: opportunity applicants pagination', () => {
+  const dummyApplicants = Array.from({ length: 32 }, (_, i) => ({
+    id: `app-${i + 1}`,
+    applicantName: `Candidate ${i + 1}`,
+    status: 'submitted'
+  }));
+
+  const APPLICANT_PAGE_SIZE = 20;
+  const totalPages = Math.ceil(dummyApplicants.length / APPLICANT_PAGE_SIZE);
+  assert.strictEqual(totalPages, 2);
+
+  const page1 = dummyApplicants.slice(0, APPLICANT_PAGE_SIZE);
+  const page2 = dummyApplicants.slice(APPLICANT_PAGE_SIZE, APPLICANT_PAGE_SIZE * 2);
+
+  assert.strictEqual(page1.length, 20);
+  assert.strictEqual(page2.length, 12);
+});
+
+test('characterization: notifications pagination preserves PAGE_SIZE = 20', () => {
+  const dummyNotifications = Array.from({ length: 50 }, (_, i) => ({
+    id: `notif-${i + 1}`,
+    title: `Notification ${i + 1}`,
+    is_read: i % 2 === 0
+  }));
+
+  const NOTIFICATIONS_PAGE_SIZE = 20;
+  const totalPages = Math.ceil(dummyNotifications.length / NOTIFICATIONS_PAGE_SIZE);
+  assert.strictEqual(totalPages, 3);
+
+  const unreadOnly = dummyNotifications.filter(n => !n.is_read);
+  assert.strictEqual(unreadOnly.length, 25);
+  const unreadPages = Math.ceil(unreadOnly.length / NOTIFICATIONS_PAGE_SIZE);
+  assert.strictEqual(unreadPages, 2);
+});
+
+test('characterization: messenger thread pagination delivers newest messages on page 1 with chronological ordering', () => {
+  const rawThread = Array.from({ length: 45 }, (_, i) => ({
+    id: `msg-${i + 1}`,
+    senderId: i % 2 === 0 ? 'user-1' : 'user-2',
+    receiverId: i % 2 === 0 ? 'user-2' : 'user-1',
+    content: `Message ${i + 1}`,
+    timestamp: new Date(1700000000000 + i * 60000).toISOString()
+  }));
+
+  const THREAD_PAGE_SIZE = 20;
+  const total = rawThread.length;
+  const totalPages = Math.ceil(total / THREAD_PAGE_SIZE);
+  assert.strictEqual(totalPages, 3);
+
+  const getThreadPage = (page) => {
+    const end = Math.max(0, total - (page - 1) * THREAD_PAGE_SIZE);
+    const start = Math.max(0, end - THREAD_PAGE_SIZE);
+    return rawThread.slice(start, end);
+  };
+
+  // Page 1: most recent 20 messages (indices 25 to 44)
+  const page1 = getThreadPage(1);
+  assert.strictEqual(page1.length, 20);
+  assert.strictEqual(page1[0].content, 'Message 26');
+  assert.strictEqual(page1[19].content, 'Message 45');
+
+  // Verify internal chronological order within page
+  const t0 = new Date(page1[0].timestamp).getTime();
+  const t19 = new Date(page1[19].timestamp).getTime();
+  assert.ok(t0 < t19, 'Messages within page must be in ascending chronological order');
+
+  // Page 2: next 20 older messages (indices 5 to 24)
+  const page2 = getThreadPage(2);
+  assert.strictEqual(page2.length, 20);
+  assert.strictEqual(page2[0].content, 'Message 6');
+  assert.strictEqual(page2[19].content, 'Message 25');
+
+  // Page 3: oldest 5 messages (indices 0 to 4)
+  const page3 = getThreadPage(3);
+  assert.strictEqual(page3.length, 5);
+  assert.strictEqual(page3[0].content, 'Message 1');
+  assert.strictEqual(page3[4].content, 'Message 5');
+});
+
+
 

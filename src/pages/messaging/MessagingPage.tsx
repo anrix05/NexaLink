@@ -25,6 +25,7 @@ import { formatMessageTime, formatConversationPreview } from '../../features/mes
 import { validateChatAttachment, MAX_FILES_PER_MESSAGE } from '../../features/messaging/utils/fileValidation';
 import { processChatImage } from '../../features/messaging/utils/imageProcessor';
 import { MessagingService } from '../../features/messaging/api/messagingService';
+import { messagingService, type ConversationSummary } from '../../services/messagingService';
 import { EmojiPicker } from '../../features/messaging/emoji/EmojiPicker';
 import { insertAtCaret } from '../../features/messaging/emoji/insertAtCaret';
 import { ThreadHeader } from '../../features/messaging/components/ThreadHeader';
@@ -97,7 +98,8 @@ export const MessagingPage: React.FC = () => {
     isDataLoading,
     setActiveChatContactId,
     pendingChatUserId,
-    setPendingChatUserId
+    setPendingChatUserId,
+    loadThreadMessages
   } = useData();
 
   const { currentUser } = useAuth();
@@ -298,6 +300,39 @@ export const MessagingPage: React.FC = () => {
       })
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }, [messages, currentUserId, activeContactId, benchmarkThreadMessages]);
+
+  // Keyset & Page pagination on thread messages (THREAD_PAGE_SIZE = 20)
+  const [threadPage, setThreadPage] = useState(1);
+  const THREAD_PAGE_SIZE = 20;
+
+  // Reset page when switching active contact
+  useEffect(() => {
+    setThreadPage(1);
+  }, [activeContactId]);
+
+  // Load thread messages on-demand when contact selected
+  useEffect(() => {
+    if (!activeContactId || !currentUserId) return;
+    const hasThread = messages.some(
+      m => (m.senderId === currentUserId && m.receiverId === activeContactId) ||
+           (m.senderId === activeContactId && m.receiverId === currentUserId)
+    );
+    if (!hasThread && loadThreadMessages) {
+      loadThreadMessages(activeContactId, { limit: THREAD_PAGE_SIZE });
+    }
+  }, [activeContactId, currentUserId, messages, loadThreadMessages]);
+
+  const totalThreadMessages = rawThreadMessages.length;
+  const totalThreadPages = Math.max(1, Math.ceil(totalThreadMessages / THREAD_PAGE_SIZE));
+
+  const paginatedThreadMessages = useMemo(() => {
+    if (totalThreadMessages <= THREAD_PAGE_SIZE) {
+      return rawThreadMessages;
+    }
+    const end = Math.max(0, totalThreadMessages - (threadPage - 1) * THREAD_PAGE_SIZE);
+    const start = Math.max(0, end - THREAD_PAGE_SIZE);
+    return rawThreadMessages.slice(start, end);
+  }, [rawThreadMessages, threadPage, totalThreadMessages]);
 
   // Last sent message in the entire thread (for status display)
   const lastSentMsgId = useMemo(() => {
@@ -620,6 +655,7 @@ export const MessagingPage: React.FC = () => {
       currentReply || undefined
     );
 
+    setThreadPage(1);
     scrollToBottom(true);
   };
 
@@ -1020,6 +1056,33 @@ export const MessagingPage: React.FC = () => {
                   </div>
                 )}
 
+                {/* Thread Pagination Control Bar */}
+                {totalThreadMessages > 0 && (
+                  <div className="mb-4 py-2 px-3.5 rounded-xl bg-[#FAFAFA] border border-[#E5E7EB] flex items-center justify-between text-xs text-[#4B5563]">
+                    <span>
+                      Showing {Math.min(paginatedThreadMessages.length, THREAD_PAGE_SIZE)} of {totalThreadMessages} messages (Page {threadPage} of {totalThreadPages})
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={threadPage <= 1}
+                        onClick={() => setThreadPage(p => Math.max(1, p - 1))}
+                        className="px-2.5 py-1 rounded-lg border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] disabled:opacity-40 disabled:cursor-not-allowed font-medium text-xs transition"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        type="button"
+                        disabled={threadPage >= totalThreadPages}
+                        onClick={() => setThreadPage(p => Math.min(totalThreadPages, p + 1))}
+                        className="px-2.5 py-1 rounded-lg border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] disabled:opacity-40 disabled:cursor-not-allowed font-medium text-xs transition"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {rawThreadMessages.length === 0 ? (
                   <div className="py-16 text-center text-[#6B7280] space-y-4">
                     <div className="flex justify-center">
@@ -1054,10 +1117,10 @@ export const MessagingPage: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  rawThreadMessages.map((msg, index) => {
+                  paginatedThreadMessages.map((msg, index) => {
                     const isMe = msg.senderId === currentUserId;
-                    const prevMsg = rawThreadMessages[index - 1];
-                    const nextMsg = rawThreadMessages[index + 1];
+                    const prevMsg = paginatedThreadMessages[index - 1];
+                    const nextMsg = paginatedThreadMessages[index + 1];
 
                     const msgDate = new Date(msg.timestamp);
                     const msgTime = msgDate.getTime();

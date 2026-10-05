@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { jobsService } from '../../services/jobsService';
@@ -131,6 +131,20 @@ export const OpportunityManageConsole: React.FC<OpportunityManageConsoleProps> =
       return true;
     });
   }, [currentApplications, statusFilter, searchTerm]);
+
+  const [applicantPage, setApplicantPage] = useState(1);
+  const APPLICANT_PAGE_SIZE = 20;
+
+  useEffect(() => {
+    setApplicantPage(1);
+  }, [statusFilter, searchTerm]);
+
+  const totalApplicants = filteredApplicants.length;
+  const totalApplicantPages = Math.max(1, Math.ceil(totalApplicants / APPLICANT_PAGE_SIZE));
+  const paginatedApplicants = useMemo(() => {
+    const start = (applicantPage - 1) * APPLICANT_PAGE_SIZE;
+    return filteredApplicants.slice(start, start + APPLICANT_PAGE_SIZE);
+  }, [filteredApplicants, applicantPage]);
 
   // Statistics
   const totalApps = currentApplications.length;
@@ -436,7 +450,8 @@ export const OpportunityManageConsole: React.FC<OpportunityManageConsoleProps> =
                 No applicants found matching your filter criteria.
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+                <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-[#FAFAFA] border-b border-[#E5E7EB] text-[#6B7280] text-[11px] uppercase tracking-wider font-semibold">
                     <tr>
@@ -448,7 +463,7 @@ export const OpportunityManageConsole: React.FC<OpportunityManageConsoleProps> =
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E5E7EB]">
-                    {filteredApplicants.map(app => (
+                    {paginatedApplicants.map(app => (
                       <tr
                         key={app.id}
                         onClick={() => handleOpenApplicant(app)}
@@ -544,7 +559,33 @@ export const OpportunityManageConsole: React.FC<OpportunityManageConsoleProps> =
                   </tbody>
                 </table>
               </div>
-            )}
+
+              {/* Pagination Controls Bar */}
+              <div className="p-3.5 border-t border-[#E5E7EB] bg-[#FAFAFA] flex items-center justify-between text-xs text-[#4B5563]">
+                <span>
+                  Showing {Math.min(paginatedApplicants.length, APPLICANT_PAGE_SIZE)} of {totalApplicants} applicants (Page {applicantPage} of {totalApplicantPages})
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={applicantPage <= 1}
+                    onClick={() => setApplicantPage(p => Math.max(1, p - 1))}
+                    className="px-3 py-1.5 rounded-lg border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] disabled:opacity-40 disabled:cursor-not-allowed font-medium text-xs transition"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    disabled={applicantPage >= totalApplicantPages}
+                    onClick={() => setApplicantPage(p => Math.min(totalApplicantPages, p + 1))}
+                    className="px-3 py-1.5 rounded-lg border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] disabled:opacity-40 disabled:cursor-not-allowed font-medium text-xs transition"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
           </div>
         </div>
       )}

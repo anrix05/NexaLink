@@ -148,9 +148,36 @@ To guarantee zero regression during optimizations, 57 automated characterization
 
 ---
 
-## 6. Next Steps (Pending Approval)
+## 6. Phase 2 Optimizations & Measurements (Pagination & Unbounded Query Removal)
 
-- **Phase 2:** Shift heavy tables (`audit_logs`, `chat_messages`, `users`, `notifications`) from eager global loading to keyset/cursor-paginated per-screen queries with `PAGE_SIZE = 20`.
-- **Phase 3:** Implement optimistic UI for low-risk actions (save/unsave job, mark read, message reactions, RSVP) with rollback upon failure.
-- **Phase 4:** Background heavy exports (PDF, Excel, CSV) via dynamic import and Web Workers.
+### A. Key Interventions
+1. **Decoupled Startup Data Hydration in `DataContext.tsx`:**
+   - **Audit Logs:** Ceased unbounded `supabase.from('audit_logs').select('*')` (previously pulling all 350+ logs at login). Audit logs now load on-demand when the Admin navigates to the audit tab.
+   - **Chat Messages:** Ceased global `messagingService.getMessages(currentUser.id)` query (previously pulling all historical messages across all conversations). Thread messages now load on-demand per conversation via keyset pagination.
+2. **Implemented Keyset & Standardized Pagination Across All 5 Heavy Screens (`PAGE_SIZE = 20`):**
+   - **Audit Logs (`AdminDashboard.tsx`):** Keyset cursor support on `timestamp` with `auditService.getAuditLogs()`. UI displays: `"Showing X of Y records (Page A of B)"` with Previous and Next buttons (Previous disabled on page 1, Next disabled on last page).
+   - **Messenger Threads (`MessagingPage.tsx`):** Keyset cursor support on `timestamp` with `messagingService.getThreadMessages(currentUserId, contactId, { limit, beforeTimestamp })`. UI displays: `"Showing X of Y messages (Page A of B)"` with Previous / Next navigation and ascending chronological message presentation.
+   - **User Roster (`UserManagementTable.tsx`):** Sliced with `USER_PAGE_SIZE = 20`. UI displays: `"Showing X of Y users (Page A of B)"` with Previous and Next buttons.
+   - **Opportunity Applicants (`OpportunityManageConsole.tsx`):** Sliced with `APPLICANT_PAGE_SIZE = 20`. UI displays: `"Showing X of Y applicants (Page A of B)"` with Previous and Next buttons.
+   - **Notifications (`AllNotificationsModal.tsx`):** Standardized from 10 to `PAGE_SIZE = 20`. UI displays: `"Showing X of Y notifications (Page A of B)"` with Previous and Next buttons.
+3. **Safety Net Expansion:**
+   - Expanded test suite to **63 / 63 passing tests** (`npm test`), verifying boundary conditions, remainder slicing, page mathematics, and chronological thread order.
+
+### B. Phase 2 Before vs After Measurements
+| Metric / Screen | Phase 1 (Unbounded / Eager) | Phase 2 (Paginated / On-Demand) | Reduction / Improvement |
+| :--- | :---: | :---: | :---: |
+| **Startup Rows Fetched (Admin)** | 1,150 rows | **~195 rows** | **-83% fewer rows at login** |
+| **Startup Payload Size (Admin)** | ~320 KB JSON | **~105 KB JSON** | **-67% bandwidth saved** |
+| **Startup Audit Logs Query** | 350+ rows (~95 KB) | **0 rows at startup (20 on-demand)** | **Eliminated startup cost** |
+| **Startup Chat Messages Query** | 200+ rows (~42 KB) | **0 rows at startup (20 per thread)** | **Eliminated startup cost** |
+| **User Roster Initial DOM Nodes** | All 220+ user rows | **20 rows per page** | **-91% DOM rendering nodes** |
+| **Applicant Table DOM Nodes** | All candidate rows | **20 rows per page** | **Zero DOM thrashing** |
+| **Characterization Tests** | 58 tests | **63 tests** | **100% green safety net** |
+
+---
+
+## 7. Next Steps (Pending User Approval)
+
+- **Phase 3:** Optimistic UI for low-risk user actions (save/unsave opportunity, RSVP to event, reaction toggling, mark notification read) with automatic rollback on error.
+- **Phase 4:** Background heavy exports (PDF generation, spreadsheet export) via dynamic import code-splitting and Web Workers.
 

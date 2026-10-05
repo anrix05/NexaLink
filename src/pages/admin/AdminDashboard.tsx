@@ -69,6 +69,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
     mentorshipRequests,
     pendingUsersList,
     auditLogs,
+    loadAuditLogs,
     messages,
     announcements,
     approveUserVerification,
@@ -122,6 +123,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
   // Search & Filter
   const [auditSearch, setAuditSearch] = useState('');
   const [auditFilterCategory, setAuditFilterCategory] = useState<'All' | 'User Events' | 'Governance' | 'System'>('All');
+  const [auditPage, setAuditPage] = useState(1);
+  const AUDIT_PAGE_SIZE = 20;
+
+  useEffect(() => {
+    setAuditPage(1);
+  }, [auditSearch, auditFilterCategory]);
+
+  useEffect(() => {
+    if (activeAdminTab === 'audit' && loadAuditLogs) {
+      loadAuditLogs();
+    }
+  }, [activeAdminTab, loadAuditLogs]);
 
   // Notice Toast State
   const [notice, setNotice] = useState<string | null>(null);
@@ -1181,12 +1194,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
           return true;
         });
 
+        const totalAuditCount = filteredAuditLogs.length;
+        const totalAuditPages = Math.max(1, Math.ceil(totalAuditCount / AUDIT_PAGE_SIZE));
+        const paginatedAuditLogs = filteredAuditLogs.slice(
+          (auditPage - 1) * AUDIT_PAGE_SIZE,
+          auditPage * AUDIT_PAGE_SIZE
+        );
+
         return (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E7EB] pb-4">
               <div>
                 <h2 className="text-lg font-semibold text-[#0A0A0A] tracking-tight">
-                  Institutional security & audit logs ({filteredAuditLogs.length} records)
+                  Institutional security & audit logs ({totalAuditCount} records)
                 </h2>
                 <p className="text-xs text-[#6B7280] mt-0.5">
                   Immutable audit trail of all role mutations, verification events, account rejections, and profile modifications.
@@ -1217,94 +1237,121 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
               </div>
             </div>
 
-            <div className="border border-[#E5E7EB] rounded-xl overflow-x-auto text-xs bg-white">
-              <table className="w-full text-left">
-                <thead className="bg-[#FAFAFA] font-medium text-xs text-[#0A0A0A] border-b border-[#E5E7EB]">
-                  <tr>
-                    <th className="p-3">Timestamp</th>
-                    <th className="p-3">Action event</th>
-                    <th className="p-3">Performed by</th>
-                    <th className="p-3">Details / target user</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E5E7EB] text-xs">
-                  {filteredAuditLogs.length === 0 ? (
+            <div className="border border-[#E5E7EB] rounded-xl overflow-hidden text-xs bg-white">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-[#FAFAFA] font-medium text-xs text-[#0A0A0A] border-b border-[#E5E7EB]">
                     <tr>
-                      <td colSpan={4} className="p-6 text-center text-[#6B7280]">
-                        No audit log records found matching search filters.
-                      </td>
+                      <th className="p-3">Timestamp</th>
+                      <th className="p-3">Action event</th>
+                      <th className="p-3">Performed by</th>
+                      <th className="p-3">Details / target user</th>
                     </tr>
-                  ) : (
-                    filteredAuditLogs.map(log => {
-                      const isExpanded = expandedAuditLogIds.has(log.id);
-                      const isBulkLog = log.isBulkAction || log.action === 'BULK_GRADUATION_PROVISIONAL';
+                  </thead>
+                  <tbody className="divide-y divide-[#E5E7EB] text-xs">
+                    {paginatedAuditLogs.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="p-6 text-center text-[#6B7280]">
+                          No audit log records found matching search filters.
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedAuditLogs.map(log => {
+                        const isExpanded = expandedAuditLogIds.has(log.id);
+                        const isBulkLog = log.isBulkAction || log.action === 'BULK_GRADUATION_PROVISIONAL';
 
-                      return (
-                        <React.Fragment key={log.id}>
-                          <tr className="hover:bg-[#FAFAFA] transition-colors">
-                            <td className="p-3 text-[#6B7280] tabular-nums">{log.timestamp}</td>
-                            <td className="p-3 font-semibold text-[#0A0A0A]">
-                              <div className="flex items-center gap-2">
-                                {isBulkLog && (
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleExpandAuditLog(log.id)}
-                                    className="p-1 hover:bg-[#E5E7EB] rounded transition-colors text-[#0A0A0A]"
-                                  >
-                                    {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                                  </button>
-                                )}
-                                <span>{log.action}</span>
-                                {isBulkLog && (
-                                  <StatusBadge tone="indigo" label="Bulk Action" />
-                                )}
-                              </div>
-                            </td>
-                            <td className="p-3 text-[#374151]">{log.performedBy}</td>
-                            <td className="p-3 text-[#374151]">{log.details}</td>
-                          </tr>
-
-                          {isBulkLog && isExpanded && (
-                            <tr className="bg-[#FAFAFA] border-b border-[#E5E7EB]">
-                              <td colSpan={4} className="p-4">
-                                <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 space-y-3 text-xs">
-                                  <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-2">
-                                    <span className="font-semibold text-[#0A0A0A]">
-                                      Bulk Execution Breakdown ({log.bulkMetadata?.affectedCount || 'N/A'} Affected Accounts)
-                                    </span>
-                                    {log.bulkMetadata?.missingEmailCount ? (
-                                      <StatusBadge tone="amber" label={`${log.bulkMetadata.missingEmailCount} Missing recovery email`} />
-                                    ) : (
-                                      <StatusBadge tone="emerald" label="All recovery emails set" />
-                                    )}
-                                  </div>
-
-                                  <div>
-                                    <span className="block text-xs text-[#6B7280] font-medium mb-1.5">
-                                      Graduated student names
-                                    </span>
-                                    <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg text-xs">
-                                      {log.bulkMetadata?.studentNames && log.bulkMetadata.studentNames.length > 0 ? (
-                                        log.bulkMetadata.studentNames.map((name, idx) => (
-                                          <span key={idx} className="px-2 py-0.5 bg-white border border-[#E5E7EB] rounded text-[#0A0A0A]">
-                                            {name}
-                                          </span>
-                                        ))
-                                      ) : (
-                                        <span className="text-[#6B7280]">Individual records consolidated.</span>
-                                      )}
-                                    </div>
-                                  </div>
+                        return (
+                          <React.Fragment key={log.id}>
+                            <tr className="hover:bg-[#FAFAFA] transition-colors">
+                              <td className="p-3 text-[#6B7280] tabular-nums">{log.timestamp}</td>
+                              <td className="p-3 font-semibold text-[#0A0A0A]">
+                                <div className="flex items-center gap-2">
+                                  {isBulkLog && (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleExpandAuditLog(log.id)}
+                                      className="p-1 hover:bg-[#E5E7EB] rounded transition-colors text-[#0A0A0A]"
+                                    >
+                                      {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                                    </button>
+                                  )}
+                                  <span>{log.action}</span>
+                                  {isBulkLog && (
+                                    <StatusBadge tone="indigo" label="Bulk Action" />
+                                  )}
                                 </div>
                               </td>
+                              <td className="p-3 text-[#374151]">{log.performedBy}</td>
+                              <td className="p-3 text-[#374151]">{log.details}</td>
                             </tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+
+                            {isBulkLog && isExpanded && (
+                              <tr className="bg-[#FAFAFA] border-b border-[#E5E7EB]">
+                                <td colSpan={4} className="p-4">
+                                  <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 space-y-3 text-xs">
+                                    <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-2">
+                                      <span className="font-semibold text-[#0A0A0A]">
+                                        Bulk Execution Breakdown ({log.bulkMetadata?.affectedCount || 'N/A'} Affected Accounts)
+                                      </span>
+                                      {log.bulkMetadata?.missingEmailCount ? (
+                                        <StatusBadge tone="amber" label={`${log.bulkMetadata.missingEmailCount} Missing recovery email`} />
+                                      ) : (
+                                        <StatusBadge tone="emerald" label="All recovery emails set" />
+                                      )}
+                                    </div>
+
+                                    <div>
+                                      <span className="block text-xs text-[#6B7280] font-medium mb-1.5">
+                                        Graduated student names
+                                      </span>
+                                      <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg text-xs">
+                                        {log.bulkMetadata?.studentNames && log.bulkMetadata.studentNames.length > 0 ? (
+                                          log.bulkMetadata.studentNames.map((name, idx) => (
+                                            <span key={idx} className="px-2 py-0.5 bg-white border border-[#E5E7EB] rounded text-[#0A0A0A]">
+                                              {name}
+                                            </span>
+                                          ))
+                                        ) : (
+                                          <span className="text-[#6B7280]">Individual records consolidated.</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Controls Bar */}
+              <div className="p-3.5 border-t border-[#E5E7EB] bg-[#FAFAFA] flex items-center justify-between text-xs text-[#4B5563]">
+                <span>
+                  Showing {Math.min(paginatedAuditLogs.length, AUDIT_PAGE_SIZE)} of {totalAuditCount} records (Page {auditPage} of {totalAuditPages})
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={auditPage <= 1}
+                    onClick={() => setAuditPage(p => Math.max(1, p - 1))}
+                    className="px-3 py-1.5 rounded-lg border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] disabled:opacity-40 disabled:cursor-not-allowed font-medium text-xs transition"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    disabled={auditPage >= totalAuditPages}
+                    onClick={() => setAuditPage(p => Math.min(totalAuditPages, p + 1))}
+                    className="px-3 py-1.5 rounded-lg border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] disabled:opacity-40 disabled:cursor-not-allowed font-medium text-xs transition"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         );

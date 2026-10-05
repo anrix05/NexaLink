@@ -5,7 +5,7 @@
  * Driven 100% by the unified DataContext dataset.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useData } from '../../context/DataContext';
 import { RoleGate } from '../common/RoleGate';
@@ -164,6 +164,20 @@ export const UserManagementTable: React.FC = () => {
     }
     return true;
   });
+
+  const [userPage, setUserPage] = useState(1);
+  const USER_PAGE_SIZE = 20;
+
+  useEffect(() => {
+    setUserPage(1);
+  }, [searchQuery, selectedRoles, statusFilter, deptFilter]);
+
+  const totalUsers = filteredUsers.length;
+  const totalUserPages = Math.max(1, Math.ceil(totalUsers / USER_PAGE_SIZE));
+  const paginatedUsers = useMemo(() => {
+    const start = (userPage - 1) * USER_PAGE_SIZE;
+    return filteredUsers.slice(start, start + USER_PAGE_SIZE);
+  }, [filteredUsers, userPage]);
 
   const roleSummaryText = selectedRoles.length === 4
     ? 'All roles'
@@ -346,7 +360,7 @@ export const UserManagementTable: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  filteredUsers.map(user => {
+                  paginatedUsers.map((user: any) => {
                     const status = user.verificationStatus || (user.isVerified ? 'Verified' : 'Pending Verification');
                     const isDeactivated = user.isActive === false || status === 'Deactivated';
                     const isRejected = status === 'Rejected';
@@ -502,6 +516,31 @@ export const UserManagementTable: React.FC = () => {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Pagination Controls Bar */}
+          <div className="p-4 border-t border-[#E5E7EB] bg-[#FAFAFA] flex items-center justify-between text-xs text-[#4B5563] rounded-b-xl">
+            <span>
+              Showing {Math.min(paginatedUsers.length, USER_PAGE_SIZE)} of {totalUsers} users (Page {userPage} of {totalUserPages})
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={userPage <= 1}
+                onClick={() => setUserPage(p => Math.max(1, p - 1))}
+                className="px-3 py-1.5 rounded-lg border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] disabled:opacity-40 disabled:cursor-not-allowed font-medium text-xs transition"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                disabled={userPage >= totalUserPages}
+                onClick={() => setUserPage(p => Math.min(totalUserPages, p + 1))}
+                className="px-3 py-1.5 rounded-lg border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] disabled:opacity-40 disabled:cursor-not-allowed font-medium text-xs transition"
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
 

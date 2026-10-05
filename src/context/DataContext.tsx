@@ -92,6 +92,8 @@ interface DataContextType {
   updateNotificationPreferences: (prefs: Partial<Omit<NotificationPreferences, 'user_id'>>) => Promise<void>;
   messages: ChatMessage[];
   auditLogs: AuditLogEntry[];
+  loadThreadMessages?: (contactId: string, options?: { limit?: number; beforeTimestamp?: string }) => Promise<void>;
+  loadAuditLogs?: () => Promise<void>;
   roleTransitionRequests: RoleTransitionRequest[];
   isDataLoading: boolean;
   
@@ -575,41 +577,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
         }
 
-        // 6. Fetch Chat Messages
-        if (currentUser?.id && isSupabaseConfigured()) {
-          try {
-            let msgData = await messagingService.getMessages(currentUser.id);
-
-            if (currentUser.role === 'admin') {
-              const reportedData = await messagingService.getReportedMessages();
-              const existingIds = new Set(msgData.map((m: any) => m.id));
-              reportedData.forEach((r: any) => {
-                if (!existingIds.has(r.id)) {
-                  msgData.push(r);
-                  existingIds.add(r.id);
-                }
-              });
-            }
-
-            if (!msgData || msgData.length === 0) {
-              if (!isLiveMode()) {
-                const mockData = await import('../data/mockData');
-                setMessages(mockData.INITIAL_MESSAGES);
-              } else {
-                setMessages([]);
-              }
-            } else {
-              setMessages(msgData);
-            }
-          } catch (e) {
-            console.error('Failed to load messages from messagingService:', e);
-            if (!isLiveMode()) {
-              const mockData = await import('../data/mockData');
-              setMessages(mockData.INITIAL_MESSAGES);
-            }
-          }
+        // 6. Chat Messages (Phase 2: Decoupled startup fetch)
+        // Chat messages are fetched on-demand per thread by MessagingPage via getThreadMessages.
+        if (!isLiveMode()) {
+          const mockData = await import('../data/mockData');
+          setMessages(mockData.INITIAL_MESSAGES);
+        } else {
+          setMessages([]);
         }
-
 
         // Fetch Starred Conversations
         if (currentUser?.id) {
@@ -620,21 +595,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } catch (e) { console.error('Failed to load starred conversations', e); }
         }
 
-        // 7. Fetch Audit Logs
-        if (currentUser?.role === 'admin') {
-          const { data: logsData, error: lErr } = await supabase.from('audit_logs').select('*').order('timestamp', { ascending: false });
-          if (!lErr && logsData) {
-            setAuditLogs(logsData.map((l: any) => ({
-              id: l.id,
-              action: l.action,
-              performedBy: l.performed_by,
-              targetUserOrItem: l.target_user_or_item || undefined,
-              timestamp: l.timestamp,
-              details: l.details,
-              isBulkAction: l.is_bulk_action,
-              bulkMetadata: l.bulk_metadata || undefined
-            })));
-          }
+        // 7. Audit Logs (Phase 2: Decoupled startup fetch)
+        // Audit logs are fetched on-demand by AdminDashboard via auditService.getAuditLogs.
+        if (!isLiveMode()) {
+          // In mock mode, keep the initialized mock log
+        } else {
+          setAuditLogs([]);
         }
 
         // 8. Fetch Role Transition Requests
@@ -3138,6 +3104,43 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loadThreadMessages = useCallback(async (contactId: string, options?: { limit?: number; beforeTimestamp?: string }) => {
+    if (!currentUser?.id || !isSupabaseConfigured() || !contactId) return;
+    try {
+      const res = await messagingService.getThreadMessages(currentUser.id, contactId, options);
+      if (res.messages && res.messages.length > 0) {
+        setMessages(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          const newMsgs = res.messages.filter(m => !existingIds.has(m.id));
+          return [...prev, ...newMsgs];
+        });
+      }
+    } catch (err) {
+      console.error('[DataContext] Error loading thread messages:', err);
+    }
+  }, [currentUser?.id]);
+
+  const loadAuditLogs = useCallback(async () => {
+    if (currentUser?.role !== 'admin' || !isSupabaseConfigured()) return;
+    try {
+      const { data: logsData, error: lErr } = await supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(20);
+      if (!lErr && logsData) {
+        setAuditLogs(logsData.map((l: any) => ({
+          id: l.id,
+          action: l.action,
+          performedBy: l.performed_by,
+          targetUserOrItem: l.target_user_or_item || undefined,
+          timestamp: l.timestamp,
+          details: l.details,
+          isBulkAction: l.is_bulk_action,
+          bulkMetadata: l.bulk_metadata || undefined
+        })));
+      }
+    } catch (err) {
+      console.error('[DataContext] Error loading audit logs:', err);
+    }
+  }, [currentUser?.role]);
+
   const addAnnouncement = async (ancData: Omit<Announcement, 'id' | 'date'>) => {
     const newAnc: Announcement = {
       ...ancData,
@@ -3954,6 +3957,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         notifications,
         messages,
         auditLogs,
+        loadThreadMessages,
+        loadAuditLogs,
         approveUserVerification,
         rejectUserVerification,
         requestUserClarification,
