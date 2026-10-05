@@ -22,7 +22,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       <TopBar activeTab={activeTab} setActiveTab={setActiveTab} />
 
       {/* Main Workspace Frame with identical Sidebar Geometry for all roles */}
-      <div className="flex-1 flex w-full max-w-[1600px] mx-auto items-stretch">
+      <div className="flex-1 flex w-full max-w-[1440px] mx-auto items-stretch">
         {/* Sticky Desktop Sidebar (240px wide, single right hairline) */}
         <SidebarNav activeTab={activeTab} setActiveTab={setActiveTab} />
 
@@ -33,7 +33,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           className={`flex-1 min-w-0 ${
             activeTab === 'messaging'
               ? 'p-0 overflow-hidden'
-              : 'px-4 sm:px-8 lg:px-10 py-6 sm:py-8 pb-24 lg:pb-12'
+              : 'px-4 sm:px-8 lg:px-10 py-6 sm:py-8 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] lg:pb-12'
           } focus:outline-none ${className}`}
         >
           {children}
