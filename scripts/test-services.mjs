@@ -58,6 +58,8 @@ import {
   normalizeApplicationStatus,
   validateApplicationPreflights
 } from '../src/utils/applicationHelpers.ts';
+
+import { getUserEmails, isCollegeDomain } from '../src/utils/userEmails.ts';
 import {
   computeNetworkMetrics,
   getNetworkCopy
@@ -720,5 +722,111 @@ test('networkMapData: Scenario with unlocated alumni alongside located cities', 
   const copy = getNetworkCopy(metrics);
   assert.strictEqual(copy.caption, 'All 3 verified alumni are in Mumbai so far. Join from anywhere.');
   assert.strictEqual(copy.tooltipSuffix, "2 haven't added a city yet");
+});
+
+test('userEmails: student displayEmail = collegeEmail (their sign-in email)', () => {
+  const student = {
+    name: 'Abdur Rahman',
+    role: 'student',
+    email: 'abdur.rahman@vit.edu.in',
+    personalEmail: 'rahman.studyjee@gmail.com'
+  };
+  const emails = getUserEmails(student);
+  assert.strictEqual(emails.collegeEmail, 'abdur.rahman@vit.edu.in');
+  assert.strictEqual(emails.personalEmail, 'rahman.studyjee@gmail.com');
+  assert.strictEqual(emails.loginEmail, 'abdur.rahman@vit.edu.in');
+  assert.strictEqual(emails.displayEmail, 'abdur.rahman@vit.edu.in');
+});
+
+test('userEmails: student with @student.vit.edu.in', () => {
+  const student = {
+    name: 'Aanya Patel',
+    role: 'student',
+    email: 'aanya.patel@student.vit.edu.in',
+    personalEmail: 'aanya.patel@gmail.com'
+  };
+  const emails = getUserEmails(student);
+  assert.strictEqual(emails.collegeEmail, 'aanya.patel@student.vit.edu.in');
+  assert.strictEqual(emails.personalEmail, 'aanya.patel@gmail.com');
+  assert.strictEqual(emails.displayEmail, 'aanya.patel@student.vit.edu.in');
+});
+
+test('userEmails: alumni displayEmail = personalEmail (their sign-in email)', () => {
+  const alumnus = {
+    name: 'Rushabh Sanghavi',
+    role: 'alumni',
+    email: 'rushabh.sanghavi@gmail.com',
+    institutionalEmail: 'rushabh.sanghavi@alumni.vit.edu.in',
+    personalEmail: 'rushabh.sanghavi@gmail.com'
+  };
+  const emails = getUserEmails(alumnus);
+  assert.strictEqual(emails.personalEmail, 'rushabh.sanghavi@gmail.com');
+  assert.strictEqual(emails.collegeEmail, 'rushabh.sanghavi@alumni.vit.edu.in');
+  assert.strictEqual(emails.loginEmail, 'rushabh.sanghavi@gmail.com');
+  assert.strictEqual(emails.displayEmail, 'rushabh.sanghavi@gmail.com');
+});
+
+test('userEmails: alumni with legacy email in email field and personalEmail set', () => {
+  const alumnus = {
+    name: 'Priya Kulkarni',
+    role: 'alumni',
+    email: 'priya.kulkarni@vit.edu.in',
+    personalEmail: 'priya.kulkarni@outlook.com'
+  };
+  const emails = getUserEmails(alumnus);
+  assert.strictEqual(emails.personalEmail, 'priya.kulkarni@outlook.com');
+  assert.strictEqual(emails.collegeEmail, 'priya.kulkarni@vit.edu.in');
+  assert.strictEqual(emails.loginEmail, 'priya.kulkarni@outlook.com');
+  assert.strictEqual(emails.displayEmail, 'priya.kulkarni@outlook.com');
+});
+
+test('userEmails: faculty displayEmail = collegeEmail (their sign-in email)', () => {
+  const faculty = {
+    name: 'Dr. Ravindra Sangale',
+    role: 'faculty',
+    email: 'ravindra.sangale@vit.edu.in',
+    personalEmail: 'ravindra.sangale@gmail.com'
+  };
+  const emails = getUserEmails(faculty);
+  assert.strictEqual(emails.collegeEmail, 'ravindra.sangale@vit.edu.in');
+  assert.strictEqual(emails.personalEmail, 'ravindra.sangale@gmail.com');
+  assert.strictEqual(emails.loginEmail, 'ravindra.sangale@vit.edu.in');
+  assert.strictEqual(emails.displayEmail, 'ravindra.sangale@vit.edu.in');
+});
+
+test('userEmails: admin displayEmail = loginEmail', () => {
+  const admin = {
+    name: 'Administrator',
+    role: 'admin',
+    email: 'admin@vit.edu.in'
+  };
+  const emails = getUserEmails(admin);
+  assert.strictEqual(emails.collegeEmail, 'admin@vit.edu.in');
+  assert.strictEqual(emails.loginEmail, 'admin@vit.edu.in');
+  assert.strictEqual(emails.displayEmail, 'admin@vit.edu.in');
+});
+
+test('userEmails: missing field returns null, never falls back silently to another role', () => {
+  // Student with no college email
+  const brokenStudent = {
+    name: 'Missing Student',
+    role: 'student',
+    personalEmail: 'only.personal@gmail.com'
+  };
+  const studentEmails = getUserEmails(brokenStudent);
+  assert.strictEqual(studentEmails.collegeEmail, null);
+  assert.strictEqual(studentEmails.personalEmail, 'only.personal@gmail.com');
+  assert.strictEqual(studentEmails.displayEmail, null, 'Student should not fall back to personalEmail as displayEmail');
+
+  // Alumni with no personal email
+  const legacyAlumni = {
+    name: 'Legacy Alumnus',
+    role: 'alumni',
+    email: 'legacy@alumni.vit.edu.in'
+  };
+  const alumniEmails = getUserEmails(legacyAlumni);
+  assert.strictEqual(alumniEmails.collegeEmail, 'legacy@alumni.vit.edu.in');
+  assert.strictEqual(alumniEmails.personalEmail, null);
+  assert.strictEqual(alumniEmails.displayEmail, null, 'Alumni should not fall back to collegeEmail as displayEmail');
 });
 

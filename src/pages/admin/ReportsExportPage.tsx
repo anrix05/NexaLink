@@ -22,11 +22,15 @@ import {
 } from 'lucide-react';
 import { AdminVisualAnalytics } from './AdminVisualAnalytics';
 import { Badge, Button, SegmentedTabs, ToastNotice } from '../../components/common/UIComponents';
+import { getUserEmails } from '../../utils/userEmails';
+import { getDepartmentDisplayName } from '../../utils/enumMappers';
 
 interface UserRecord {
   id: string;
   name: string;
   email: string;
+  collegeEmail: string;
+  personalEmail: string;
   roleDisplay: string;
   roleKey: string;
   department: string;
@@ -96,59 +100,79 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
 
   // Combine All User Categories (Students, Alumni, Faculty, Admin)
   const combinedUserRecords: UserRecord[] = [
-    ...studentList.map(s => ({
-      id: s.id,
-      name: s.name,
-      email: (s.email || '').replace(/^\+/, '').trim(),
-      roleDisplay: 'Student',
-      roleKey: 'student',
-      department: s.department,
-      year: s.graduationYear || 2026,
-      info: `PRN: ${s.prn} • CGPA: ${s.cgpa}`,
-      location: 'Enrolled Student',
-      avatar: s.avatar,
-      isVerified: true
-    })),
-    ...alumniList.map(a => ({
-      id: a.id,
-      name: a.name,
-      email: (a.email || '').replace(/^\+/, '').trim(),
-      roleDisplay: 'Alumni',
-      roleKey: 'alumni',
-      department: a.department,
-      year: a.graduationYear,
-      info: a.company && a.designation ? `${a.company} • ${a.designation}` : (a.company || a.designation || 'Alumni'),
-      location: a.location,
-      avatar: a.avatar,
-      isVerified: !!a.isVerified
-    })),
-    ...facultyList.map((t: FacultyProfile) => ({
-      id: t.id,
-      name: t.name,
-      email: (t.email || '').replace(/^\+/, '').trim(),
-      roleDisplay: 'Faculty',
-      roleKey: 'faculty',
-      department: t.department,
-      year: 2026,
-      info: formatFacultyInfo(t),
-      location: 'VIT Wadala Campus',
-      avatar: t.avatar,
-      isVerified: true
-    })),
+    ...studentList.map(s => {
+      const emails = getUserEmails(s);
+      return {
+        id: s.id,
+        name: s.name,
+        email: emails.displayEmail || '',
+        collegeEmail: emails.collegeEmail || '',
+        personalEmail: emails.personalEmail || '',
+        roleDisplay: 'Student',
+        roleKey: 'student',
+        department: getDepartmentDisplayName(s.department),
+        year: s.graduationYear || 2026,
+        info: `PRN: ${s.prn} • CGPA: ${s.cgpa}`,
+        location: 'Enrolled Student',
+        avatar: s.avatar,
+        isVerified: true
+      };
+    }),
+    ...alumniList.map(a => {
+      const emails = getUserEmails(a);
+      return {
+        id: a.id,
+        name: a.name,
+        email: emails.displayEmail || '',
+        collegeEmail: emails.collegeEmail || '',
+        personalEmail: emails.personalEmail || '',
+        roleDisplay: 'Alumni',
+        roleKey: 'alumni',
+        department: getDepartmentDisplayName(a.department),
+        year: a.graduationYear,
+        info: a.company && a.designation ? `${a.company} • ${a.designation}` : (a.company || a.designation || 'Alumni'),
+        location: a.location,
+        avatar: a.avatar,
+        isVerified: !!a.isVerified
+      };
+    }),
+    ...facultyList.map((t: FacultyProfile) => {
+      const emails = getUserEmails(t);
+      return {
+        id: t.id,
+        name: t.name,
+        email: emails.displayEmail || '',
+        collegeEmail: emails.collegeEmail || '',
+        personalEmail: emails.personalEmail || '',
+        roleDisplay: 'Faculty',
+        roleKey: 'faculty',
+        department: getDepartmentDisplayName(t.department),
+        year: 2026,
+        info: formatFacultyInfo(t),
+        location: 'VIT Wadala Campus',
+        avatar: t.avatar,
+        isVerified: true
+      };
+    }),
     ...(adminList && adminList.length > 0
-      ? adminList.map(adm => ({
-          id: adm.id,
-          name: adm.name,
-          email: (adm.email || '').replace(/^\+/, '').trim(),
-          roleDisplay: 'Admin',
-          roleKey: 'admin',
-          department: adm.department || 'CMPN',
-          year: 2026,
-          info: adm.employeeId ? `Institutional Admin • Emp ID: ${adm.employeeId}` : 'Institutional Admin Cell',
-          location: 'VIT Wadala Campus',
-          avatar: adm.avatar,
-          isVerified: true
-        }))
+      ? adminList.map(adm => {
+          const emails = getUserEmails(adm);
+          return {
+            id: adm.id,
+            name: adm.name,
+            email: emails.displayEmail || '',
+            collegeEmail: emails.collegeEmail || '',
+            personalEmail: emails.personalEmail || '',
+            roleDisplay: 'Admin',
+            roleKey: 'admin',
+            department: getDepartmentDisplayName(adm.department || 'CMPN'),
+            year: 2026,
+            info: adm.employeeId ? `Institutional Admin • Emp ID: ${adm.employeeId}` : 'Institutional Admin Cell',
+            location: 'VIT Wadala Campus',
+            avatar: adm.avatar,
+            isVerified: true
+          };
+        })
       : [])
   ];
 
@@ -266,7 +290,8 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
         'Graduation Year': item.year,
         'Details / Organization / PRN': item.info,
         'Location / Campus': item.location,
-        'Email Address': item.email
+        'College Email': item.collegeEmail || 'Not provided',
+        'Personal Email': item.personalEmail || 'Not provided'
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -349,7 +374,8 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
                       new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Dept', bold: true })] })] }),
                       new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Year', bold: true })] })] }),
                       new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Details / Company / PRN', bold: true })] })] }),
-                      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Email', bold: true })] })] })
+                      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'College Email', bold: true })] })] }),
+                      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Personal Email', bold: true })] })] })
                     ]
                   }),
                   ...filteredRecords.map(
@@ -361,7 +387,8 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
                           new TableCell({ children: [new Paragraph(item.department)] }),
                           new TableCell({ children: [new Paragraph(item.year.toString())] }),
                           new TableCell({ children: [new Paragraph(item.info)] }),
-                          new TableCell({ children: [new Paragraph(item.email)] })
+                          new TableCell({ children: [new Paragraph(item.collegeEmail || '—')] }),
+                          new TableCell({ children: [new Paragraph(item.personalEmail || '—')] })
                         ]
                       })
                   )
@@ -385,7 +412,7 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
   const handleExportCSV = () => {
     setExportingFormat('csv');
     try {
-      const headers = ['Sr No', 'Name', 'Role Category', 'Department', 'Year', 'Details / Company / PRN', 'Email'];
+      const headers = ['Sr No', 'Name', 'Role Category', 'Department', 'Year', 'Details / Company / PRN', 'College Email', 'Personal Email'];
       const rows = filteredRecords.map((item, idx) => [
         idx + 1,
         `"${item.name}"`,
@@ -393,7 +420,8 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
         item.department,
         item.year,
         `"${item.info}"`,
-        item.email
+        `"${item.collegeEmail || ''}"`,
+        `"${item.personalEmail || ''}"`
       ]);
 
       const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');

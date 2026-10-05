@@ -14,3 +14,4 @@ export * from './ConfirmSheet';
 export * from './TopBar';
 export * from './SidebarNav';
 export * from './AppShell';
+export * from './Avatar';

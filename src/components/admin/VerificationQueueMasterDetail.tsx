@@ -18,6 +18,8 @@ import { MasterDetail, StatusBadge, EmptyState } from '../ui';
 import { AnimatedCheckIcon } from '../common/UIComponents';
 import type { UserRole } from '../../types';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { getUserEmails } from '../../utils/userEmails';
+import { getDepartmentDisplayName } from '../../utils/enumMappers';
 
 export interface VerificationItem {
   id: string;
@@ -77,9 +79,21 @@ export const VerificationQueueMasterDetail: React.FC<VerificationQueueMasterDeta
   const filteredItems = items.filter(item => {
     if (!searchFilter.trim()) return true;
     const q = searchFilter.toLowerCase();
+    const rawRole = (item.role || '').toLowerCase();
+    const normalizedRole = rawRole.includes('alumni') ? 'alumni' : rawRole.includes('faculty') ? 'faculty' : rawRole.includes('admin') ? 'admin' : 'student';
+    const emails = getUserEmails({
+      role: normalizedRole,
+      email: item.email,
+      personalEmail: item.proposedData?.personalEmail || item.raw?.personalEmail,
+      institutionalEmail: item.raw?.institutionalEmail
+    });
     return (
       item.name.toLowerCase().includes(q) ||
+      (emails.collegeEmail && emails.collegeEmail.toLowerCase().includes(q)) ||
+      (emails.personalEmail && emails.personalEmail.toLowerCase().includes(q)) ||
+      (emails.displayEmail && emails.displayEmail.toLowerCase().includes(q)) ||
       item.email.toLowerCase().includes(q) ||
+      getDepartmentDisplayName(item.department).toLowerCase().includes(q) ||
       item.department.toLowerCase().includes(q) ||
       item.idNo.toLowerCase().includes(q)
     );
@@ -325,7 +339,18 @@ export const VerificationQueueMasterDetail: React.FC<VerificationQueueMasterDeta
   );
 
   // Detail Column Content
-  const detailContent = selectedItem ? (
+  const selectedRawRole = (selectedItem?.role || '').toLowerCase();
+  const selectedNormalizedRole = selectedRawRole.includes('alumni') ? 'alumni' : selectedRawRole.includes('faculty') ? 'faculty' : selectedRawRole.includes('admin') ? 'admin' : 'student';
+  const detailEmails = selectedItem
+    ? getUserEmails({
+        role: selectedNormalizedRole,
+        email: selectedItem.email,
+        personalEmail: selectedItem.proposedData?.personalEmail || selectedItem.raw?.personalEmail,
+        institutionalEmail: selectedItem.raw?.institutionalEmail
+      })
+    : null;
+
+  const detailContent = selectedItem && detailEmails ? (
     <div className="p-6 space-y-6">
       {/* Header Info */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E5E7EB]">
@@ -350,8 +375,8 @@ export const VerificationQueueMasterDetail: React.FC<VerificationQueueMasterDeta
               </span>
             )}
           </div>
-          <p className="text-xs text-[#6B7280] mt-0.5">
-            Registered: {selectedItem.email} · Department: {selectedItem.department}
+          <p className="text-xs text-[#6B7280] mt-0.5 font-sans">
+            Display email: <span className="text-[#0A0A0A] font-medium">{detailEmails.displayEmail || 'Not provided'}</span> · Department: <span className="text-[#0A0A0A] font-medium">{getDepartmentDisplayName(selectedItem.department)}</span>
           </p>
         </div>
 
@@ -403,22 +428,37 @@ export const VerificationQueueMasterDetail: React.FC<VerificationQueueMasterDeta
               <tr>
                 <td className="p-2.5 text-[#6B7280] font-medium">PRN / ID</td>
                 <td className="p-2.5 font-mono text-[#0A0A0A] font-medium">{selectedItem.idNo}</td>
-                <td className="p-2.5 text-[#065F46] font-medium">✓ Valid format for {selectedItem.department}</td>
+                <td className="p-2.5 text-[#065F46] font-medium">✓ Valid format for {getDepartmentDisplayName(selectedItem.department)}</td>
               </tr>
               <tr>
-                <td className="p-2.5 text-[#6B7280] font-medium">Email domain</td>
-                <td className="p-2.5 text-[#0A0A0A]">{selectedItem.email}</td>
+                <td className="p-2.5 text-[#6B7280] font-medium">College email</td>
+                <td className="p-2.5 text-[#0A0A0A] font-sans">
+                  {detailEmails.collegeEmail || <span className="text-[#9CA3AF] italic">Not provided</span>}
+                </td>
                 <td className="p-2.5 font-medium">
-                  {selectedItem.email.includes('vit.edu.in') ? (
+                  {detailEmails.collegeEmail?.includes('vit.edu.in') ? (
                     <span className="text-[#065F46]">✓ Institutional email validated</span>
                   ) : (
-                    <span className="text-[#B45309]">Personal email ({resolvedDocUrl ? 'proof attached' : 'No document yet'})</span>
+                    <span className="text-[#6B7280]">No college address</span>
+                  )}
+                </td>
+              </tr>
+              <tr>
+                <td className="p-2.5 text-[#6B7280] font-medium">Personal email</td>
+                <td className="p-2.5 text-[#0A0A0A] font-sans">
+                  {detailEmails.personalEmail || <span className="text-[#9CA3AF] italic">Not provided</span>}
+                </td>
+                <td className="p-2.5 font-medium">
+                  {detailEmails.personalEmail ? (
+                    <span className="text-[#0A0A0A]">Personal contact recorded</span>
+                  ) : (
+                    <span className="text-[#9CA3AF] italic">Not provided</span>
                   )}
                 </td>
               </tr>
               <tr>
                 <td className="p-2.5 text-[#6B7280] font-medium">Department</td>
-                <td className="p-2.5 text-[#0A0A0A]">{selectedItem.department}</td>
+                <td className="p-2.5 text-[#0A0A0A] font-sans">{getDepartmentDisplayName(selectedItem.department)}</td>
                 <td className="p-2.5 text-[#065F46]">✓ Registered departmental cohort</td>
               </tr>
               {selectedItem.proposedData && (

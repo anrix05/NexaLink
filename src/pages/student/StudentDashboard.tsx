@@ -27,7 +27,8 @@ import {
   ListRow,
   FocusPanel,
   RightRail,
-  StatusBadge
+  StatusBadge,
+  Avatar
 } from '../../components/ui';
 import { Button, TextField, Modal } from '../../components/common/UIComponents';
 import { uploadProofDocument } from '../../lib/storage';
@@ -449,10 +450,10 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
                     key={match.item.id}
                     isFirst={idx === 0}
                     leading={
-                      <img
+                      <Avatar
                         src={match.item.avatar}
-                        alt={match.item.name}
-                        className="w-10 h-10 rounded-full object-cover border border-[#E5E7EB]"
+                        name={match.item.name}
+                        size="md"
                       />
                     }
                     title={match.item.name}

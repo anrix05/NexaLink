@@ -43,9 +43,11 @@ import {
   Section,
   UnderlineTabs,
   StatusBadge,
-  EmptyState
+  EmptyState,
+  Avatar
 } from '../../components/ui';
 import { Badge, Button, Modal, AnimatedCheckIcon } from '../../components/common/UIComponents';
+import { getUserEmails } from '../../utils/userEmails';
 
 export type AdminTab = 'overview' | 'approvals' | 'users' | 'moderation' | 'announcements' | 'reports' | 'graduation' | 'audit';
 
@@ -357,11 +359,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
         }
       } catch {}
 
+      const uEmails = getUserEmails(u);
       return {
         id: u.id,
         type: 'registration' as const,
         name: u.name,
-        email: u.email,
+        email: uEmails.displayEmail || u.email,
         role: u.role,
         department: u.department,
         idNo: u.enrollmentNo || (u as any).prn || (u as any).employeeId || 'PRN-VIT-2024-089',
@@ -369,8 +372,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
         documentName: localReplyName || (localReplyUrl ? 'Scanned_ID_Proof.pdf' : undefined),
         bio: u.bio,
         skills: u.skills,
-        confidence: u.email.includes('vit.edu.in') ? ('high' as const) : ('medium' as const),
-        confidenceReason: u.email.includes('vit.edu.in')
+        confidence: (uEmails.collegeEmail?.includes('vit.edu.in') || u.email.includes('vit.edu.in')) ? ('high' as const) : ('medium' as const),
+        confidenceReason: (uEmails.collegeEmail?.includes('vit.edu.in') || u.email.includes('vit.edu.in'))
           ? 'Active institutional email domain validated'
           : 'Personal email domain used; document proof review advised',
         raw: {
@@ -383,11 +386,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
     }),
     ...pendingTransitions.map(r => {
       const sUser = studentList.find(s => s.id === r.userId) || allUsersTable.find(u => u.id === r.userId);
+      const sEmails = sUser ? getUserEmails(sUser as any) : null;
       return {
         id: r.id,
         type: 'role_transition' as const,
         name: sUser?.name || 'Graduating Student',
-        email: r.proposedAlumniData?.personalEmail || sUser?.email || '',
+        email: r.proposedAlumniData?.personalEmail || sEmails?.personalEmail || sEmails?.displayEmail || sUser?.email || '',
         role: 'Student → Alumni',
         department: sUser?.department || 'CMPN',
         idNo: (sUser as any)?.enrollmentNo || (sUser as any)?.prn || 'PRN-VIT-2024',
@@ -1118,7 +1122,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
                             </td>
                             <td className="p-3 font-semibold text-[#0A0A0A]">
                               <div className="flex items-center gap-2.5">
-                                <img src={s.avatar} alt={s.name} className="w-8 h-8 rounded-full object-cover border border-[#E5E7EB]" />
+                                <Avatar src={s.avatar} name={s.name} email={s.email} size="sm" />
                                 <span>{s.name}</span>
                               </div>
                             </td>

@@ -258,7 +258,7 @@ const FACULTY_EDITABLE_FIELDS = new Set([
 export interface SaveProfilePatch {
   name?: string;
   bio?: string;
-  avatar?: string;
+  avatar?: string | null;
   phone?: string;
   department?: string;
   personalEmail?: string;
@@ -272,7 +272,7 @@ export interface SaveProfilePatch {
   preferredIndustry?: string;
   preferredHigherStudies?: string;
   certifications?: string[];
-  resumeUrl?: string;
+  resumeUrl?: string | null;
   expectedGraduationYear?: number;
   // Alumni
   graduationYear?: number;

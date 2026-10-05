@@ -8,6 +8,19 @@ export const VALID_DEPARTMENT_CODES: DepartmentCode[] = [
   'BIOM'
 ];
 
+export const DEPARTMENT_LABELS: Record<DepartmentCode, string> = {
+  CMPN: 'Computer Engineering',
+  INFT: 'Information Technology',
+  EXTC: 'Electronics & Telecommunication',
+  EXCS: 'Electronics & Computer Science',
+  BIOM: 'Biomedical Engineering'
+};
+
+export function getDepartmentDisplayName(dept?: string | null): string {
+  const code = normalizeDepartmentCode(dept);
+  return DEPARTMENT_LABELS[code] || 'Computer Engineering';
+}
+
 /**
  * Maps arbitrary department names, abbreviations, or strings to the canonical PostgreSQL department_code enums
  */

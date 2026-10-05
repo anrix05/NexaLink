@@ -5,7 +5,7 @@
  * Driven 100% by the unified DataContext dataset.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useData } from '../../context/DataContext';
 import { RoleGate } from '../common/RoleGate';
@@ -27,15 +27,26 @@ import {
   GraduationCap,
   Briefcase,
   Trash2,
-  ChevronDown
+  ChevronDown,
+  Copy,
+  Check,
+  Phone,
+  Calendar,
+  FileText,
+  ExternalLink
 } from 'lucide-react';
 import { Badge, Button } from '../common/UIComponents';
+import { getUserEmails } from '../../utils/userEmails';
+import { getDepartmentDisplayName } from '../../utils/enumMappers';
+import { formatDate } from '../../utils/formatters';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 
 export const UserManagementTable: React.FC = () => {
   const {
     alumniList,
     studentList,
     facultyList,
+    adminList,
     pendingUsersList,
     deactivateUser,
     reactivateUser,
@@ -49,7 +60,8 @@ export const UserManagementTable: React.FC = () => {
   const allRosterUsers = [
     ...studentList.map(s => ({ ...s, userCategory: 'Student', isPending: s.verificationStatus === 'Pending Verification' })),
     ...alumniList.map(a => ({ ...a, userCategory: 'Alumni', isPending: a.verificationStatus === 'Pending Verification' })),
-    ...facultyList.map(f => ({ ...f, userCategory: 'Faculty', isPending: f.verificationStatus === 'Pending Verification' }))
+    ...facultyList.map(f => ({ ...f, userCategory: 'Faculty', isPending: f.verificationStatus === 'Pending Verification' })),
+    ...(adminList || []).map(adm => ({ ...adm, userCategory: 'Administrator', isPending: adm.verificationStatus === 'Pending Verification' }))
   ];
 
   // Filters & Search
@@ -72,11 +84,56 @@ export const UserManagementTable: React.FC = () => {
   const [editEmail, setEditEmail] = useState<string>('');
   const [editPersonalEmail, setEditPersonalEmail] = useState<string>('');
   const [toastNotice, setToastNotice] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [detailSignedDocUrl, setDetailSignedDocUrl] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastNotice(msg);
     setTimeout(() => setToastNotice(null), 3500);
   };
+
+  const handleCopyText = (key: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  // Resolve signed URL for selected user detail proof document
+  useEffect(() => {
+    let isMounted = true;
+    const rawUrl = selectedUserDetail?.verificationDocumentUrl ||
+      selectedUserDetail?.verification_document_url ||
+      selectedUserDetail?.proofDocumentUrl;
+
+    if (!rawUrl) {
+      setDetailSignedDocUrl(null);
+      return;
+    }
+
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('data:')) {
+      setDetailSignedDocUrl(rawUrl);
+      return;
+    }
+
+    if (isSupabaseConfigured()) {
+      const cleanPath = rawUrl.replace(/^proof-documents\//, '');
+      supabase.storage
+        .from('proof-documents')
+        .createSignedUrl(cleanPath, 3600)
+        .then(({ data }) => {
+          if (isMounted) setDetailSignedDocUrl(data?.signedUrl || rawUrl);
+        })
+        .catch(() => {
+          if (isMounted) setDetailSignedDocUrl(rawUrl);
+        });
+    } else {
+      setDetailSignedDocUrl(rawUrl);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedUserDetail]);
 
   // Filtered Roster
   const filteredUsers = allRosterUsers.filter(u => {
@@ -94,12 +151,16 @@ export const UserManagementTable: React.FC = () => {
 
     if (searchQuery.trim() !== '') {
       const q = searchQuery.toLowerCase();
-      const matchName = u.name.toLowerCase().includes(q);
-      const matchEmail = u.email.toLowerCase().includes(q);
-      const matchDept = u.department.toLowerCase().includes(q);
-      const matchCompany = ('company' in u && (u.company || '').toLowerCase().includes(q));
-      const matchPrn = ('prn' in u && (u.prn || '').toLowerCase().includes(q));
-      return matchName || matchEmail || matchDept || matchCompany || matchPrn;
+      const uAny = u as any;
+      const matchName = String(u.name || '').toLowerCase().includes(q);
+      const emails = getUserEmails(u);
+      const matchCollegeEmail = (emails.collegeEmail || '').toLowerCase().includes(q);
+      const matchPersonalEmail = (emails.personalEmail || '').toLowerCase().includes(q);
+      const matchDept = String(u.department || '').toLowerCase().includes(q);
+      const matchCompany = String(uAny.company || '').toLowerCase().includes(q);
+      const matchPrn = String(uAny.prn || uAny.enrollmentNo || '').toLowerCase().includes(q);
+      const matchEmpId = String(uAny.employeeId || '').toLowerCase().includes(q);
+      return matchName || matchCollegeEmail || matchPersonalEmail || matchDept || matchCompany || matchPrn || matchEmpId;
     }
     return true;
   });
@@ -290,6 +351,10 @@ export const UserManagementTable: React.FC = () => {
                     const isDeactivated = user.isActive === false || status === 'Deactivated';
                     const isRejected = status === 'Rejected';
 
+                    const emails = getUserEmails(user);
+                    const joinedRaw = (user as any).createdAt || (user as any).verifiedAt || '2026-07-01T00:00:00Z';
+                    const joinedDisplay = formatDate(joinedRaw);
+
                     return (
                       <motion.tr layout key={user.id} className="hover:bg-[#FAFAFA] transition whitespace-nowrap">
                         <td className="p-3.5">
@@ -306,14 +371,14 @@ export const UserManagementTable: React.FC = () => {
                               </div>
                             )}
                             <div>
-                              <p className="font-bold text-[#0A0A0A] text-sm tracking-tight">{user.name}</p>
-                              <p className="text-[11px] text-[#6B7280] font-mono">
-                                {user.role === 'alumni' && (user as any).personalEmail === null ? (
-                                  <span className="text-[#B45309] font-medium italic">
-                                    Personal email not on file — contact this alumnus to complete their profile
-                                  </span>
+                              <p className="font-bold text-[#0A0A0A] text-sm tracking-tight font-sans">{user.name}</p>
+                              <p className="text-[11px] text-[#6B7280] font-sans font-normal">
+                                {emails.displayEmail ? (
+                                  emails.displayEmail
                                 ) : (
-                                  (user as any).personalEmail || user.email
+                                  <span className="text-[#B45309] font-medium italic">
+                                    Not provided
+                                  </span>
                                 )}
                               </p>
                             </div>
@@ -327,9 +392,17 @@ export const UserManagementTable: React.FC = () => {
                         </td>
 
                         <td className="p-3.5">
-                          <p className="font-bold text-[#0A0A0A]">{user.department} Dept</p>
+                          <p className="font-bold text-[#0A0A0A] font-sans">{getDepartmentDisplayName(user.department)}</p>
                           <p className="text-[11px] text-[#6B7280]">
-                            {'company' in user ? user.company : 'prn' in user ? `PRN: ${user.prn}` : 'Employee ID: EMP-FAC'}
+                            {(user as any).company ? (
+                              <span>{(user as any).company}</span>
+                            ) : (user as any).prn ? (
+                              <span className="font-mono">PRN: {(user as any).prn}</span>
+                            ) : (user as any).employeeId ? (
+                              <span className="font-mono">ID: {(user as any).employeeId}</span>
+                            ) : (
+                              <span className="font-sans">Campus Member</span>
+                            )}
                           </p>
                         </td>
 
@@ -345,8 +418,8 @@ export const UserManagementTable: React.FC = () => {
                           )}
                         </td>
 
-                        <td className="p-3.5 font-mono text-[11px] text-[#6B7280]">
-                          {(user as any).verifiedAt || '2026-07-01'}
+                        <td className="p-3.5 font-sans text-xs text-[#6B7280] tabular-nums" title={String(joinedRaw)}>
+                          {joinedDisplay}
                         </td>
 
                         <td className="p-3.5 text-right">
@@ -433,84 +506,183 @@ export const UserManagementTable: React.FC = () => {
         </div>
 
         {/* MODAL 1: VIEW FULL PROFILE DETAIL */}
-        {selectedUserDetail && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
-            <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 max-w-lg w-full space-y-4 font-sans text-xs">
-              <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
-                <div className="flex items-center gap-3">
-                  {selectedUserDetail.avatar ? (
-                    <img src={selectedUserDetail.avatar} alt={selectedUserDetail.name} className="w-10 h-10 rounded-full border border-[#E5E7EB] object-cover" />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-[#0A0A0A] text-white flex items-center justify-center border border-[#E5E7EB] text-sm font-bold font-mono tracking-wider shrink-0">
-                      {selectedUserDetail.name ? selectedUserDetail.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
+        {selectedUserDetail && (() => {
+          const detailEmails = getUserEmails(selectedUserDetail);
+          const detailJoinedRaw = (selectedUserDetail as any).createdAt || (selectedUserDetail as any).verifiedAt || '2026-07-01T00:00:00Z';
+          const isCollegeLogin = Boolean(detailEmails.collegeEmail && detailEmails.loginEmail === detailEmails.collegeEmail);
+          const isPersonalLogin = Boolean(detailEmails.personalEmail && detailEmails.loginEmail === detailEmails.personalEmail);
+          const docUrl = detailSignedDocUrl || selectedUserDetail.verificationDocumentUrl || (selectedUserDetail as any).verification_document_url;
+          const docName = selectedUserDetail.verificationDocumentName || (selectedUserDetail as any).proof_document_name || selectedUserDetail.proofDocumentName || 'Document_Proof.pdf';
+
+          return (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+              <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 max-w-lg w-full space-y-4 font-sans text-xs max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
+                  <div className="flex items-center gap-3">
+                    {selectedUserDetail.avatar ? (
+                      <img src={selectedUserDetail.avatar} alt={selectedUserDetail.name} className="w-10 h-10 rounded-full border border-[#E5E7EB] object-cover" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-[#0A0A0A] text-white flex items-center justify-center border border-[#E5E7EB] text-sm font-bold font-mono tracking-wider shrink-0">
+                        {selectedUserDetail.name ? selectedUserDetail.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="font-extrabold text-sm text-[#0A0A0A] font-sans">{selectedUserDetail.name}</h3>
+                      <p className="text-[11px] text-[#6B7280] font-sans">
+                        {detailEmails.displayEmail || 'No active display email'}
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedUserDetail(null)} className="text-[#6B7280] hover:text-[#0A0A0A] font-bold p-1">
+                    ✕
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {/* Email Breakdown Section with Copy Buttons and "Used to sign in" tag */}
+                  <div className="space-y-2 bg-[#FAFAFA] p-3.5 rounded-lg border border-[#E5E7EB]">
+                    <span className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider">Account Email Addresses</span>
+                    
+                    {/* College Email */}
+                    <div className="flex items-center justify-between gap-2 p-2 bg-white rounded border border-[#E5E7EB]">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-[#0A0A0A] font-sans">College email:</span>
+                          {isCollegeLogin && (
+                            <span className="px-1.5 py-0.2 bg-[#0A0A0A] text-white text-[10px] font-medium rounded">
+                              Used to sign in
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-sans text-[#374151] truncate mt-0.5">
+                          {detailEmails.collegeEmail || <span className="text-[#9CA3AF] italic">Not provided</span>}
+                        </p>
+                      </div>
+                      {detailEmails.collegeEmail && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopyText('college', detailEmails.collegeEmail!)}
+                          className="p-1.5 rounded hover:bg-[#F3F4F6] text-[#6B7280] hover:text-[#0A0A0A] transition-colors shrink-0"
+                          title="Copy college email"
+                        >
+                          {copiedKey === 'college' ? <Check className="w-3.5 h-3.5 text-[#065F46]" /> : <Copy className="w-3.5 h-3.5 text-[#6B7280]" />}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Personal Email */}
+                    <div className="flex items-center justify-between gap-2 p-2 bg-white rounded border border-[#E5E7EB]">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-[#0A0A0A] font-sans">Personal email:</span>
+                          {isPersonalLogin && (
+                            <span className="px-1.5 py-0.2 bg-[#0A0A0A] text-white text-[10px] font-medium rounded">
+                              Used to sign in
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-sans text-[#374151] truncate mt-0.5">
+                          {detailEmails.personalEmail || <span className="text-[#9CA3AF] italic">Not provided</span>}
+                        </p>
+                      </div>
+                      {detailEmails.personalEmail && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopyText('personal', detailEmails.personalEmail!)}
+                          className="p-1.5 rounded hover:bg-[#F3F4F6] text-[#6B7280] hover:text-[#0A0A0A] transition-colors shrink-0"
+                          title="Copy personal email"
+                        >
+                          {copiedKey === 'personal' ? <Check className="w-3.5 h-3.5 text-[#065F46]" /> : <Copy className="w-3.5 h-3.5 text-[#6B7280]" />}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Core Details Grid */}
+                  <div className="grid grid-cols-2 gap-3 bg-[#FAFAFA] p-3 rounded-lg border border-[#E5E7EB]">
+                    <div>
+                      <span className="app-label text-[#0A0A0A] font-bold">Account Role</span>
+                      <p className="font-semibold text-[#0A0A0A] capitalize font-sans">{selectedUserDetail.role}</p>
+                    </div>
+                    <div>
+                      <span className="app-label text-[#0A0A0A] font-bold">Department</span>
+                      <p className="font-bold text-[#0A0A0A] font-sans">{getDepartmentDisplayName(selectedUserDetail.department)}</p>
+                    </div>
+                    <div>
+                      <span className="app-label text-[#0A0A0A] font-bold">Verification Status</span>
+                      <p className="font-bold text-[#0A0A0A] font-sans">{selectedUserDetail.verificationStatus || (selectedUserDetail.isVerified ? 'Verified' : 'Pending Verification')}</p>
+                    </div>
+                    <div>
+                      <span className="app-label text-[#0A0A0A] font-bold">Joined Date</span>
+                      <p className="font-sans text-[#0A0A0A] font-medium tabular-nums" title={String(detailJoinedRaw)}>
+                        {formatDate(detailJoinedRaw)}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="app-label text-[#0A0A0A] font-bold">Phone (Admin Only)</span>
+                      <p className="font-sans text-[#0A0A0A] font-medium">
+                        {selectedUserDetail.phone || <span className="text-[#9CA3AF] italic">Not provided</span>}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="app-label text-[#0A0A0A] font-bold">PRN or Employee ID</span>
+                      <p className="font-mono text-[#0A0A0A] font-bold">
+                        {selectedUserDetail.prn || selectedUserDetail.enrollmentNo || selectedUserDetail.employeeId || <span className="text-[#9CA3AF] font-sans italic font-normal">Not provided</span>}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Proof Document Viewer / Status */}
+                  <div className="bg-[#FAFAFA] p-3 rounded-lg border border-[#E5E7EB] space-y-2">
+                    <span className="app-label text-[#0A0A0A] font-bold">Proof Document Status</span>
+                    {docUrl ? (
+                      <div className="flex items-center justify-between gap-2 p-2 bg-white border border-[#E5E7EB] rounded-lg">
+                        <div className="flex items-center gap-2 truncate">
+                          <FileText className="w-4 h-4 text-[#0A0A0A] shrink-0" />
+                          <span className="font-medium text-[#0A0A0A] truncate">{docName}</span>
+                          <span className="text-[10px] text-[#065F46] font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                            Signed Link Ready
+                          </span>
+                        </div>
+                        <a
+                          href={docUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1 text-xs bg-[#0A0A0A] text-white rounded font-medium hover:bg-[#262626] transition-colors inline-flex items-center gap-1 shrink-0"
+                        >
+                          <span>Open</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    ) : (
+                      <p className="text-[#6B7280] italic text-xs">
+                        No proof document submitted for this account.
+                      </p>
+                    )}
+                  </div>
+
+                  {'company' in selectedUserDetail && selectedUserDetail.company && (
+                    <div>
+                      <span className="app-label text-[#0A0A0A] font-bold">Current Employer & Title</span>
+                      <p className="font-bold text-[#0A0A0A] font-sans">{selectedUserDetail.designation || 'Alumni'} at {selectedUserDetail.company}</p>
                     </div>
                   )}
-                  <div>
-                    <h3 className="font-extrabold text-sm text-[#0A0A0A]">{selectedUserDetail.name}</h3>
-                    <p className="text-[11px] text-[#6B7280] font-mono">{selectedUserDetail.email}</p>
-                  </div>
-                </div>
-                <button onClick={() => setSelectedUserDetail(null)} className="text-[#6B7280] hover:text-[#0A0A0A] font-bold">
-                  ✕
-                </button>
-              </div>
 
-              <div className="space-y-3">
-                {selectedUserDetail.role === 'alumni' && (
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-1">
-                    <span className="app-label text-[#0A0A0A] font-bold">Personal Login Email (Post-Graduation)</span>
-                    <p className="font-bold text-[#0A0A0A] font-mono">
-                      {selectedUserDetail.personalEmail === null ? (
-                        <span className="text-[#B45309] italic font-normal">
-                          Personal email not on file — contact this alumnus to complete their profile
-                        </span>
-                      ) : (
-                        selectedUserDetail.personalEmail || selectedUserDetail.email
-                      )}
-                    </p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-3 bg-[#FAFAFA] p-3 rounded-lg border border-[#E5E7EB]">
                   <div>
-                    <span className="app-label text-[#0A0A0A] font-bold">Account Role</span>
-                    <p className="font-semibold text-[#0A0A0A] capitalize">{selectedUserDetail.role}</p>
-                  </div>
-                  <div>
-                    <span className="app-label text-[#0A0A0A] font-bold">Department</span>
-                    <p className="font-bold text-[#0A0A0A]">{selectedUserDetail.department} Engg</p>
-                  </div>
-                  <div>
-                    <span className="app-label text-[#0A0A0A] font-bold">Verification Status</span>
-                    <p className="font-bold text-[#0A0A0A]">{selectedUserDetail.verificationStatus || 'Verified'}</p>
-                  </div>
-                  <div>
-                    <span className="app-label text-[#0A0A0A] font-bold">Enrollment / Employee ID</span>
-                    <p className="font-mono text-[#0A0A0A] font-bold">{selectedUserDetail.prn || selectedUserDetail.enrollmentNo || 'EMP-099'}</p>
+                    <span className="app-label text-[#0A0A0A] font-bold">Bio & Statement</span>
+                    <p className="text-[#374151] font-medium font-sans">{selectedUserDetail.bio || 'No custom bio set.'}</p>
                   </div>
                 </div>
 
-                {'company' in selectedUserDetail && (
-                  <div>
-                    <span className="app-label text-[#0A0A0A] font-bold">Current Employer & Title</span>
-                    <p className="font-bold text-[#0A0A0A]">{selectedUserDetail.designation} at {selectedUserDetail.company}</p>
-                  </div>
-                )}
-
-                <div>
-                  <span className="app-label text-[#0A0A0A] font-bold">Bio & Statement</span>
-                  <p className="text-[#374151] font-medium">{selectedUserDetail.bio || 'No custom bio set.'}</p>
+                <div className="flex justify-end pt-2 border-t border-[#E5E7EB]">
+                  <Button variant="primary" size="md" onClick={() => setSelectedUserDetail(null)}>
+                    Close Detail View
+                  </Button>
                 </div>
-              </div>
-
-              <div className="flex justify-end pt-2 border-t border-[#E5E7EB]">
-                <Button variant="primary" size="md" onClick={() => setSelectedUserDetail(null)}>
-                  Close Detail View
-                </Button>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* MODAL 2: EDIT USER CREDENTIALS & ROLE */}
         {roleMutateUser && (
@@ -532,28 +704,37 @@ export const UserManagementTable: React.FC = () => {
 
               <div className="space-y-3">
                 <div>
-                  <label className="app-label text-[#0A0A0A] font-bold">Primary Institutional Email</label>
+                  <div className="flex items-center justify-between">
+                    <label className="app-label text-[#0A0A0A] font-bold">Primary Institutional / Login Email</label>
+                    <span className="text-[10px] text-[#6B7280] font-medium bg-[#F3F4F6] px-1.5 py-0.5 rounded border border-[#E5E7EB]">
+                      Supabase Auth Managed
+                    </span>
+                  </div>
                   <input
                     type="email"
                     value={editEmail}
-                    onChange={e => setEditEmail(e.target.value)}
-                    className="app-input w-full font-bold font-mono border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
+                    readOnly
+                    disabled
+                    className="app-input w-full font-medium font-sans border-[#E5E7EB] rounded-lg bg-[#F3F4F6] text-[#6B7280] cursor-not-allowed"
                   />
+                  <p className="text-[10px] text-[#6B7280] mt-1">
+                    Primary login identity is bound to institutional Supabase Auth. Direct table edits are restricted to avoid account lockout.
+                  </p>
                 </div>
 
                 <div>
                   <label className="app-label text-[#0A0A0A] font-bold">
-                    Personal Login Email (Post-Graduation / Recovery)
+                    Personal / Recovery Email
                   </label>
                   <input
                     type="email"
                     value={editPersonalEmail}
                     onChange={e => setEditPersonalEmail(e.target.value)}
                     placeholder="e.g. personal.name@gmail.com"
-                    className="app-input w-full font-bold font-mono border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
+                    className="app-input w-full font-medium font-sans border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
                   />
                   <p className="text-[10px] text-[#6B7280] mt-1">
-                    Entering a valid personal email resolves any legacy email recovery flag for this account.
+                    Secondary recovery and post-graduation contact email.
                   </p>
                 </div>
 
@@ -583,9 +764,7 @@ export const UserManagementTable: React.FC = () => {
                     if (roleMutateUser.role !== newSelectedRole) {
                       mutateUserRole(roleMutateUser.id, newSelectedRole);
                     }
-                    const updates: Record<string, any> = {
-                      email: editEmail
-                    };
+                    const updates: Record<string, any> = {};
                     if (editPersonalEmail.trim()) {
                       updates.personalEmail = editPersonalEmail.trim();
                       updates.loginRecoveryNeeded = false;

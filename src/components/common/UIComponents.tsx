@@ -1085,56 +1085,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
 // ============================================================================
 // 17. REUSABLE AVATAR COMPONENT (Initials Fallback)
 // ============================================================================
-export interface AvatarProps {
-  src?: string | null;
-  name: string;
-  size?: 'sm' | 'md' | 'lg';
-  className?: string;
-}
-
-export const Avatar: React.FC<AvatarProps> = ({
-  src,
-  name,
-  size = 'md',
-  className = ''
-}) => {
-  const getInitials = (str: string) => {
-    if (!str) return 'U';
-    return str
-      .split(' ')
-      .map(n => n[0])
-      .join('')
-      .substring(0, 2)
-      .toUpperCase();
-  };
-
-  const getSizeStyles = () => {
-    switch (size) {
-      case 'sm': return 'w-7 h-7 text-[10px]';
-      case 'lg': return 'w-12 h-12 text-sm';
-      case 'md':
-      default: return 'w-9 h-9 text-xs';
-    }
-  };
-
-  if (src && !src.includes('default') && !src.includes('placeholder')) {
-    return (
-      <img
-        src={src}
-        alt={name}
-        className={`rounded-full object-cover border border-[#E5E7EB] shrink-0 ${getSizeStyles()} ${className}`}
-      />
-    );
-  }
-
-  return (
-    <div
-      className={`rounded-full bg-[#0A0A0A] text-white flex items-center justify-center font-bold font-sans tracking-wider border border-[#E5E7EB] shrink-0 ${getSizeStyles()} ${className}`}
-    >
-      {getInitials(name)}
-    </div>
-  );
-};
+export { Avatar, type AvatarProps, type AvatarSize } from '../ui/Avatar';
 
 // ============================================================================
 // 18. REUSABLE STEPPER COMPONENT

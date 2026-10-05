@@ -38,6 +38,7 @@ import { profileService } from '../services/profileService';
 import { subscribeToChatMessages, subscribeToNotifications } from '../lib/realtime';
 import { parseAnnouncementMeta, serializeAnnouncementContent } from '../components/common/InstitutionalAnnouncementFeed';
 import { validateEventLeadTime, checkVenueConflict, generateCheckinCode } from '../utils/eventTimeUtils';
+import { getAvatarUrl } from '../lib/avatar';
 
 
 const generateUUID = () => {
@@ -356,7 +357,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               name: u.name,
               email: (u.email || '').replace(/^\+/, '').trim(),
               role: u.role,
-              avatar: u.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
+              avatar: getAvatarUrl(u.avatar_url) || '',
               department: u.department,
               phone: u.phone || undefined,
               isVerified: u.is_verified,

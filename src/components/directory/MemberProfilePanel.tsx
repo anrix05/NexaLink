@@ -22,6 +22,7 @@ import { redactUserPrivacyFields } from '../../utils/privacyGuard';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import type { AlumniProfile, FacultyProfile, StudentProfile } from '../../types';
+import { getUserEmails } from '../../utils/userEmails';
 
 export interface MemberProfilePanelProps {
   user: AlumniProfile | FacultyProfile | any;
@@ -86,7 +87,8 @@ export const MemberProfilePanel: React.FC<MemberProfilePanelProps> = ({
     setTimeout(() => setCopiedEmail(false), 2000);
   };
 
-  const visibleEmail = safeUser.institutionalEmail || safeUser.email;
+  const userEmails = getUserEmails(safeUser);
+  const visibleEmail = userEmails.displayEmail;
   const showEmail = safeUser.privacySettings?.email !== 'private' && visibleEmail && !visibleEmail.includes('@private.hidden');
 
   return (

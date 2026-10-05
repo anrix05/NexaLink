@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Copy, Check, Pencil } from 'lucide-react';
 import type { User, DepartmentCode } from '../../types';
 import { DEPARTMENTS } from '../../data/constants';
+import { getUserEmails } from '../../utils/userEmails';
 
 export interface DetailsListProps {
   user: User;
@@ -114,7 +115,7 @@ export const DetailsList: React.FC<DetailsListProps> = ({
         <div className="p-3.5 flex items-center justify-between gap-4">
           <span className="text-xs text-[#6B7280] shrink-0">Email address</span>
           <span className="text-xs font-medium text-[#0A0A0A] font-sans truncate text-right">
-            {user.email || user.institutionalEmail}
+            {getUserEmails(user).displayEmail || <span className="text-[#9CA3AF] italic">Not provided</span>}
           </span>
         </div>
 
