@@ -3,6 +3,7 @@ import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { jobsService } from '../../services/jobsService';
 import { Modal, Button, TextArea } from '../../components/common/UIComponents';
+import { exportCsvBlob } from '../../utils/chunkedExporter';
 import type {
   JobListing,
   OpportunityApplication,
@@ -160,36 +161,20 @@ export const OpportunityManageConsole: React.FC<OpportunityManageConsoleProps> =
   }, [job.applicationDeadline]);
 
   // Export CSV
-  const handleExportCsv = () => {
-    const rows = [
-      ['Opportunity', job.title],
-      ['Company', job.company],
-      ['Deadline', job.applicationDeadline],
-      [],
-      ['Applicant Name', 'Email', 'Department', 'Grad Year', 'CGPA', 'Match %', 'Status', 'Applied At']
-    ];
+  const handleExportCsv = async () => {
+    const headers = ['Applicant Name', 'Email', 'Department', 'Grad Year', 'CGPA', 'Match %', 'Status', 'Applied At'];
+    const rows = currentApplications.map(a => [
+      a.applicantName,
+      a.applicantEmail,
+      a.applicantDepartment,
+      a.applicantYear,
+      '-',
+      `${a.matchScore || 0}%`,
+      a.status,
+      new Date(a.appliedAt).toLocaleDateString('en-IN')
+    ]);
 
-    currentApplications.forEach(a => {
-      rows.push([
-        a.applicantName,
-        a.applicantEmail,
-        a.applicantDepartment,
-        a.applicantYear,
-        '-',
-        `${a.matchScore || 0}%`,
-        a.status,
-        new Date(a.appliedAt).toLocaleDateString('en-IN')
-      ]);
-    });
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + rows.map(e => e.join(',')).join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `${job.title.replace(/[^a-zA-Z0-9]/g, '_')}_Applicants.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    await exportCsvBlob(`${job.title.replace(/[^a-zA-Z0-9]/g, '_')}_Applicants.csv`, headers, rows);
   };
 
   const handleStatusChange = async (appId: string, nextStatus: OpportunityApplicationStatus) => {

@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import jsPDF from 'jspdf';
 import type { EventItem, EventType } from '../../types';
 import { EVENT_CATEGORIES } from '../../constants/taxonomy';
 import {
@@ -10,6 +9,7 @@ import {
   cleanEventTitle,
   generateIcsCalendar
 } from '../../utils/eventTimeUtils';
+import { loadJsPdf } from '../../utils/chunkedExporter';
 import {
   Calendar,
   MapPin,
@@ -325,8 +325,9 @@ export const EventsPage: React.FC = () => {
     }
   };
 
-  const handleDownloadCertificate = (evt: EventItem) => {
+  const handleDownloadCertificate = async (evt: EventItem) => {
     try {
+      const { jsPDF } = await loadJsPdf();
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
       const certId = `CERT-VIT-${evt.id.substring(0, 6).toUpperCase()}-${currentUser.id.substring(0, 4).toUpperCase()}`;
 

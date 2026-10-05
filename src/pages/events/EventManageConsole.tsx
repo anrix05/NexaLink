@@ -9,6 +9,7 @@ import {
   cleanEventTitle,
   isCheckinWindowActive
 } from '../../utils/eventTimeUtils';
+import { exportCsvBlob } from '../../utils/chunkedExporter';
 import {
   ArrowLeft,
   Calendar,
@@ -145,33 +146,16 @@ export const EventManageConsole: React.FC<EventManageConsoleProps> = ({ eventId,
     setTimeout(() => setNoticeMsg(null), 4000);
   };
 
-  const handleExportCsv = () => {
-    const rows = [
-      ['Event Title', cleanTitle],
-      ['Date', event.date],
-      ['Time', event.time],
-      ['Location', event.locationOrUrl],
-      [],
-      ['Participant ID', 'Status', 'Attended At', 'Certificate ID']
-    ];
+  const handleExportCsv = async () => {
+    const headers = ['Participant ID', 'Status', 'Attended At', 'Certificate ID'];
+    const rows = currentEventRsvps.map(r => [
+      r.userId,
+      r.status,
+      r.attendedAt ? new Date(r.attendedAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-',
+      r.certificateId || '-'
+    ]);
 
-    currentEventRsvps.forEach(r => {
-      rows.push([
-        r.userId,
-        r.status,
-        r.attendedAt ? new Date(r.attendedAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-',
-        r.certificateId || '-'
-      ]);
-    });
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + rows.map(e => e.join(',')).join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `${cleanTitle.replace(/[^a-zA-Z0-9]/g, '_')}_Attendees.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    await exportCsvBlob(`${cleanTitle.replace(/[^a-zA-Z0-9]/g, '_')}_Attendees.csv`, headers, rows);
 
     setNoticeMsg('Attendee roster CSV exported.');
     setTimeout(() => setNoticeMsg(null), 3000);

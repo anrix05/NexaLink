@@ -391,7 +391,8 @@ export const generateIcsCalendar = (params: {
   return lines.join('\r\n');
 };
 
-import jsPDF from 'jspdf';
+import type jsPDF from 'jspdf';
+import { loadJsPdf } from './chunkedExporter';
 
 /**
  * Generates a 6-digit numeric check-in code
@@ -403,15 +404,16 @@ export const generateCheckinCode = (): string => {
 /**
  * Generates a high-resolution institutional certificate of participation PDF
  */
-export const generateEventCertificatePdf = (params: {
+export const generateEventCertificatePdf = async (params: {
   eventTitle: string;
   recipientName: string;
   recipientRole?: string;
   dateStr: string;
   certificateId: string;
   department?: string;
-}): jsPDF => {
-  const doc = new jsPDF({
+}): Promise<jsPDF> => {
+  const { jsPDF: JsPdfClass } = await loadJsPdf();
+  const doc = new JsPdfClass({
     orientation: 'landscape',
     unit: 'mm',
     format: 'a4'

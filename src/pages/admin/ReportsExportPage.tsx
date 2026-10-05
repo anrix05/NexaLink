@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
 import type { FacultyProfile } from '../../types';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType } from 'docx';
-import { saveAs } from 'file-saver';
+import { loadJsPdf, loadXlsx, loadDocx, exportCsvBlob, yieldToMainThread } from '../../utils/chunkedExporter';
 import {
   FileSpreadsheet,
   Download,
@@ -66,6 +62,7 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
   
   // Specific Exporting Format Loading State
   const [exportingFormat, setExportingFormat] = useState<'pdf' | 'excel' | 'docx' | 'csv' | 'naac' | null>(null);
+  const [exportProgress, setExportProgress] = useState<number | null>(null);
   const isExporting = exportingFormat !== null;
 
   // Export Success Toast State with Exit Animation
@@ -183,9 +180,14 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
     return true;
   });
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     setExportingFormat('pdf');
+    setExportProgress(10);
     try {
+      const { jsPDF, autoTable } = await loadJsPdf();
+      setExportProgress(25);
+      await yieldToMainThread(10);
+
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
       doc.setFillColor(10, 10, 10);
@@ -211,6 +213,9 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
       doc.text(`Category: ${selectedRole.toUpperCase()} | Dept: ${selectedDept}`, 230, 17);
       doc.text(`Batch Span: ${selectedYearStart} - ${selectedYearEnd}`, 230, 22);
 
+      setExportProgress(45);
+      await yieldToMainThread(10);
+
       const rows = filteredRecords.map((item, idx) => [
         (idx + 1).toString(),
         item.name,
@@ -222,7 +227,10 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
         item.email
       ]);
 
-      autoTable(doc, {
+      setExportProgress(65);
+      await yieldToMainThread(10);
+
+      (autoTable as any)(doc, {
         startY: 34,
         head: [['#', 'Name', 'Category Role', 'Dept', 'Year', 'Details / Employer / PRN', 'Location', 'Email Address']],
         body: rows,
@@ -257,6 +265,9 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
         margin: { left: 14, right: 14 }
       });
 
+      setExportProgress(85);
+      await yieldToMainThread(10);
+
       const totalPages = (doc as any).internal.getNumberOfPages();
       for (let i = 1; i <= totalPages; i++) {
         doc.setPage(i);
@@ -270,18 +281,28 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
         doc.text('Registrar Seal & Signature', 230, 200);
       }
 
+      setExportProgress(95);
+      await yieldToMainThread(10);
+
       doc.save(`VIT_Accreditation_Report_${selectedRole}_${Date.now()}.pdf`);
+      setExportProgress(100);
       triggerSuccessMsg(`Successfully generated PDF report (${filteredRecords.length} records).`);
     } catch (err) {
       console.error(err);
     } finally {
       setExportingFormat(null);
+      setExportProgress(null);
     }
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     setExportingFormat('excel');
+    setExportProgress(15);
     try {
+      const XLSX = await loadXlsx();
+      setExportProgress(35);
+      await yieldToMainThread(10);
+
       const exportData = filteredRecords.map((item, idx) => ({
         'Serial No': idx + 1,
         'Full Name': item.name,
@@ -293,6 +314,9 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
         'College Email': item.collegeEmail || 'Not provided',
         'Personal Email': item.personalEmail || 'Not provided'
       }));
+
+      setExportProgress(60);
+      await yieldToMainThread(10);
 
       const worksheet = XLSX.utils.json_to_sheet(exportData);
 
@@ -314,21 +338,33 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
       });
       worksheet['!cols'] = colWidths;
 
+      setExportProgress(85);
+      await yieldToMainThread(10);
+
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Institutional Roster');
 
       XLSX.writeFile(workbook, `VIT_Accreditation_Data_${selectedRole}_${Date.now()}.xlsx`);
+      setExportProgress(100);
       triggerSuccessMsg(`Excel workbook exported successfully (${filteredRecords.length} records).`);
     } catch (err) {
       console.error(err);
     } finally {
       setExportingFormat(null);
+      setExportProgress(null);
     }
   };
 
   const handleExportDOCX = async () => {
     setExportingFormat('docx');
+    setExportProgress(15);
     try {
+      const { docx, saveAs } = await loadDocx();
+      const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType } = docx;
+
+      setExportProgress(35);
+      await yieldToMainThread(10);
+
       const doc = new Document({
         sections: [
           {
@@ -399,51 +435,62 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
         ]
       });
 
+      setExportProgress(75);
+      await yieldToMainThread(10);
+
       const blob = await Packer.toBlob(doc);
+      setExportProgress(95);
       saveAs(blob, `VIT_Institutional_Report_${Date.now()}.docx`);
+      setExportProgress(100);
       triggerSuccessMsg(`Word Document (.docx) generated successfully.`);
     } catch (err) {
       console.error(err);
     } finally {
       setExportingFormat(null);
+      setExportProgress(null);
     }
   };
 
-  const handleExportCSV = () => {
+  const handleExportCSV = async () => {
     setExportingFormat('csv');
+    setExportProgress(0);
     try {
       const headers = ['Sr No', 'Name', 'Role Category', 'Department', 'Year', 'Details / Company / PRN', 'College Email', 'Personal Email'];
       const rows = filteredRecords.map((item, idx) => [
         idx + 1,
-        `"${item.name}"`,
-        `"${item.roleDisplay}"`,
+        item.name,
+        item.roleDisplay,
         item.department,
         item.year,
-        `"${item.info}"`,
-        `"${item.collegeEmail || ''}"`,
-        `"${item.personalEmail || ''}"`
+        item.info,
+        item.collegeEmail || '',
+        item.personalEmail || ''
       ]);
 
-      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `VIT_Records_${selectedRole}_${Date.now()}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      await exportCsvBlob(
+        `VIT_Records_${selectedRole}_${Date.now()}.csv`,
+        headers,
+        rows,
+        progress => setExportProgress(progress)
+      );
 
       triggerSuccessMsg('CSV raw data exported.');
     } catch (err) {
       console.error(err);
     } finally {
       setExportingFormat(null);
+      setExportProgress(null);
     }
   };
 
-  const handleExportNaacEvents = () => {
+  const handleExportNaacEvents = async () => {
     setExportingFormat('naac');
+    setExportProgress(15);
     try {
+      const XLSX = await loadXlsx();
+      setExportProgress(35);
+      await yieldToMainThread(10);
+
       const activeEvents = eventsList || [];
       const activeRsvps = eventRsvps || [];
 
@@ -479,6 +526,9 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
           'Lifecycle Audit Status': evt.lifecycleStatus || 'published'
         };
       });
+
+      setExportProgress(65);
+      await yieldToMainThread(10);
 
       // Sheet 2: Quantitative Summary Metrics
       const totalSessions = activeEvents.length;
@@ -517,16 +567,21 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
       // Auto fit columns for Sheet 2
       wsSummary['!cols'] = [{ wch: 45 }, { wch: 55 }];
 
+      setExportProgress(85);
+      await yieldToMainThread(10);
+
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, wsSummary, '5.4.1 Executive Summary');
       XLSX.utils.book_append_sheet(workbook, wsEvents, '5.4.1 Detailed Event Roster');
 
       XLSX.writeFile(workbook, `VIT_NAAC_5.4.1_Alumni_Engagement_${Date.now()}.xlsx`);
+      setExportProgress(100);
       triggerSuccessMsg(`NAAC 5.4.1 Alumni Engagement workbook (.xlsx) exported successfully (${naacRows.length} sessions).`);
     } catch (err) {
       console.error(err);
     } finally {
       setExportingFormat(null);
+      setExportProgress(null);
     }
   };
 
@@ -631,6 +686,24 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
             </div>
 
             <div className="pt-4 border-t border-[#E5E7EB]">
+              {isExporting && exportProgress !== null && (
+                <div className="mb-5 p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl space-y-2 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 font-semibold text-[#0A0A0A]">
+                      <Loader2 className="w-4 h-4 animate-spin text-[#0A0A0A]" />
+                      <span>Processing {exportingFormat?.toUpperCase()} export (time-sliced stream)...</span>
+                    </div>
+                    <span className="font-mono font-bold text-[#0A0A0A]">{exportProgress}%</span>
+                  </div>
+                  <div className="w-full bg-[#E5E7EB] h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-[#0A0A0A] h-full rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${exportProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <p className="text-xs text-[#6B7280] font-semibold mb-3">
                 Choose output export format:
               </p>
@@ -645,7 +718,7 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
                     <div className="flex items-center gap-3">
                       <Loader2 className="w-5 h-5 animate-spin text-white" />
                       <div className="text-left">
-                        <p className="font-extrabold text-sm text-white">Generating...</p>
+                        <p className="font-extrabold text-sm text-white">Generating ({exportProgress ?? 0}%)...</p>
                         <p className="text-[10px] text-neutral-400 font-normal">Building PDF Document</p>
                       </div>
                     </div>
@@ -671,7 +744,7 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
                     <div className="flex items-center gap-3">
                       <Loader2 className="w-5 h-5 animate-spin text-[#0A0A0A]" />
                       <div className="text-left">
-                        <p className="font-extrabold text-sm">Generating...</p>
+                        <p className="font-extrabold text-sm">Generating ({exportProgress ?? 0}%)...</p>
                         <p className="text-[10px] text-[#6B7280] font-normal">Building Workbook</p>
                       </div>
                     </div>
@@ -697,7 +770,7 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
                     <div className="flex items-center gap-3">
                       <Loader2 className="w-5 h-5 animate-spin text-[#0A0A0A]" />
                       <div className="text-left">
-                        <p className="font-extrabold text-sm">Generating...</p>
+                        <p className="font-extrabold text-sm">Generating ({exportProgress ?? 0}%)...</p>
                         <p className="text-[10px] text-[#6B7280] font-normal">Building Word DOCX</p>
                       </div>
                     </div>
@@ -723,7 +796,7 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
                     <div className="flex items-center gap-3">
                       <Loader2 className="w-5 h-5 animate-spin text-[#0A0A0A]" />
                       <div className="text-left">
-                        <p className="font-extrabold text-sm">Generating...</p>
+                        <p className="font-extrabold text-sm">Generating ({exportProgress ?? 0}%)...</p>
                         <p className="text-[10px] text-[#6B7280] font-normal">Building CSV File</p>
                       </div>
                     </div>
@@ -760,7 +833,7 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
                     {exportingFormat === 'naac' ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin text-white" />
-                        <span>Generating NAAC Workbook...</span>
+                        <span>Generating NAAC Workbook ({exportProgress ?? 0}%)...</span>
                       </>
                     ) : (
                       <>

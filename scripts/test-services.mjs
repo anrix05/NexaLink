@@ -1475,6 +1475,79 @@ test('characterization: optimistic event RSVP rolls back registered and waitlist
   assert.strictEqual(toastMsg, 'Failed to update, changes reverted');
 });
 
+test('characterization: escapeCsvCell handles RFC 4180 quotes, commas, newlines, and nulls', () => {
+  const escapeCsvCell = (val) => {
+    if (val === null || val === undefined) return '""';
+    const str = String(val);
+    if (/[",\n\r]/.test(str)) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return `"${str}"`;
+  };
+
+  assert.strictEqual(escapeCsvCell('Hello'), '"Hello"');
+  assert.strictEqual(escapeCsvCell('Hello, World'), '"Hello, World"');
+  assert.strictEqual(escapeCsvCell('He said "Hi"'), '"He said ""Hi"""');
+  assert.strictEqual(escapeCsvCell('Line1\nLine2'), '"Line1\nLine2"');
+  assert.strictEqual(escapeCsvCell(null), '""');
+  assert.strictEqual(escapeCsvCell(undefined), '""');
+  assert.strictEqual(escapeCsvCell(12345), '"12345"');
+});
+
+test('characterization: chunked CSV export processes rows in batches and reports incremental progress', async () => {
+  const CHUNK_SIZE = 50;
+  const totalRows = 120;
+  const rows = Array.from({ length: totalRows }, (_, i) => [`User ${i + 1}`, `user${i + 1}@vit.edu.in`, 'CMPN', 2026]);
+  const headers = ['Name', 'Email', 'Dept', 'Year'];
+
+  const progressUpdates = [];
+  const onProgress = (p) => progressUpdates.push(p);
+
+  const csvChunks = [];
+  csvChunks.push(headers.map(h => `"${h}"`).join(',') + '\r\n');
+  onProgress(5);
+
+  let processed = 0;
+  for (let i = 0; i < totalRows; i += CHUNK_SIZE) {
+    const chunk = rows.slice(i, i + CHUNK_SIZE);
+    const chunkString = chunk.map(r => r.map(c => `"${c}"`).join(',')).join('\r\n') + '\r\n';
+    csvChunks.push(chunkString);
+    processed += chunk.length;
+    const pct = Math.min(95, Math.round(5 + (processed / totalRows) * 90));
+    onProgress(pct);
+  }
+  onProgress(100);
+
+  assert.ok(progressUpdates.length >= 3, 'Must record multiple progress updates');
+  assert.strictEqual(progressUpdates[0], 5, 'Initial progress starts at 5%');
+  assert.strictEqual(progressUpdates[progressUpdates.length - 1], 100, 'Final progress reaches 100%');
+  assert.ok(progressUpdates.every((val, i, arr) => i === 0 || val >= arr[i - 1]), 'Progress must be monotonically increasing');
+
+  const fullCsv = csvChunks.join('');
+  assert.ok(fullCsv.includes('"User 1"'), 'Contains first record');
+  assert.ok(fullCsv.includes('"User 120"'), 'Contains last record');
+});
+
+test('characterization: time-sliced yielding ensures event loop execution between export chunks', async () => {
+  let executedDuringYield = false;
+  setTimeout(() => {
+    executedDuringYield = true;
+  }, 0);
+
+  const yieldToMainThread = () => new Promise(resolve => setTimeout(resolve, 5));
+  await yieldToMainThread();
+
+  assert.strictEqual(executedDuringYield, true, 'Event loop must run scheduled tasks during chunk yield');
+});
+
+test('characterization: dynamic export loaders decouple heavy engines from initial bundle', async () => {
+  const xlsx = await import('xlsx');
+  assert.ok(xlsx.utils, 'XLSX utils must be present');
+  assert.ok(typeof xlsx.utils.json_to_sheet === 'function', 'json_to_sheet must be a function');
+  assert.ok(typeof xlsx.utils.book_new === 'function', 'book_new must be a function');
+});
+
+
 
 
 

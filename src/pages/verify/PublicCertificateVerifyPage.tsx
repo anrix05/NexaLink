@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { generateEventCertificatePdf, cleanEventTitle } from '../../utils/eventTimeUtils';
-import { ShieldCheck, CheckCircle2, AlertTriangle, Download, ArrowLeft, Search, Calendar, Award, Building, User } from 'lucide-react';
+import { ShieldCheck, CheckCircle2, AlertTriangle, Download, ArrowLeft, Search, Calendar, Award, Building, User, Loader2 } from 'lucide-react';
 
 interface PublicCertificateVerifyPageProps {
   setActiveTab?: (tab: string) => void;
@@ -87,17 +87,26 @@ export const PublicCertificateVerifyPage: React.FC<PublicCertificateVerifyPagePr
     }
   };
 
-  const handleDownload = () => {
-    if (!record) return;
-    const doc = generateEventCertificatePdf({
-      eventTitle: record.eventTitle,
-      recipientName: record.recipientName,
-      recipientRole: record.recipientRole,
-      dateStr: record.eventDate,
-      certificateId: record.certificateId,
-      department: record.recipientDept
-    });
-    doc.save(`${record.certificateId}_${record.recipientName.replace(/\s+/g, '_')}.pdf`);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    if (!record || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      const doc = await generateEventCertificatePdf({
+        eventTitle: record.eventTitle,
+        recipientName: record.recipientName,
+        recipientRole: record.recipientRole,
+        dateStr: record.eventDate,
+        certificateId: record.certificateId,
+        department: record.recipientDept
+      });
+      doc.save(`${record.certificateId}_${record.recipientName.replace(/\s+/g, '_')}.pdf`);
+    } catch (err) {
+      console.error('Failed to generate certificate PDF:', err);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   return (
@@ -189,10 +198,20 @@ export const PublicCertificateVerifyPage: React.FC<PublicCertificateVerifyPagePr
               <button
                 type="button"
                 onClick={handleDownload}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#0A0A0A] text-white rounded-xl text-xs font-semibold hover:bg-neutral-800 transition-colors cursor-pointer shrink-0"
+                disabled={isDownloading}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#0A0A0A] text-white rounded-xl text-xs font-semibold hover:bg-neutral-800 disabled:opacity-60 transition-colors cursor-pointer shrink-0"
               >
-                <Download className="w-3.5 h-3.5" />
-                <span>Download PDF</span>
+                {isDownloading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Preparing PDF...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download PDF</span>
+                  </>
+                )}
               </button>
             </div>
 
