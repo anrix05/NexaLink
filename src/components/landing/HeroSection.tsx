@@ -51,15 +51,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               pairing="sans"
             />
 
-            {/* Mobile network map — below copy, zero CLS */}
+            {/* Mobile/Tablet network map — below copy */}
             <div className="lg:hidden pt-6 w-full">
-              <GlobalNetworkMap className="aspect-[4/3] w-full" />
+              <GlobalNetworkMap onSignIn={onSignIn} className="aspect-[4/3] min-h-[280px] sm:aspect-[16/10] w-full" />
             </div>
           </motion.div>
 
           {/* Right column: desktop network map */}
-          <div className="hidden lg:flex lg:col-span-5 w-full items-start justify-center relative">
-            <GlobalNetworkMap className="aspect-[4/3] max-h-[calc(100vh-200px)] w-full" />
+          <div className="hidden lg:flex lg:col-span-5 w-full items-center justify-center relative self-center">
+            <GlobalNetworkMap onSignIn={onSignIn} className="aspect-[4/3] max-h-[calc(100vh-180px)] w-full" />
           </div>
 
         </div>
