@@ -37,6 +37,7 @@ import { validateDataMode } from './lib/dataMode';
 import { DataModeErrorBanner } from './components/common/DataModeErrorBanner';
 import { GlobalErrorToaster } from './components/common/GlobalErrorToaster';
 import { useData } from './context/DataContext';
+import { MobileChromeProvider } from './context/MobileChromeContext';
 import { NotificationToast } from './components/notifications/NotificationToast';
 import type { AlumniProfile } from './types';
 
@@ -68,9 +69,20 @@ const getInitialReportsSubTab = (): 'analytics' | 'export' => {
   return 'analytics';
 };
 
+const getInitialOpportunitiesSubTab = (): 'jobs' | 'events' => {
+  if (typeof window === 'undefined') return 'jobs';
+  const params = new URLSearchParams(window.location.search);
+  const sub = params.get('subtab');
+  if (sub === 'events') return 'events';
+  if (sub === 'jobs') return 'jobs';
+  const tab = params.get('tab');
+  if (tab === 'events') return 'events';
+  return 'jobs';
+};
+
 const MainContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>(getInitialActiveTab);
-  const [opportunitiesSubTab, setOpportunitiesSubTab] = useState<'jobs' | 'events'>('jobs');
+  const [opportunitiesSubTab, setOpportunitiesSubTab] = useState<'jobs' | 'events'>(getInitialOpportunitiesSubTab);
   const [mentorshipSubTab, setMentorshipSubTab] = useState<'find' | 'my-sent' | 'incoming' | 'requests' | undefined>(undefined);
   const [reportsSubTab, setReportsSubTab] = useState<'analytics' | 'export'>(getInitialReportsSubTab);
   const [selectedMentorForBooking, setSelectedMentorForBooking] = useState<AlumniProfile | null>(null);
@@ -112,6 +124,17 @@ const MainContent: React.FC = () => {
         setActiveTab('mentorship');
       } else if (tabParam === 'messages' || tabParam === 'chat' || tabParam === 'messaging') {
         setActiveTab('messaging');
+      } else if (tabParam === 'jobs') {
+        setOpportunitiesSubTab('jobs');
+        setActiveTab('opportunities');
+      } else if (tabParam === 'events') {
+        setOpportunitiesSubTab('events');
+        setActiveTab('events');
+      } else if (tabParam === 'opportunities') {
+        if (subtabParam === 'events' || subtabParam === 'jobs') {
+          setOpportunitiesSubTab(subtabParam);
+        }
+        setActiveTab('opportunities');
       } else {
         setActiveTab(tabParam);
       }
@@ -230,10 +253,16 @@ const MainContent: React.FC = () => {
 
   const handleTabChange = (tab: string, subTab?: string) => {
     if (tab === 'jobs' || tab === 'opportunities') {
+      if (subTab === 'events' || subTab === 'jobs') {
+        setOpportunitiesSubTab(subTab);
+      } else if (tab === 'jobs') {
+        setOpportunitiesSubTab('jobs');
+      }
       setActiveTab('opportunities');
       return;
     }
     if (tab === 'events') {
+      setOpportunitiesSubTab('events');
       setActiveTab('events');
       return;
     }
@@ -308,9 +337,9 @@ const MainContent: React.FC = () => {
         );
       case 'opportunities':
       case 'jobs':
-        return <OpportunitiesPage setActiveTab={handleTabChange} />;
+        return <OpportunitiesPage setActiveTab={handleTabChange} initialSubTab={opportunitiesSubTab} />;
       case 'events':
-        return <EventsPage />;
+        return <OpportunitiesPage setActiveTab={handleTabChange} initialSubTab="events" />;
       case 'mentorship':
       case 'guidance':
         return (
@@ -611,9 +640,11 @@ export function App() {
   return (
     <AuthProvider>
       <DataProvider>
-        <GlobalErrorToaster />
-        {shouldMountIntro && <IntroOverlay />}
-        <MainContent />
+        <MobileChromeProvider>
+          <GlobalErrorToaster />
+          {shouldMountIntro && <IntroOverlay />}
+          <MainContent />
+        </MobileChromeProvider>
       </DataProvider>
     </AuthProvider>
   );

@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
+import { jobsService } from '../../services/jobsService';
+import { Modal, Button, TextArea } from '../../components/common/UIComponents';
 import type {
   JobListing,
   OpportunityApplication,
@@ -22,7 +24,10 @@ import {
   Search,
   ExternalLink,
   Ban,
-  FileSpreadsheet
+  FileSpreadsheet,
+  FileText,
+  Lock,
+  Loader2
 } from 'lucide-react';
 
 interface OpportunityManageConsoleProps {
@@ -54,6 +59,12 @@ export const OpportunityManageConsole: React.FC<OpportunityManageConsoleProps> =
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [noticeMsg, setNoticeMsg] = useState<string | null>(null);
+
+  // Applicant review drawer / modal state
+  const [selectedApplicant, setSelectedApplicant] = useState<OpportunityApplication | null>(null);
+  const [activePosterNote, setActivePosterNote] = useState<string>('');
+  const [loadingResumeId, setLoadingResumeId] = useState<string | null>(null);
+  const [isSavingNote, setIsSavingNote] = useState(false);
 
   if (!job) {
     return (
@@ -167,10 +178,60 @@ export const OpportunityManageConsole: React.FC<OpportunityManageConsoleProps> =
     document.body.removeChild(link);
   };
 
-  const handleStatusChange = (appId: string, nextStatus: OpportunityApplicationStatus) => {
-    updateApplicationStatus(appId, nextStatus);
-    setNoticeMsg(`Applicant status updated to ${nextStatus}.`);
+  const handleStatusChange = async (appId: string, nextStatus: OpportunityApplicationStatus) => {
+    const targetApp = currentApplications.find(a => a.id === appId);
+    await updateApplicationStatus(appId, nextStatus, targetApp?.posterNote);
+    setNoticeMsg(`Applicant status updated to ${nextStatus}. Applicant has been notified.`);
     setTimeout(() => setNoticeMsg(null), 3000);
+  };
+
+  const handleOpenApplicant = (app: OpportunityApplication) => {
+    setSelectedApplicant(app);
+    setActivePosterNote(app.posterNote || '');
+    if (app.status === 'submitted') {
+      updateApplicationStatus(app.id, 'viewed', app.posterNote);
+      setNoticeMsg(`Application for ${app.applicantName} marked as Viewed.`);
+      setTimeout(() => setNoticeMsg(null), 3000);
+    }
+  };
+
+  const handleViewResume = async (app: OpportunityApplication) => {
+    if (!app.resumePath) return;
+    setLoadingResumeId(app.id);
+    try {
+      const signedUrl = await jobsService.getSignedResumeUrl(app.resumePath);
+      if (signedUrl) {
+        window.open(signedUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        alert('Could not generate signed URL for resume. The file may no longer exist or you may lack permissions.');
+      }
+    } catch (err) {
+      console.error('Failed to open resume', err);
+      alert('Error fetching resume file.');
+    } finally {
+      setLoadingResumeId(null);
+    }
+  };
+
+  const handleSavePosterNote = async () => {
+    if (!selectedApplicant) return;
+    setIsSavingNote(true);
+    try {
+      await updateApplicationStatus(selectedApplicant.id, selectedApplicant.status, activePosterNote.trim() || undefined);
+      setSelectedApplicant(prev => prev ? { ...prev, posterNote: activePosterNote.trim() || undefined } : null);
+      setNoticeMsg('Private poster note saved.');
+      setTimeout(() => setNoticeMsg(null), 3000);
+    } finally {
+      setIsSavingNote(false);
+    }
+  };
+
+  const handleModalStatusChange = async (nextStatus: OpportunityApplicationStatus) => {
+    if (!selectedApplicant) return;
+    await updateApplicationStatus(selectedApplicant.id, nextStatus, activePosterNote.trim() || selectedApplicant.posterNote);
+    setSelectedApplicant(prev => prev ? { ...prev, status: nextStatus } : null);
+    setNoticeMsg(`Status updated to ${nextStatus}. Candidate has been notified.`);
+    setTimeout(() => setNoticeMsg(null), 3500);
   };
 
   const handleMessageApplicant = (applicantId: string, applicantName: string) => {
@@ -345,18 +406,24 @@ export const OpportunityManageConsole: React.FC<OpportunityManageConsoleProps> =
             </div>
 
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-              {['all', 'submitted', 'viewed', 'shortlisted', 'rejected'].map(st => (
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'submitted', label: 'Submitted' },
+                { id: 'viewed', label: 'Viewed' },
+                { id: 'shortlisted', label: 'Shortlisted' },
+                { id: 'not_selected', label: 'Not selected' }
+              ].map(st => (
                 <button
-                  key={st}
+                  key={st.id}
                   type="button"
-                  onClick={() => setStatusFilter(st)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize whitespace-nowrap cursor-pointer transition-colors ${
-                    statusFilter === st
+                  onClick={() => setStatusFilter(st.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap cursor-pointer transition-colors ${
+                    statusFilter === st.id
                       ? 'bg-[#0A0A0A] text-white'
                       : 'border border-[#E5E7EB] bg-white text-[#6B7280] hover:text-[#0A0A0A]'
                   }`}
                 >
-                  {st}
+                  {st.label}
                 </button>
               ))}
             </div>
@@ -382,13 +449,23 @@ export const OpportunityManageConsole: React.FC<OpportunityManageConsoleProps> =
                   </thead>
                   <tbody className="divide-y divide-[#E5E7EB]">
                     {filteredApplicants.map(app => (
-                      <tr key={app.id} className="hover:bg-neutral-50/50 transition-colors">
+                      <tr
+                        key={app.id}
+                        onClick={() => handleOpenApplicant(app)}
+                        className="hover:bg-neutral-50/50 transition-colors cursor-pointer"
+                      >
                         <td className="py-3.5 px-4">
                           <p className="font-bold text-[#0A0A0A]">{app.applicantName}</p>
                           <p className="text-[11px] text-[#6B7280]">{app.applicantEmail}</p>
                           {app.studentNote && (
                             <p className="text-[11px] text-[#0A0A0A] mt-1 italic line-clamp-1">
                               "{app.studentNote}"
+                            </p>
+                          )}
+                          {app.posterNote && (
+                            <p className="text-[10px] text-amber-900 mt-1 flex items-center gap-1 font-medium bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60 inline-flex">
+                              <Lock className="w-2.5 h-2.5" />
+                              <span className="line-clamp-1">Note: {app.posterNote}</span>
                             </p>
                           )}
                         </td>
@@ -413,31 +490,45 @@ export const OpportunityManageConsole: React.FC<OpportunityManageConsoleProps> =
                           </span>
                         </td>
 
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4" onClick={e => e.stopPropagation()}>
                           <select
                             value={app.status}
                             onChange={e => handleStatusChange(app.id, e.target.value as OpportunityApplicationStatus)}
                             className="h-8 px-2 bg-white border border-[#6B7280] rounded-lg text-xs font-semibold text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] cursor-pointer"
                           >
                             <option value="submitted">Submitted</option>
-                            <option value="viewed">Under Review</option>
+                            <option value="viewed">Viewed</option>
                             <option value="shortlisted">Shortlisted ✓</option>
-                            <option value="rejected">Not Selected</option>
+                            <option value="not_selected">Not selected</option>
                           </select>
                         </td>
 
-                        <td className="py-3.5 px-4 text-right space-x-2">
+                        <td className="py-3.5 px-4 text-right space-x-2" onClick={e => e.stopPropagation()}>
                           {app.resumePath && (
-                            <a
-                              href={app.resumePath}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-[#6B7280] text-[#0A0A0A] rounded-lg text-xs font-semibold hover:border-[#0A0A0A] cursor-pointer"
+                            <button
+                              type="button"
+                              onClick={() => handleViewResume(app)}
+                              disabled={loadingResumeId === app.id}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-[#6B7280] text-[#0A0A0A] rounded-lg text-xs font-semibold hover:border-[#0A0A0A] cursor-pointer disabled:opacity-50"
+                              title="Open candidate resume with verified signed URL"
                             >
-                              <span>CV</span>
+                              {loadingResumeId === app.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <span>CV</span>
+                              )}
                               <ExternalLink className="w-3 h-3" />
-                            </a>
+                            </button>
                           )}
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenApplicant(app)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-[#0A0A0A] text-[#0A0A0A] rounded-lg text-xs font-semibold hover:bg-neutral-50 cursor-pointer"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>Review</span>
+                          </button>
 
                           <button
                             type="button"
@@ -520,6 +611,154 @@ export const OpportunityManageConsole: React.FC<OpportunityManageConsoleProps> =
           </div>
         </div>
       )}
+
+      {/* Candidate Review Modal */}
+      {selectedApplicant && (
+        <Modal
+          isOpen={!!selectedApplicant}
+          onClose={() => setSelectedApplicant(null)}
+          title={`Candidate Application: ${selectedApplicant.applicantName}`}
+          subtitle={`${job.title} at ${job.company}`}
+          maxWidth="lg"
+        >
+          <div className="space-y-4 font-sans text-xs">
+            {/* Top metadata */}
+            <div className="p-3.5 bg-neutral-50 border border-neutral-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <p className="font-bold text-sm text-[#0A0A0A]">{selectedApplicant.applicantName}</p>
+                <p className="text-[#6B7280]">{selectedApplicant.applicantEmail}</p>
+                <div className="flex items-center gap-2 mt-1 text-[11px] text-[#6B7280]">
+                  <span>Dept: <strong className="text-[#0A0A0A] font-semibold">{selectedApplicant.applicantDepartment}</strong></span>
+                  <span>•</span>
+                  <span>Batch: <strong className="text-[#0A0A0A] font-semibold">{selectedApplicant.applicantYear}</strong></span>
+                  <span>•</span>
+                  <span>Applied: {new Date(selectedApplicant.appliedAt).toLocaleDateString('en-IN')}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {selectedApplicant.resumePath ? (
+                  <button
+                    type="button"
+                    onClick={() => handleViewResume(selectedApplicant)}
+                    disabled={loadingResumeId === selectedApplicant.id}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#0A0A0A] text-white rounded-xl text-xs font-semibold hover:bg-neutral-800 cursor-pointer disabled:opacity-50"
+                  >
+                    {loadingResumeId === selectedApplicant.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <FileText className="w-3.5 h-3.5" />
+                    )}
+                    <span>View Resume (PDF)</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </button>
+                ) : (
+                  <span className="text-[11px] text-[#6B7280] italic">No resume on file</span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleMessageApplicant(selectedApplicant.applicantId, selectedApplicant.applicantName);
+                    setSelectedApplicant(null);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#6B7280] text-[#0A0A0A] rounded-xl text-xs font-semibold hover:border-[#0A0A0A] cursor-pointer"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Message</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Candidate Cover Note */}
+            <div>
+              <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block mb-1.5">
+                Cover Note from Candidate
+              </span>
+              <div className="p-3 bg-white border border-[#E5E7EB] rounded-xl text-xs text-[#0A0A0A] leading-relaxed whitespace-pre-line min-h-[60px]">
+                {selectedApplicant.studentNote || (
+                  <span className="text-[#9CA3AF] italic">The candidate did not provide an optional cover note.</span>
+                )}
+              </div>
+            </div>
+
+            {/* Review Status Selector */}
+            <div>
+              <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block mb-1.5">
+                Candidate Review Status
+              </span>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'viewed', label: 'Viewed · Under Review', icon: Eye, color: 'text-blue-700 bg-blue-50 border-blue-200' },
+                  { id: 'shortlisted', label: 'Shortlisted', icon: CheckCircle2, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
+                  { id: 'not_selected', label: 'Not Selected', icon: XCircle, color: 'text-rose-700 bg-rose-50 border-rose-200' }
+                ].map(opt => {
+                  const isCurrent = selectedApplicant.status === opt.id;
+                  const Icon = opt.icon;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => handleModalStatusChange(opt.id as any)}
+                      className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
+                        isCurrent
+                          ? `${opt.color} ring-1 ring-black/10`
+                          : 'border-[#E5E7EB] bg-white text-[#6B7280] hover:text-[#0A0A0A] hover:border-[#6B7280]'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5 shrink-0" />
+                      <span>{opt.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-[#6B7280] mt-1.5">
+                Updating review status automatically notifies the applicant in their portal and Opportunities feed.
+              </p>
+            </div>
+
+            {/* Private Poster Note */}
+            <div className="space-y-1.5 pt-2 border-t border-[#E5E7EB]">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-[#6B7280]" />
+                  <span>Private Poster Note</span>
+                </span>
+                <span className="text-[10px] text-[#9CA3AF]">
+                  Only visible to you and institutional administrators
+                </span>
+              </div>
+              <TextArea
+                placeholder="Add evaluation comments, interview feedback, or next steps (e.g. Schedule round 2 interview on Tuesday)..."
+                value={activePosterNote}
+                onChange={e => setActivePosterNote(e.target.value)}
+                rows={3}
+              />
+              <div className="flex justify-end pt-1">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleSavePosterNote}
+                  disabled={isSavingNote}
+                >
+                  {isSavingNote ? 'Saving note…' : 'Save private note'}
+                </Button>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-[#E5E7EB] flex items-center justify-end">
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setSelectedApplicant(null)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
     </div>
   );
 };

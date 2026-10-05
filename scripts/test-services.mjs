@@ -43,6 +43,22 @@ import {
   deduplicateNotifications
 } from '../src/utils/notificationHelpers.ts';
 
+// Import emailDomains configuration
+import {
+  classifyEmailDomain,
+  isInstitutionalEmail,
+  SIGN_IN_EMAIL_HELPER,
+  INSTITUTIONAL_DOMAINS
+} from '../src/config/emailDomains.ts';
+
+import { mapUserDbToProfile } from '../src/services/profileService.ts';
+import { redactUserPrivacyFields } from '../src/utils/privacyGuard.ts';
+import {
+  mapRowToApplication,
+  normalizeApplicationStatus,
+  validateApplicationPreflights
+} from '../src/utils/applicationHelpers.ts';
+
 // ----------------------------------------------------------------------------
 // 1. enumMappers Unit Tests
 // ----------------------------------------------------------------------------
@@ -348,3 +364,237 @@ test('notificationHelpers: formatRelativeTime handles relative offsets correctly
   assert.strictEqual(formatRelativeTime(new Date(now.getTime() - 25 * 3600 * 1000).toISOString()), 'Yesterday');
 });
 
+// ----------------------------------------------------------------------------
+// 6. emailDomains Configuration Unit Tests
+// ----------------------------------------------------------------------------
+test('emailDomains: classifies @student.vit.edu.in as institutional student', () => {
+  const result = classifyEmailDomain('x@student.vit.edu.in');
+  assert.strictEqual(result.isInstitutional, true);
+  assert.strictEqual(result.suggestedRole, 'student');
+  assert.strictEqual(result.domain, 'student.vit.edu.in');
+});
+
+test('emailDomains: classifies @vit.edu.in as institutional with no presumptive role', () => {
+  const result = classifyEmailDomain('abdur.rahman@vit.edu.in');
+  assert.strictEqual(result.isInstitutional, true);
+  assert.strictEqual(result.suggestedRole, undefined);
+  assert.strictEqual(result.domain, 'vit.edu.in');
+});
+
+test('emailDomains: classifies personal domains as non-institutional alumni suggestion', () => {
+  const result = classifyEmailDomain('someone@gmail.com');
+  assert.strictEqual(result.isInstitutional, false);
+  assert.strictEqual(result.suggestedRole, 'alumni');
+  assert.strictEqual(result.domain, 'gmail.com');
+});
+
+test('emailDomains: handles invalid/empty emails safely', () => {
+  assert.strictEqual(classifyEmailDomain('').isInstitutional, false);
+  assert.strictEqual(classifyEmailDomain('no-at-sign').isInstitutional, false);
+  assert.strictEqual(classifyEmailDomain('trailing-at@').isInstitutional, false);
+});
+
+test('emailDomains: isInstitutionalEmail validates canonical domains accurately', () => {
+  assert.strictEqual(isInstitutionalEmail('test@student.vit.edu.in'), true);
+  assert.strictEqual(isInstitutionalEmail('faculty@vit.edu.in'), true);
+  assert.strictEqual(isInstitutionalEmail('alumni@yahoo.com'), false);
+  assert.strictEqual(isInstitutionalEmail('fake@vit.edu.in.evil.com'), false);
+});
+
+test('emailDomains: SIGN_IN_EMAIL_HELPER is neutral and non-presumptive', () => {
+  assert.strictEqual(SIGN_IN_EMAIL_HELPER, 'Use your institutional email. Alumni can use their personal email.');
+});
+
+// ----------------------------------------------------------------------------
+// 7. profileService & mapUserDbToProfile Unit Tests
+// ----------------------------------------------------------------------------
+test('mapUserDbToProfile: correctly maps student with institutional and personal email', () => {
+  const userRow = {
+    id: 'user-123',
+    name: 'Abdur Rahman',
+    email: 'abdur.rahman@vit.edu.in',
+    personal_email: 'rahman.studyjee@gmail.com',
+    role: 'student',
+    department: 'CMPN',
+    bio: 'Aspiring AI engineer',
+    phone: '+91 9876543210',
+    avatar_url: null
+  };
+  const roleRow = {
+    user_id: 'user-123',
+    semester: 'Semester 4',
+    current_year: 'SE',
+    skills: ['Python', 'TypeScript', 'React'],
+    career_goal: 'Software Engineer',
+    preferred_industry: 'Tech'
+  };
+
+  const profile = mapUserDbToProfile(userRow, roleRow);
+  assert.strictEqual(profile.id, 'user-123');
+  assert.strictEqual(profile.name, 'Abdur Rahman');
+  assert.strictEqual(profile.email, 'abdur.rahman@vit.edu.in');
+  assert.strictEqual(profile.personalEmail, 'rahman.studyjee@gmail.com');
+  assert.strictEqual(profile.role, 'student');
+  assert.strictEqual(profile.semester, 'Semester 4');
+  assert.strictEqual(profile.currentYear, 'SE');
+  assert.strictEqual(profile.careerGoal, 'Software Engineer');
+  assert.deepStrictEqual(profile.skills, ['Python', 'TypeScript', 'React']);
+});
+
+test('mapUserDbToProfile: correctly maps alumni profile fields', () => {
+  const userRow = {
+    id: 'alumni-456',
+    name: 'Jane Doe',
+    email: 'jane@gmail.com',
+    role: 'alumni',
+    department: 'CMPN',
+    bio: 'Senior Engineer at Google'
+  };
+  const roleRow = {
+    user_id: 'alumni-456',
+    company: 'Google',
+    designation: 'Staff SWE',
+    graduation_year: 2020,
+    is_mentoring_available: true,
+    max_mentees: 5
+  };
+
+  const profile = mapUserDbToProfile(userRow, roleRow);
+  assert.strictEqual(profile.role, 'alumni');
+  assert.strictEqual(profile.company, 'Google');
+  assert.strictEqual(profile.designation, 'Staff SWE');
+  assert.strictEqual(profile.graduationYear, 2020);
+  assert.strictEqual(profile.maxMentees, 5);
+  assert.strictEqual(profile.isMentoringAvailable, true);
+});
+
+test('redactUserPrivacyFields: redacts personal email and private phone for other viewers', () => {
+  const student = {
+    id: 'student-1',
+    name: 'Abdur',
+    email: 'abdur@vit.edu.in',
+    personalEmail: 'abdur@gmail.com',
+    phone: '+91 9999999999',
+    role: 'student',
+    avatar: '',
+    department: 'CMPN',
+    privacySettings: {
+      email: 'institution',
+      phone: 'private',
+      company: 'public',
+      higherEd: 'public'
+    }
+  };
+
+  const viewer = {
+    id: 'other-user',
+    name: 'Peer',
+    email: 'peer@vit.edu.in',
+    role: 'student',
+    avatar: '',
+    department: 'CMPN'
+  };
+
+  const redacted = redactUserPrivacyFields(student, viewer);
+  assert.strictEqual(redacted.personalEmail, undefined, 'Personal recovery email should not be exposed to other viewers');
+  assert.strictEqual(redacted.phone, undefined, 'Private phone should be redacted for other viewers');
+  assert.strictEqual(redacted.email, 'abdur@vit.edu.in', 'Institutional email is visible to logged-in user');
+});
+
+test('redactUserPrivacyFields: preserves personal details when viewing own profile', () => {
+  const student = {
+    id: 'student-1',
+    name: 'Abdur',
+    email: 'abdur@vit.edu.in',
+    personalEmail: 'abdur@gmail.com',
+    phone: '+91 9999999999',
+    role: 'student',
+    avatar: '',
+    department: 'CMPN'
+  };
+
+  const selfRedacted = redactUserPrivacyFields(student, student);
+  assert.strictEqual(selfRedacted.personalEmail, 'abdur@gmail.com');
+  assert.strictEqual(selfRedacted.phone, '+91 9999999999');
+});
+
+// ----------------------------------------------------------------------------
+// 6. Opportunity Applications Pipeline Tests
+// ----------------------------------------------------------------------------
+test('mapRowToApplication: correctly maps database row columns and normalizes status', () => {
+  const row = {
+    id: 'app-uuid-1',
+    job_id: 'job-uuid-1',
+    applicant_id: 'user-student-1',
+    applicant_name: 'Ananya Sharma',
+    applicant_email: 'ananya.s@vit.edu.in',
+    applicant_department: 'CMPN',
+    applicant_year: '2026',
+    applied_at: '2026-03-15T12:00:00Z',
+    status: 'Submitted',
+    status_updated_at: '2026-03-15T12:05:00Z',
+    cover_note: 'Excited to apply for this backend engineering role.',
+    resume_url: 'resumes/ananya-sharma.pdf',
+    poster_note: 'Strong candidate with Docker experience'
+  };
+
+  const mapped = mapRowToApplication(row);
+
+  assert.strictEqual(mapped.id, 'app-uuid-1');
+  assert.strictEqual(mapped.opportunityId, 'job-uuid-1');
+  assert.strictEqual(mapped.applicantId, 'user-student-1');
+  assert.strictEqual(mapped.applicantName, 'Ananya Sharma');
+  assert.strictEqual(mapped.applicantEmail, 'ananya.s@vit.edu.in');
+  assert.strictEqual(mapped.applicantDepartment, 'CMPN');
+  assert.strictEqual(mapped.applicantYear, '2026');
+  assert.strictEqual(mapped.status, 'submitted', 'Status should be normalized to lowercase canonical status');
+  assert.strictEqual(mapped.studentNote, 'Excited to apply for this backend engineering role.');
+  assert.strictEqual(mapped.resumePath, 'resumes/ananya-sharma.pdf');
+  assert.strictEqual(mapped.posterNote, 'Strong candidate with Docker experience');
+});
+
+test('normalizeApplicationStatus: normalizes various status casing and defaults unknown to submitted', () => {
+  assert.strictEqual(normalizeApplicationStatus('VIEWED'), 'viewed');
+  assert.strictEqual(normalizeApplicationStatus('under review'), 'viewed');
+  assert.strictEqual(normalizeApplicationStatus('Shortlisted'), 'shortlisted');
+  assert.strictEqual(normalizeApplicationStatus('Not Selected'), 'not_selected');
+  assert.strictEqual(normalizeApplicationStatus('rejected'), 'not_selected');
+  assert.strictEqual(normalizeApplicationStatus('CustomStatus'), 'submitted');
+  assert.strictEqual(normalizeApplicationStatus(undefined), 'submitted');
+});
+
+test('validateApplicationPreflights: correctly enforces preflight business rules', () => {
+  const verifiedStudent = { id: 'student-1', isVerified: true };
+  const unverifiedStudent = { id: 'student-2', isVerified: false };
+  const job = { id: 'job-1', postedByAlumniId: 'alumni-1', status: 'Active', applicationDeadline: '2026-12-31' };
+
+  // 1. Unverified candidate
+  const unverifiedRes = validateApplicationPreflights({ currentUser: unverifiedStudent, job });
+  assert.strictEqual(unverifiedRes.canApply, false);
+  assert.match(unverifiedRes.reason || '', /verified/i);
+
+  // 2. Self application
+  const ownJobRes = validateApplicationPreflights({ currentUser: verifiedStudent, job: { ...job, postedByAlumniId: 'student-1' } });
+  assert.strictEqual(ownJobRes.canApply, false);
+  assert.match(ownJobRes.reason || '', /published/i);
+
+  // 3. Closed job
+  const closedRes = validateApplicationPreflights({ currentUser: verifiedStudent, job: { ...job, status: 'Closed' } });
+  assert.strictEqual(closedRes.canApply, false);
+  assert.match(closedRes.reason || '', /closed/i);
+
+  // 4. Past deadline
+  const expiredRes = validateApplicationPreflights({ currentUser: verifiedStudent, job: { ...job, applicationDeadline: '2020-01-01' } });
+  assert.strictEqual(expiredRes.canApply, false);
+  assert.match(expiredRes.reason || '', /deadline/i);
+
+  // 5. Already applied
+  const duplicateRes = validateApplicationPreflights({ currentUser: verifiedStudent, job, hasAlreadyApplied: true });
+  assert.strictEqual(duplicateRes.canApply, false);
+  assert.match(duplicateRes.reason || '', /already/i);
+
+  // 6. Valid candidate passes
+  const validRes = validateApplicationPreflights({ currentUser: verifiedStudent, job, hasAlreadyApplied: false });
+  assert.strictEqual(validRes.canApply, true);
+  assert.strictEqual(validRes.reason, undefined);
+});

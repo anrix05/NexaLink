@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { RoleGate } from '../../components/common/RoleGate';
-import type { JobListing, OpportunityType, StudentProfile } from '../../types';
+import type { JobListing, OpportunityType, StudentProfile, OpportunityApplication } from '../../types';
 import { calculateOpportunityMatch } from '../../utils/recommendationEngine';
 import { normalizeOpportunityType, OPPORTUNITY_TAXONOMY, type CanonicalOpportunityType } from '../../constants/taxonomy';
 import { OpportunityRow } from '../../components/opportunities/OpportunityRow';
 import { OpportunityDetailPanel } from '../../components/opportunities/OpportunityDetailPanel';
+import { ApplyOpportunitySheet } from '../../components/opportunities/ApplyOpportunitySheet';
 import { OpportunityComposerPage } from '../opportunities/OpportunityComposerPage';
 import { OpportunityManageConsole } from '../opportunities/OpportunityManageConsole';
 import {
@@ -19,7 +20,12 @@ import {
   MapPin,
   X,
   Building2,
-  CheckCircle2
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  FileText,
+  ExternalLink,
+  SlidersHorizontal
 } from 'lucide-react';
 import {
   Button,
@@ -35,7 +41,7 @@ interface JobPortalPageProps {
 }
 
 export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) => {
-  const { jobsList, addJob, applyForJob, isDataLoading, setPendingChatUserId } = useData();
+  const { jobsList, addJob, applyForJob, opportunityApplications, isDataLoading, setPendingChatUserId } = useData();
   const { currentUser, currentRole } = useAuth();
 
   const isHostRole = currentRole === 'alumni' || currentRole === 'faculty' || currentRole === 'admin';
@@ -52,19 +58,49 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
     if (typeof window === 'undefined') return null;
     return new URLSearchParams(window.location.search).get('jobId');
   });
-  const [activePortalTab, setActivePortalTab] = useState<'all' | 'postings'>('all');
+  const [activePortalTab, setActivePortalTab] = useState<'all' | 'my_applications' | 'postings'>('all');
 
   const [activeTaxonomy, setActiveTaxonomy] = useState<string>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocation, setSelectedLocation] = useState<string>('All');
   const [onlyMatchingSkills, setOnlyMatchingSkills] = useState(false);
   const [onlySaved, setOnlySaved] = useState(false);
+  const [showMobileFiltersSheet, setShowMobileFiltersSheet] = useState(false);
+
+  const activeFilterCount = useMemo(() => {
+    return (selectedLocation !== 'All' ? 1 : 0) + (onlyMatchingSkills ? 1 : 0) + (onlySaved ? 1 : 0);
+  }, [selectedLocation, onlyMatchingSkills, onlySaved]);
 
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [showPostJobModal, setShowPostJobModal] = useState(false);
-  const [appliedJobIds, setAppliedJobIds] = useState<string[]>([]);
   const [savedJobIds, setSavedJobIds] = useState<string[]>(['job-1']);
+
+  // Apply modal & feedback states
+  const [applyingJob, setApplyingJob] = useState<JobListing | null>(null);
   const [applySuccessMsg, setApplySuccessMsg] = useState<string | null>(null);
+  const [toastWarningMsg, setToastWarningMsg] = useState<string | null>(null);
+
+  const showToastWarning = (msg: string) => {
+    setToastWarningMsg(msg);
+    setTimeout(() => setToastWarningMsg(null), 4000);
+  };
+
+  // Map of job_id -> application submitted by the logged-in student
+  const appliedJobMap = useMemo(() => {
+    const map = new Map<string, OpportunityApplication>();
+    if (currentUser?.id) {
+      opportunityApplications
+        .filter(a => a.applicantId === currentUser.id)
+        .forEach(a => map.set(a.opportunityId, a));
+    }
+    return map;
+  }, [opportunityApplications, currentUser?.id]);
+
+  // List of all applications submitted by current user
+  const myApplications = useMemo(() => {
+    if (!currentUser?.id) return [];
+    return opportunityApplications.filter(a => a.applicantId === currentUser.id);
+  }, [opportunityApplications, currentUser?.id]);
 
   const [isMobileScreen, setIsMobileScreen] = useState<boolean>(
     () => typeof window !== 'undefined' && window.innerWidth < 1024
@@ -272,10 +308,44 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
   }, [publishedJobs, selectedJobId]);
 
   const handleApply = (jobId: string) => {
-    applyForJob(jobId);
-    setAppliedJobIds(prev => [...prev, jobId]);
-    setApplySuccessMsg('Application submitted. Your verified profile has been transmitted to the publisher.');
-    setTimeout(() => setApplySuccessMsg(null), 4000);
+    const targetJob = jobsList.find(j => j.id === jobId);
+    if (!targetJob) return;
+
+    if (!currentUser?.id) {
+      showToastWarning('Please log in to apply for opportunities.');
+      return;
+    }
+
+    if (!currentUser.isVerified) {
+      showToastWarning('Only verified institutional members may apply for opportunities. Please complete your profile verification.');
+      return;
+    }
+
+    if (targetJob.postedByAlumniId === currentUser.id) {
+      showToastWarning('You cannot apply to an opportunity you published.');
+      return;
+    }
+
+    if (targetJob.status === 'Closed' || targetJob.lifecycleStatus === 'closed') {
+      showToastWarning('This opportunity is closed and no longer accepting applications.');
+      return;
+    }
+
+    if (targetJob.applicationDeadline) {
+      const deadline = new Date(targetJob.applicationDeadline);
+      deadline.setHours(23, 59, 59, 999);
+      if (Date.now() > deadline.getTime()) {
+        showToastWarning('The application deadline for this opportunity has passed.');
+        return;
+      }
+    }
+
+    if (appliedJobMap.has(jobId)) {
+      showToastWarning('You have already submitted an application for this opportunity.');
+      return;
+    }
+
+    setApplyingJob(targetJob);
   };
 
   const handleToggleSaveJob = (e: React.MouseEvent, jobId: string) => {
@@ -430,20 +500,36 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
         </RoleGate>
       </div>
 
-      {/* Host Sub-tabs */}
-      {isHostRole && (
-        <div className="flex items-center gap-2 border-b border-[#E5E7EB]">
-          <button
-            type="button"
-            onClick={() => setActivePortalTab('all')}
-            className={`pb-2.5 px-3 text-xs font-semibold cursor-pointer border-b-2 transition-colors ${
-              activePortalTab === 'all'
-                ? 'border-[#0A0A0A] text-[#0A0A0A]'
-                : 'border-transparent text-[#6B7280] hover:text-[#0A0A0A]'
-            }`}
-          >
-            All opportunities
-          </button>
+      {/* Opportunities Sub-tabs: All opportunities, My applications (count), Your postings (for host/admin) */}
+      <div className="flex items-center gap-2 border-b border-[#E5E7EB]">
+        <button
+          type="button"
+          onClick={() => setActivePortalTab('all')}
+          className={`pb-2.5 px-3 text-xs font-semibold cursor-pointer border-b-2 transition-colors ${
+            activePortalTab === 'all'
+              ? 'border-[#0A0A0A] text-[#0A0A0A]'
+              : 'border-transparent text-[#6B7280] hover:text-[#0A0A0A]'
+          }`}
+        >
+          All opportunities
+        </button>
+        <button
+          type="button"
+          onClick={() => setActivePortalTab('my_applications')}
+          className={`pb-2.5 px-3 text-xs font-semibold cursor-pointer border-b-2 transition-colors flex items-center gap-1.5 ${
+            activePortalTab === 'my_applications'
+              ? 'border-[#0A0A0A] text-[#0A0A0A]'
+              : 'border-transparent text-[#6B7280] hover:text-[#0A0A0A]'
+          }`}
+        >
+          <span>My applications</span>
+          {myApplications.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-neutral-100 text-[#0A0A0A] font-mono">
+              {myApplications.length}
+            </span>
+          )}
+        </button>
+        {isHostRole && (
           <button
             type="button"
             onClick={() => setActivePortalTab('postings')}
@@ -458,17 +544,162 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
               {hostJobs.length}
             </span>
           </button>
+        )}
+      </div>
+
+      {toastWarningMsg && (
+        <div className="p-3.5 bg-amber-50 border border-amber-200 text-amber-950 text-xs font-medium rounded-xl flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+            <span>{toastWarningMsg}</span>
+          </div>
+          <button onClick={() => setToastWarningMsg(null)} className="text-amber-800 hover:text-amber-950 p-1">
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
       {applySuccessMsg && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs font-medium rounded-xl flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-[#065F46] shrink-0" />
-          <span>{applySuccessMsg}</span>
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs font-medium rounded-xl flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-[#065F46] shrink-0" />
+            <span>{applySuccessMsg}</span>
+          </div>
+          <button onClick={() => setApplySuccessMsg(null)} className="text-emerald-800 hover:text-emerald-950 p-1">
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
-      {activePortalTab === 'postings' ? (
+      {activePortalTab === 'my_applications' ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-[#6B7280]">
+              Showing <strong className="text-[#0A0A0A] font-semibold">{myApplications.length}</strong> applications submitted by you.
+            </p>
+          </div>
+
+          {myApplications.length === 0 ? (
+            <div className="bg-white border border-[#E5E7EB] rounded-2xl p-12 text-center space-y-3">
+              <FileText className="w-8 h-8 text-[#9CA3AF] mx-auto opacity-50" />
+              <h3 className="text-sm font-bold text-[#0A0A0A]">No applications yet</h3>
+              <p className="text-xs text-[#6B7280] max-w-sm mx-auto">
+                Explore full-time roles, internships, or research opportunities published by alumni and faculty.
+              </p>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => setActivePortalTab('all')}
+              >
+                Explore opportunities
+              </Button>
+            </div>
+          ) : (
+            <div className="bg-white border border-[#E5E7EB] rounded-2xl overflow-hidden shadow-none divide-y divide-[#E5E7EB]">
+              {myApplications.map((app) => {
+                const targetJob = jobsList.find(j => j.id === app.opportunityId);
+                const appliedDateStr = new Date(app.appliedAt).toLocaleDateString('en-IN', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric'
+                });
+
+                const statusBadge = (() => {
+                  switch (app.status) {
+                    case 'viewed':
+                      return (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                          <Clock className="w-3 h-3" />
+                          Viewed · Under review
+                        </span>
+                      );
+                    case 'shortlisted':
+                      return (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Shortlisted
+                        </span>
+                      );
+                    case 'not_selected':
+                      return (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                          Not selected
+                        </span>
+                      );
+                    case 'submitted':
+                    default:
+                      return (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-neutral-100 text-[#0A0A0A] border border-[#E5E7EB]">
+                          Submitted
+                        </span>
+                      );
+                  }
+                })();
+
+                return (
+                  <div key={app.id} className="p-4 sm:p-5 flex flex-col gap-3 hover:bg-neutral-50/50 transition-colors">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                      <div className="space-y-1 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-[#0A0A0A]">
+                            {targetJob?.title || 'Opportunity'}
+                          </span>
+                          {targetJob?.company && (
+                            <span className="text-xs font-medium text-[#6B7280]">
+                              at {targetJob.company}
+                            </span>
+                          )}
+                          {statusBadge}
+                        </div>
+
+                        <div className="flex items-center gap-3 text-[11px] text-[#6B7280] flex-wrap">
+                          {targetJob?.location && <span>{targetJob.location}</span>}
+                          {targetJob?.type && <span>• {targetJob.type}</span>}
+                          <span>• Applied {appliedDateStr}</span>
+                          {targetJob?.postedByAlumniName && (
+                            <span>• Posted by {targetJob.postedByAlumniName}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {targetJob && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            setActivePortalTab('all');
+                            setSelectedJobId(targetJob.id);
+                          }}
+                          className="self-start shrink-0"
+                        >
+                          View opportunity
+                        </Button>
+                      )}
+                    </div>
+
+                    {app.studentNote && (
+                      <div className="text-xs text-[#4B5563] bg-neutral-50 border border-neutral-100 rounded-lg p-2.5">
+                        <span className="font-semibold text-[#0A0A0A]">Cover note: </span>
+                        <span>"{app.studentNote}"</span>
+                      </div>
+                    )}
+
+                    {app.posterNote && (
+                      <div className="text-xs bg-amber-50/70 border border-amber-200 text-amber-950 rounded-lg p-3 space-y-1">
+                        <div className="flex items-center gap-1.5 font-semibold text-amber-900">
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>Note from publisher</span>
+                        </div>
+                        <p className="text-amber-950">{app.posterNote}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : activePortalTab === 'postings' ? (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-xs text-[#6B7280]">
@@ -579,102 +810,302 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
         </div>
       ) : (
         <>
-          {/* Single-Row Control Bar: Search + Taxonomy Pills + Location + Skill Matches + Saved */}
-          <div className="bg-white border border-[#E5E7EB] rounded-2xl p-3 px-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-none">
-        
-        {/* Left: Search input */}
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="w-4 h-4 text-[#9CA3AF] absolute left-3.5 top-2.5 pointer-events-none" />
-          <input
-            ref={searchInputRef}
-            type="text"
-            placeholder="Search by title, company, location, or skill..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full h-9 pl-9 pr-8 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl text-xs font-normal text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] transition-colors placeholder:text-[#9CA3AF]"
-          />
-          {searchTerm && (
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                searchInputRef.current?.focus();
-              }}
-              className="absolute right-2.5 top-2.5 text-[#9CA3AF] hover:text-[#0A0A0A]"
-              title="Clear search"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+          {/* Mobile Filter Area (Unboxed, single scrollable chip row, filters button) */}
+          <div className="space-y-3 sm:hidden">
+            {/* Search Field */}
+            <div className="relative w-full">
+              <Search className="w-4 h-4 text-[#9CA3AF] absolute left-3.5 top-3 pointer-events-none" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search roles or companies"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full h-10 pl-9 pr-9 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl text-xs font-normal text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] transition-colors placeholder:text-[#9CA3AF]"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm('');
+                    searchInputRef.current?.focus();
+                  }}
+                  className="absolute right-3 top-3 text-[#9CA3AF] hover:text-[#0A0A0A]"
+                  title="Clear search"
+                  aria-label="Clear search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
 
-        {/* Right: Taxonomy Pills + Location + Toggles */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Taxonomy Pills */}
-          <div className="flex items-center border border-[#E5E7EB] rounded-xl p-0.5 bg-[#F9FAFB]">
-            {taxonomyOptions.map((opt) => (
+            {/* Horizontal Snap-Scroll Type Chips + Single "Filters" Button */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 min-w-0 overflow-hidden">
+                <div className="flex items-center gap-1.5 overflow-x-auto snap-x snap-mandatory py-0.5 no-scrollbar scroll-smooth">
+                  {taxonomyOptions.map((opt) => {
+                    const isSelected = activeTaxonomy === opt.id;
+                    const labelText = opt.id === 'All' ? 'All' : opt.label;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setActiveTaxonomy(opt.id)}
+                        className={`snap-start shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer touch-target-44 select-none ${
+                          isSelected
+                            ? 'bg-[#0A0A0A] text-white shadow-2xs font-semibold'
+                            : 'bg-[#F3F4F6] text-[#6B7280] hover:text-[#0A0A0A] hover:bg-[#E5E7EB]'
+                        }`}
+                      >
+                        {labelText}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Edge fade */}
+                <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-white to-transparent" />
+              </div>
+
+              {/* Single "Filters" Button with Active Count Badge */}
               <button
-                key={opt.id}
-                onClick={() => setActiveTaxonomy(opt.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                  activeTaxonomy === opt.id
-                    ? 'bg-[#0A0A0A] text-white shadow-2xs'
-                    : 'text-[#6B7280] hover:text-[#0A0A0A]'
+                type="button"
+                onClick={() => setShowMobileFiltersSheet(true)}
+                className={`shrink-0 h-9 px-3 rounded-full border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer touch-target-44 ${
+                  activeFilterCount > 0
+                    ? 'bg-[#0A0A0A] text-white border-[#0A0A0A]'
+                    : 'bg-white text-[#0A0A0A] border-[#E5E7EB] hover:bg-[#F9FAFB]'
                 }`}
+                aria-label="Open filter settings"
               >
-                {opt.label}
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>Filters</span>
+                {activeFilterCount > 0 && (
+                  <span className="min-w-[16px] h-4 px-1 rounded-full bg-white text-[#0A0A0A] text-[10px] font-bold flex items-center justify-center">
+                    {activeFilterCount}
+                  </span>
+                )}
               </button>
-            ))}
+            </div>
           </div>
 
-          {/* Location Select Dropdown */}
-          <select
-            value={selectedLocation}
-            onChange={(e) => setSelectedLocation(e.target.value)}
-            className="h-9 px-3 bg-white border border-[#E5E7EB] rounded-xl text-xs font-medium text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] cursor-pointer"
-          >
-            <option value="All">All locations</option>
-            {locationsList.map((loc) => (
-              <option key={loc} value={loc}>
-                {loc}
-              </option>
-            ))}
-          </select>
+          {/* Desktop Single-Row Control Bar: Search + Taxonomy Pills + Location + Skill Matches + Saved */}
+          <div className="hidden sm:flex bg-white border border-[#E5E7EB] rounded-2xl p-3 px-4 flex-col md:flex-row md:items-center justify-between gap-3 shadow-none">
+        
+            {/* Left: Search input */}
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="w-4 h-4 text-[#9CA3AF] absolute left-3.5 top-2.5 pointer-events-none" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search by title, company, location, or skill..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full h-9 pl-9 pr-8 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl text-xs font-normal text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] transition-colors placeholder:text-[#9CA3AF]"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm('');
+                    searchInputRef.current?.focus();
+                  }}
+                  className="absolute right-2.5 top-2.5 text-[#9CA3AF] hover:text-[#0A0A0A]"
+                  title="Clear search"
+                  aria-label="Clear search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
 
-          {/* "Matches my skills" Toggle (Student only) */}
-          {isStudent && (
-            <button
-              onClick={() => setOnlyMatchingSkills((prev) => !prev)}
-              className={`h-9 px-3 rounded-xl border text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
-                onlyMatchingSkills
-                  ? 'bg-[#0A0A0A] text-white border-[#0A0A0A]'
-                  : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:text-[#0A0A0A] hover:bg-[#F9FAFB]'
-              }`}
+            {/* Right: Taxonomy Pills + Location + Toggles */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Taxonomy Pills */}
+              <div className="flex items-center border border-[#E5E7EB] rounded-xl p-0.5 bg-[#F9FAFB]">
+                {taxonomyOptions.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setActiveTaxonomy(opt.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                      activeTaxonomy === opt.id
+                        ? 'bg-[#0A0A0A] text-white shadow-2xs'
+                        : 'text-[#6B7280] hover:text-[#0A0A0A]'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Location Select Dropdown */}
+              <select
+                value={selectedLocation}
+                onChange={(e) => setSelectedLocation(e.target.value)}
+                className="h-9 px-3 bg-white border border-[#E5E7EB] rounded-xl text-xs font-medium text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] cursor-pointer"
+              >
+                <option value="All">All locations</option>
+                {locationsList.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
+              </select>
+
+              {/* "Matches my skills" Toggle (Student only) */}
+              {isStudent && (
+                <button
+                  type="button"
+                  onClick={() => setOnlyMatchingSkills((prev) => !prev)}
+                  className={`h-9 px-3 rounded-xl border text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
+                    onlyMatchingSkills
+                      ? 'bg-[#0A0A0A] text-white border-[#0A0A0A]'
+                      : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:text-[#0A0A0A] hover:bg-[#F9FAFB]'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Matching skills</span>
+                </button>
+              )}
+
+              {/* "Saved" Filter Toggle */}
+              <button
+                type="button"
+                onClick={() => setOnlySaved((prev) => !prev)}
+                className={`h-9 px-3 rounded-xl border text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  onlySaved
+                    ? 'bg-[#0A0A0A] text-white border-[#0A0A0A]'
+                    : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:text-[#0A0A0A] hover:bg-[#F9FAFB]'
+                }`}
+              >
+                <Bookmark className={`w-3.5 h-3.5 ${onlySaved ? 'fill-current' : ''}`} />
+                <span>Saved ({savedJobIds.length})</span>
+              </button>
+            </div>
+
+          </div>
+
+          {/* Mobile Filters Bottom Sheet */}
+          {showMobileFiltersSheet && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              className="fixed inset-0 z-50 bg-[#0A0A0A]/40 backdrop-blur-xs flex flex-col justify-end"
+              onClick={() => setShowMobileFiltersSheet(false)}
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Matching skills</span>
-            </button>
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white w-full rounded-t-2xl border-t border-[#E5E7EB] shadow-2xl p-5 space-y-4 animate-in slide-in-from-bottom duration-200 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+              >
+                {/* Drag handle */}
+                <div className="w-12 h-1 bg-neutral-300 rounded-full mx-auto" />
+
+                <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
+                  <h3 className="font-bold text-sm text-[#0A0A0A]">Filter opportunities</h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowMobileFiltersSheet(false)}
+                    className="p-1 rounded-lg text-[#6B7280] hover:text-[#0A0A0A]"
+                    aria-label="Close filters"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Location Dropdown */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[#0A0A0A] block">Location</label>
+                    <select
+                      value={selectedLocation}
+                      onChange={(e) => setSelectedLocation(e.target.value)}
+                      className="w-full h-10 px-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl text-xs font-medium text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A]"
+                    >
+                      <option value="All">All locations</option>
+                      {locationsList.map((loc) => (
+                        <option key={loc} value={loc}>
+                          {loc}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Matching Skills Toggle (Student only) */}
+                  {isStudent && (
+                    <div className="flex items-center justify-between p-3 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB]">
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-semibold text-[#0A0A0A] block">Matching skills</span>
+                        <span className="text-[11px] text-[#6B7280] block">Show opportunities with &ge;60% match</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setOnlyMatchingSkills(prev => !prev)}
+                        className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                          onlyMatchingSkills ? 'bg-[#0A0A0A]' : 'bg-neutral-300'
+                        }`}
+                        aria-pressed={onlyMatchingSkills}
+                      >
+                        <span
+                          className={`block w-5 h-5 rounded-full bg-white transition-transform ${
+                            onlyMatchingSkills ? 'translate-x-5' : 'translate-x-0.5'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Saved Jobs Toggle */}
+                  <div className="flex items-center justify-between p-3 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB]">
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-semibold text-[#0A0A0A] block">Saved only</span>
+                      <span className="text-[11px] text-[#6B7280] block">Show bookmarked jobs ({savedJobIds.length})</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setOnlySaved(prev => !prev)}
+                      className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                        onlySaved ? 'bg-[#0A0A0A]' : 'bg-neutral-300'
+                      }`}
+                      aria-pressed={onlySaved}
+                    >
+                      <span
+                        className={`block w-5 h-5 rounded-full bg-white transition-transform ${
+                          onlySaved ? 'translate-x-5' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Action Footer */}
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedLocation('All');
+                      setOnlyMatchingSkills(false);
+                      setOnlySaved(false);
+                    }}
+                    className="py-2.5 px-4 rounded-xl border border-[#E5E7EB] text-xs font-medium text-[#6B7280] hover:text-[#0A0A0A] transition-colors"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowMobileFiltersSheet(false)}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-[#0A0A0A] text-white text-xs font-semibold hover:bg-neutral-800 transition-colors"
+                  >
+                    Show {filteredJobs.length} opportunities
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
-          {/* "Saved" Filter Toggle */}
-          <button
-            onClick={() => setOnlySaved((prev) => !prev)}
-            className={`h-9 px-3 rounded-xl border text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
-              onlySaved
-                ? 'bg-[#0A0A0A] text-white border-[#0A0A0A]'
-                : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:text-[#0A0A0A] hover:bg-[#F9FAFB]'
-            }`}
-          >
-            <Bookmark className={`w-3.5 h-3.5 ${onlySaved ? 'fill-current' : ''}`} />
-            <span>Saved ({savedJobIds.length})</span>
-          </button>
-        </div>
-
-      </div>
-
-      {/* Main Master-Detail Area */}
-      <div className="flex items-start gap-6 relative min-h-[500px]">
-        {/* Left Column: Hairline Opportunity Rows */}
-        <div className="flex-1 bg-white border border-[#E5E7EB] rounded-2xl overflow-hidden shadow-none">
+          {/* Main Master-Detail Area */}
+          <div className="flex items-start gap-6 relative min-h-[500px]">
+            {/* Left Column: Hairline Opportunity Rows (Unboxed on mobile, safe bottom padding) */}
+            <div className="flex-1 bg-white border border-[#E5E7EB] rounded-2xl overflow-hidden shadow-none pb-[calc(var(--bottomnav-h,56px)+env(safe-area-inset-bottom,0px)+32px)] sm:pb-0">
           <div className="p-3.5 px-5 border-b border-[#E5E7EB] flex items-center justify-between text-xs text-[#6B7280] bg-white">
             <span>
               Showing <strong className="text-[#0A0A0A] font-semibold">{filteredJobs.length}</strong> opportunities
@@ -730,7 +1161,8 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
               {filteredJobs.map((job) => {
                 const isSelected = job.id === selectedJobId;
                 const isSaved = savedJobIds.includes(job.id);
-                const isApplied = appliedJobIds.includes(job.id);
+                const isApplied = appliedJobMap.has(job.id);
+                const application = appliedJobMap.get(job.id);
                 const matchScore = matchScoresMap.get(job.id);
 
                 return (
@@ -740,6 +1172,7 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
                     isSelected={isSelected}
                     isSaved={isSaved}
                     isApplied={isApplied}
+                    applicationStatus={application?.status}
                     matchScore={matchScore}
                     onSelect={() => handleSelectJob(job.id)}
                     onToggleSave={(e) => handleToggleSaveJob(e, job.id)}
@@ -757,7 +1190,8 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
             job={selectedJob}
             currentUser={currentUser}
             isSaved={savedJobIds.includes(selectedJob.id)}
-            isApplied={appliedJobIds.includes(selectedJob.id)}
+            isApplied={appliedJobMap.has(selectedJob.id)}
+            applicationStatus={appliedJobMap.get(selectedJob.id)?.status}
             onClose={handleClosePanel}
             onToggleSave={(e) => handleToggleSaveJob(e, selectedJob.id)}
             onApply={(id) => handleApply(id)}
@@ -858,6 +1292,24 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
           </div>
         </form>
       </Modal>
+
+      {/* Apply to Opportunity Sheet / Modal */}
+      {applyingJob && currentUser && (
+        <ApplyOpportunitySheet
+          job={applyingJob}
+          currentUser={currentUser}
+          isOpen={!!applyingJob}
+          onClose={() => setApplyingJob(null)}
+          onSubmit={async ({ resumeUrl, coverNote }) => {
+            const res = await applyForJob(applyingJob.id, { resumeUrl, coverNote });
+            if (res.success) {
+              setApplySuccessMsg(`Application sent for ${applyingJob.title} at ${applyingJob.company}. You can track it under My applications.`);
+              setTimeout(() => setApplySuccessMsg(null), 5000);
+            }
+            return res;
+          }}
+        />
+      )}
 
     </div>
   );

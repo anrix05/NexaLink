@@ -1,11 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { ArrowRight, RefreshCw, GraduationCap, Briefcase, Award, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, RefreshCw, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { FormField } from './FormField';
 import { TextInput } from './TextInput';
 import { PasswordField } from './PasswordField';
 import { InlineAlert } from './InlineAlert';
 import { useCountdown } from '../../hooks/useCountdown';
 import { useAuth } from '../../context/AuthContext';
+import { SIGN_IN_EMAIL_HELPER } from '../../config/emailDomains';
 
 export interface SignInFormProps {
   onSwitchToRegister: () => void;
@@ -42,44 +43,7 @@ export const SignInForm: React.FC<SignInFormProps> = ({
   const emailInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
-  // Compute live role hint based on typing pattern (icon + text, neutral tone)
-  const getRoleHint = (val: string) => {
-    const trimmed = val.trim().toLowerCase();
-    if (!trimmed || !trimmed.includes('@')) return null;
 
-    if (trimmed.endsWith('@student.vit.edu.in')) {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs text-[#6B7280]">
-          <GraduationCap className="w-3.5 h-3.5" aria-hidden="true" />
-          <span>Student account</span>
-        </span>
-      );
-    }
-
-    if (trimmed.endsWith('@vit.edu.in')) {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs text-[#6B7280]">
-          <Briefcase className="w-3.5 h-3.5" aria-hidden="true" />
-          <span>Faculty account</span>
-        </span>
-      );
-    }
-
-    // Any other domain format
-    const basicRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (basicRegex.test(trimmed)) {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs text-[#6B7280]">
-          <Award className="w-3.5 h-3.5" aria-hidden="true" />
-          <span>Alumni accounts sign in with their personal email.</span>
-        </span>
-      );
-    }
-
-    return null;
-  };
-
-  const roleHint = getRoleHint(email);
 
   const validate = () => {
     const errors: { email?: string; password?: string } = {};
@@ -148,7 +112,7 @@ export const SignInForm: React.FC<SignInFormProps> = ({
     <div className={`w-full flex flex-col gap-6 ${className}`}>
       {/* Title & Subtitle */}
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl sm:text-3xl font-serif font-normal text-[#0A0A0A] tracking-tight leading-tight">
+        <h1 className="text-2xl sm:text-3xl font-display font-bold text-[#0A0A0A] tracking-tight leading-tight">
           Welcome back
         </h1>
         <p className="text-sm text-[#6B7280] leading-relaxed">
@@ -211,7 +175,7 @@ export const SignInForm: React.FC<SignInFormProps> = ({
         <FormField
           id="signin-email"
           label="Email address"
-          hint={roleHint}
+          hint={SIGN_IN_EMAIL_HELPER}
           error={fieldErrors.email}
           required
         >

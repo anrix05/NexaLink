@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
+import { useMobileChrome } from '../../context/MobileChromeContext';
 import type {
   JobListing,
   OpportunityType,
@@ -59,6 +60,12 @@ export const OpportunityComposerPage: React.FC<OpportunityComposerPageProps> = (
 }) => {
   const { jobsList, saveOpportunityDraft, submitOpportunityForReview } = useData();
   const { currentUser, currentRole } = useAuth();
+  const { setHideMobileChrome } = useMobileChrome();
+
+  useEffect(() => {
+    setHideMobileChrome(true);
+    return () => setHideMobileChrome(false);
+  }, [setHideMobileChrome]);
 
   const isEditing = !!opportunityId;
   const existingJob = useMemo(() => {
@@ -71,7 +78,7 @@ export const OpportunityComposerPage: React.FC<OpportunityComposerPageProps> = (
   const [company, setCompany] = useState(existingJob?.company || '');
   const [companyLogo, setCompanyLogo] = useState(existingJob?.companyLogo || '');
   const [workMode, setWorkMode] = useState<OpportunityWorkMode>(existingJob?.workMode || 'Hybrid');
-  const [location, setLocation] = useState(existingJob?.location || 'Mumbai / Hybrid');
+  const [location, setLocation] = useState(existingJob?.location || '');
   const [openings, setOpenings] = useState<number>(existingJob?.openings || 1);
 
   // Compensation State
@@ -187,7 +194,7 @@ export const OpportunityComposerPage: React.FC<OpportunityComposerPageProps> = (
       title: title.trim() || 'Untitled Opportunity Draft',
       company: company.trim() || 'Pending Organization',
       companyLogo: companyLogo.trim() || undefined,
-      location: location.trim(),
+      location: workMode === 'Remote' ? (location.trim() || 'Remote') : location.trim(),
       type,
       workMode,
       openings,
@@ -257,8 +264,8 @@ export const OpportunityComposerPage: React.FC<OpportunityComposerPageProps> = (
     if (!company.trim()) {
       errors.company = 'Company or organization name is required.';
     }
-    if (!location.trim()) {
-      errors.location = 'Location or remote indicator is required.';
+    if (workMode !== 'Remote' && !location.trim()) {
+      errors.location = 'Location is required for hybrid and on-site opportunities.';
     }
     if (selectedDepts.length === 0) {
       errors.depts = 'Select at least one eligible academic department.';
@@ -305,7 +312,7 @@ export const OpportunityComposerPage: React.FC<OpportunityComposerPageProps> = (
       title: title.trim(),
       company: company.trim(),
       companyLogo: companyLogo.trim() || undefined,
-      location: location.trim(),
+      location: workMode === 'Remote' ? (location.trim() || 'Remote') : location.trim(),
       type,
       workMode,
       openings,
@@ -392,34 +399,35 @@ export const OpportunityComposerPage: React.FC<OpportunityComposerPageProps> = (
   const isAutoPublishRole = currentRole === 'admin' || currentRole === 'faculty';
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] font-sans antialiased text-[#0A0A0A] pb-24">
+    <div className="min-h-screen bg-[#FAFAFA] font-sans antialiased text-[#0A0A0A] pb-36 sm:pb-24">
       {/* Top Fixed Bar */}
       <div className="bg-white border-b border-[#E5E7EB] sticky top-0 z-30 px-4 sm:px-6 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <button
               type="button"
               onClick={onBack}
-              className="p-1.5 text-[#6B7280] hover:text-[#0A0A0A] rounded-lg transition-colors cursor-pointer"
+              className="p-2 text-[#6B7280] hover:text-[#0A0A0A] rounded-lg transition-colors cursor-pointer touch-target-44 shrink-0 -ml-1"
+              aria-label="Back to opportunities"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
-            <div>
-              <h1 className="text-base font-bold text-[#0A0A0A] tracking-tight font-outfit">
-                {isEditing ? 'Edit Opportunity' : 'Post an Opportunity'}
+            <div className="min-w-0 flex-1">
+              <h1 className="text-base font-bold text-[#0A0A0A] tracking-tight font-display truncate">
+                {isEditing ? 'Edit opportunity' : 'Post an opportunity'}
               </h1>
-              <div className="flex items-center gap-2 text-[11px] text-[#6B7280]">
-                <span>{company || 'New posting'}</span>
+              <div className="flex items-center gap-2 text-[11px] text-[#6B7280] truncate font-sans">
+                <span className="truncate">{company || 'New posting'}</span>
                 <span>•</span>
-                <span className="font-mono">
-                  {lastSavedTime ? `Draft saved ${lastSavedTime}` : 'Autosave active'}
+                <span className="shrink-0">
+                  {lastSavedTime ? `Saved on this device ${lastSavedTime}` : 'Autosave active'}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Mobile preview toggle */}
+          {/* Desktop Actions in Header - Hidden on mobile to prevent overflow */}
+          <div className="hidden md:flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setShowMobilePreview(!showMobilePreview)}
@@ -435,7 +443,7 @@ export const OpportunityComposerPage: React.FC<OpportunityComposerPageProps> = (
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-[#6B7280] text-[#0A0A0A] rounded-xl text-xs font-semibold hover:border-[#0A0A0A] transition-colors cursor-pointer"
             >
               <Save className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Save Draft</span>
+              <span>Save draft</span>
             </button>
 
             <button
@@ -444,7 +452,7 @@ export const OpportunityComposerPage: React.FC<OpportunityComposerPageProps> = (
               className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-[#0A0A0A] text-white rounded-xl text-xs font-semibold hover:bg-neutral-800 transition-colors cursor-pointer shadow-sm"
             >
               <Send className="w-3.5 h-3.5" />
-              <span>{isAutoPublishRole ? 'Publish Opportunity' : 'Submit for Review'}</span>
+              <span>{isAutoPublishRole ? 'Publish opportunity' : 'Submit for review'}</span>
             </button>
           </div>
         </div>
@@ -493,67 +501,67 @@ export const OpportunityComposerPage: React.FC<OpportunityComposerPageProps> = (
 
               <div>
                 <label className="block text-xs font-semibold text-[#0A0A0A] mb-1">
-                  Opportunity Title <span className="text-rose-600">*</span>
+                  Opportunity title <span className="text-[#6B7280] text-xs font-normal" aria-hidden="true">*</span>
                 </label>
                 <input
                   type="text"
                   value={title}
                   onChange={e => setTitle(e.target.value)}
                   onBlur={handleAutosave}
-                  placeholder="e.g. Software Engineer - Distributed Systems"
-                  className={`w-full h-10 px-3 bg-white border ${
-                    validationErrors.title ? 'border-rose-500' : 'border-[#6B7280]'
-                  } rounded-xl text-xs text-[#0A0A0A] placeholder-[#9CA3AF] focus:outline-none focus:border-[#0A0A0A]`}
+                  placeholder="e.g. Backend engineer"
+                  className={`w-full min-h-[48px] h-12 px-3 bg-white border ${
+                    validationErrors.title ? 'border-[#DC2626]' : 'border-[#6B7280]'
+                  } rounded-xl text-base sm:text-xs text-[#0A0A0A] placeholder-[#9CA3AF] focus:outline-none focus:border-[#0A0A0A]`}
                 />
                 {validationErrors.title && (
-                  <p className="text-[11px] text-rose-600 mt-1">{validationErrors.title}</p>
+                  <p className="text-[11px] text-[#DC2626] mt-1">{validationErrors.title}</p>
                 )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-[#0A0A0A] mb-1">
-                    Opportunity Type <span className="text-rose-600">*</span>
+                    Opportunity type <span className="text-[#6B7280] text-xs font-normal" aria-hidden="true">*</span>
                   </label>
                   <select
                     value={type}
                     onChange={e => setType(e.target.value as OpportunityType)}
-                    className="w-full h-10 px-3 bg-white border border-[#6B7280] rounded-xl text-xs text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] cursor-pointer"
+                    className="w-full min-h-[48px] h-12 px-3 bg-white border border-[#6B7280] rounded-xl text-base sm:text-xs text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] cursor-pointer"
                   >
-                    <option value="Job Vacancy">Full-time Job</option>
+                    <option value="Job Vacancy">Full-time</option>
                     <option value="Internship">Internship</option>
-                    <option value="Referral">Alumni Referral</option>
-                    <option value="Research">Faculty Research</option>
+                    <option value="Referral">Alumni referral</option>
+                    <option value="Research">Faculty research</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-[#0A0A0A] mb-1">
-                    Company / Organization <span className="text-rose-600">*</span>
+                    Company or organization <span className="text-[#6B7280] text-xs font-normal" aria-hidden="true">*</span>
                   </label>
                   <input
                     type="text"
                     value={company}
                     onChange={e => setCompany(e.target.value)}
                     onBlur={handleAutosave}
-                    placeholder="e.g. Google, Morgan Stanley, VIT Research Lab"
-                    className={`w-full h-10 px-3 bg-white border ${
-                      validationErrors.company ? 'border-rose-500' : 'border-[#6B7280]'
-                    } rounded-xl text-xs text-[#0A0A0A] placeholder-[#9CA3AF] focus:outline-none focus:border-[#0A0A0A]`}
+                    placeholder="e.g. Morgan Stanley or VIT Lab"
+                    className={`w-full min-h-[48px] h-12 px-3 bg-white border ${
+                      validationErrors.company ? 'border-[#DC2626]' : 'border-[#6B7280]'
+                    } rounded-xl text-base sm:text-xs text-[#0A0A0A] placeholder-[#9CA3AF] focus:outline-none focus:border-[#0A0A0A]`}
                   />
                   {validationErrors.company && (
-                    <p className="text-[11px] text-rose-600 mt-1">{validationErrors.company}</p>
+                    <p className="text-[11px] text-[#DC2626] mt-1">{validationErrors.company}</p>
                   )}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-[#0A0A0A] mb-1">Work Mode</label>
+                  <label className="block text-xs font-semibold text-[#0A0A0A] mb-1">Work mode</label>
                   <select
                     value={workMode}
                     onChange={e => setWorkMode(e.target.value as OpportunityWorkMode)}
-                    className="w-full h-10 px-3 bg-white border border-[#6B7280] rounded-xl text-xs text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] cursor-pointer"
+                    className="w-full min-h-[48px] h-12 px-3 bg-white border border-[#6B7280] rounded-xl text-base sm:text-xs text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] cursor-pointer"
                   >
                     <option value="Hybrid">Hybrid</option>
                     <option value="Remote">Remote</option>
@@ -561,24 +569,26 @@ export const OpportunityComposerPage: React.FC<OpportunityComposerPageProps> = (
                   </select>
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-[#0A0A0A] mb-1">
-                    Location <span className="text-rose-600">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={location}
-                    onChange={e => setLocation(e.target.value)}
-                    onBlur={handleAutosave}
-                    placeholder="e.g. Mumbai, BKC or Bangalore"
-                    className={`w-full h-10 px-3 bg-white border ${
-                      validationErrors.location ? 'border-rose-500' : 'border-[#6B7280]'
-                    } rounded-xl text-xs text-[#0A0A0A] placeholder-[#9CA3AF] focus:outline-none focus:border-[#0A0A0A]`}
-                  />
-                  {validationErrors.location && (
-                    <p className="text-[11px] text-rose-600 mt-1">{validationErrors.location}</p>
-                  )}
-                </div>
+                {workMode !== 'Remote' && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-[#0A0A0A] mb-1">
+                      Location <span className="text-[#6B7280] text-xs font-normal" aria-hidden="true">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={location}
+                      onChange={e => setLocation(e.target.value)}
+                      onBlur={handleAutosave}
+                      placeholder="e.g. Mumbai"
+                      className={`w-full min-h-[48px] h-12 px-3 bg-white border ${
+                        validationErrors.location ? 'border-[#DC2626]' : 'border-[#6B7280]'
+                      } rounded-xl text-base sm:text-xs text-[#0A0A0A] placeholder-[#9CA3AF] focus:outline-none focus:border-[#0A0A0A]`}
+                    />
+                    {validationErrors.location && (
+                      <p className="text-[11px] text-[#DC2626] mt-1">{validationErrors.location}</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1143,6 +1153,37 @@ export const OpportunityComposerPage: React.FC<OpportunityComposerPageProps> = (
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Sticky Bottom Action Bar (Mobile Only, <768px) */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#E5E7EB] p-3 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-lg">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 max-w-lg mx-auto">
+          <button
+            type="button"
+            onClick={() => handleSubmit(true)}
+            className="text-xs font-semibold text-[#6B7280] hover:text-[#0A0A0A] py-1 text-center cursor-pointer order-2 sm:order-1"
+          >
+            Save draft
+          </button>
+          <div className="flex items-center gap-2 order-1 sm:order-2">
+            <button
+              type="button"
+              onClick={() => setShowMobilePreview(!showMobilePreview)}
+              className="flex-1 min-h-[44px] py-2.5 px-3 border border-[#E5E7EB] hover:border-[#0A0A0A] text-[#0A0A0A] rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer touch-target-44"
+            >
+              <Eye className="w-4 h-4" />
+              <span>Preview</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSubmit(false)}
+              className="flex-1 min-h-[44px] py-2.5 px-4 bg-[#0A0A0A] hover:bg-[#262626] text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer touch-target-44 shadow-sm"
+            >
+              <Send className="w-4 h-4" />
+              <span className="truncate">{isAutoPublishRole ? 'Publish' : 'Submit for review'}</span>
+            </button>
           </div>
         </div>
       </div>

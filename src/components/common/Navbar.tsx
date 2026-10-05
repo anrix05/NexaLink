@@ -250,18 +250,18 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
               }`
         }`}
       >
-        <div className="app-container">
+        <div className="app-container px-2.5 sm:px-4 lg:px-8">
           <div className="flex items-center justify-between h-16">
           
           {/* Brand Logo */}
           <div
             onClick={handleLogoClick}
-            className="flex items-center gap-2.5 cursor-pointer group shrink-0"
+            className="flex items-center gap-1.5 sm:gap-2.5 cursor-pointer group shrink-0"
           >
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[#0A0A0A] text-white flex items-center justify-center transition-transform">
-              <NexaMark data-intro-target="logo" className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg bg-[#0A0A0A] text-white flex items-center justify-center transition-transform">
+              <NexaMark data-intro-target="logo" className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
             </div>
-            <span className="text-base font-display font-bold tracking-tight text-[#0A0A0A]">
+            <span className="text-sm sm:text-base font-display font-bold tracking-tight text-[#0A0A0A]">
               NexaLink
             </span>
           </div>
@@ -335,7 +335,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
           )}
 
           {/* Right Action Controls */}
-          <div className="flex items-center gap-2 sm:gap-2.5">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             
             {isPublicView ? (
               <>
@@ -348,20 +348,24 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                         setActiveTab('auth');
                       }
                     }}
-                    className="px-3.5 sm:px-4 py-2 bg-[#0A0A0A] hover:bg-[#222222] text-white font-sans font-medium text-xs transition rounded-lg flex items-center gap-2 cursor-pointer touch-target-44"
+                    className="px-2.5 sm:px-4 py-1.5 sm:py-2 bg-[#0A0A0A] hover:bg-[#222222] text-white font-sans font-medium text-[11px] sm:text-xs transition rounded-lg flex items-center gap-1.5 cursor-pointer touch-target-44 shrink-0 whitespace-nowrap"
                   >
                     <LogIn className="w-3.5 h-3.5 shrink-0" />
-                    <span>{isAuthenticated && currentUser ? 'Return to dashboard' : 'Sign in'}</span>
+                    <span>
+                      {isAuthenticated && currentUser ? 'Return to dashboard' : 'Sign in'}
+                    </span>
                   </button>
                 )}
 
                 {/* Mobile Public Navigation Menu Button */}
                 <button
                   onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                  className="lg:hidden inline-flex items-center justify-center p-2 text-[#6B7280] hover:text-[#0A0A0A] border border-[#E5E7EB] rounded-lg touch-target-44"
+                  className="lg:hidden inline-flex items-center justify-center p-1.5 sm:p-2 text-[#6B7280] hover:text-[#0A0A0A] border border-[#E5E7EB] rounded-lg touch-target-44 shrink-0"
                   title="Menu"
+                  aria-expanded={mobileMenuOpen}
+                  aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
                 >
-                  {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                  {mobileMenuOpen ? <X className="w-4 h-4 sm:w-5 sm:h-5" /> : <Menu className="w-4 h-4 sm:w-5 sm:h-5" />}
                 </button>
               </>
             ) : (
@@ -569,61 +573,60 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
           className="lg:hidden fixed inset-x-0 top-16 bottom-0 z-50 bg-white/98 backdrop-blur-xl px-6 py-6 flex flex-col justify-between overflow-y-auto animate-in fade-in slide-in-from-top-4 duration-200"
           style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
         >
-          {!isAuthenticated ? (
-            <div className="space-y-4">
-              <span className="text-[11px] font-medium text-[#6B7280] block border-b border-[#E5E7EB] pb-2">
-                Public Navigation
-              </span>
+          <div className="space-y-4">
+            <span className="text-[11px] font-medium text-[#6B7280] block border-b border-[#E5E7EB] pb-2">
+              Public navigation
+            </span>
 
-              <div className="space-y-1">
-                {[
-                  { id: 'overview', label: 'Overview' },
-                  { id: 'features', label: 'Features' },
-                  { id: 'how-it-works', label: 'How it works' },
-                  { id: 'academic', label: 'Accreditation' },
-                  { id: 'departments', label: 'Departments' },
-                  { id: 'campus', label: 'Campus life' },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      scrollToSection(item.id);
-                      setMobileMenuOpen(false);
-                    }}
-                    className="w-full text-left py-3 px-3 text-lg font-display font-semibold text-[#0A0A0A] hover:bg-[#FAFAFA] rounded-xl transition-all flex items-center justify-between touch-target-44"
-                  >
-                    <span>{item.label}</span>
-                    <ArrowRight className="w-4 h-4 text-[#6B7280]" />
-                  </button>
-                ))}
-              </div>
+            <div className="space-y-1">
+              {[
+                { id: 'overview', label: 'Overview' },
+                { id: 'features', label: 'Features' },
+                { id: 'how-it-works', label: 'How it works' },
+                { id: 'academic', label: 'Accreditation' },
+                { id: 'departments', label: 'Departments' },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    scrollToSection(item.id);
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full min-h-[48px] text-left py-3 px-3 text-base font-display font-medium text-[#0A0A0A] hover:bg-[#FAFAFA] rounded-xl transition-all flex items-center justify-between touch-target-44"
+                >
+                  <span>{item.label}</span>
+                  <ArrowRight className="w-4 h-4 text-[#6B7280]" />
+                </button>
+              ))}
+            </div>
 
-              {activeTab !== 'auth' && (
-                <div className="pt-6 border-t border-[#E5E7EB] space-y-3">
-                  <button
-                    onClick={() => {
-                      setActiveTab('auth');
-                      setMobileMenuOpen(false);
-                    }}
-                    className="w-full py-3.5 bg-[#0A0A0A] text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2 cursor-pointer touch-target-44"
-                  >
-                    <LogIn className="w-4 h-4" />
-                    <span>Sign in</span>
-                  </button>
-                </div>
+            {/* Pinned Primary Action */}
+            <div className="pt-4 border-t border-[#E5E7EB] space-y-3">
+              {isAuthenticated && currentUser ? (
+                <button
+                  onClick={() => {
+                    setActiveTab('dashboard');
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full min-h-[48px] py-3 bg-[#0A0A0A] text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2 cursor-pointer touch-target-44 hover:bg-[#222222] transition-colors"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Go to dashboard</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setActiveTab('auth');
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full min-h-[48px] py-3 bg-[#0A0A0A] text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2 cursor-pointer touch-target-44 hover:bg-[#222222] transition-colors"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Sign in</span>
+                </button>
               )}
             </div>
-          ) : (
-            <div className="space-y-2">
-              <input
-                type="text"
-                value={globalSearch}
-                onChange={e => setGlobalSearch(e.target.value)}
-                placeholder={getSearchPlaceholder()}
-                className="w-full bg-[#FAFAFA] border border-[#8C8F96] rounded-lg px-3 py-2.5 text-xs text-[#0A0A0A]"
-              />
-            </div>
-          )}
+          </div>
 
           <div className="pt-6 border-t border-[#E5E7EB] flex items-center justify-between text-xs text-[#6B7280]">
             <span>Press Esc to close</span>

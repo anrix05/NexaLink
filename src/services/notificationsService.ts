@@ -161,5 +161,34 @@ export const notificationsService = {
       mute_announcements: Boolean(row?.mute_announcements),
       updated_at: row?.updated_at
     };
+  },
+
+  /**
+   * Create an in-app notification for a user
+   */
+  async createNotification(notification: {
+    userId: string;
+    title: string;
+    body: string;
+    category?: string;
+    type?: string;
+    link?: string;
+    relatedEntityId?: string;
+  }): Promise<void> {
+    if (!isSupabaseConfigured() || !isValidUuid(notification.userId)) return;
+    const payload = {
+      user_id: notification.userId,
+      title: notification.title,
+      body: notification.body,
+      category: notification.category || 'opportunity',
+      type: notification.type || 'Application Update',
+      link: notification.link || 'opportunities',
+      related_entity_id: notification.relatedEntityId || null,
+      is_read: false,
+      created_at: new Date().toISOString()
+    };
+    await runMutation('INSERT', 'notifications', async () => {
+      return (supabase.from as any)('notifications').insert(payload);
+    }, { payload, allowEmptyResult: true });
   }
 };

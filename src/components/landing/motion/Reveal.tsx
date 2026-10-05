@@ -22,7 +22,7 @@ export const Reveal: React.FC<RevealProps> = ({
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const reduceMotion = useReducedMotionPreference();
-  const isInView = useInView(ref, { once: true, margin: '-30px' });
+  const isInView = useInView(ref, { once: true, margin: '0px' });
 
   // Safe fallback: under reduced motion or SSR, keep visible immediately
   if (reduceMotion) {

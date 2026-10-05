@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../types/database.types';
 
-const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const rawSupabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const rawSupabaseUrl = typeof import.meta !== 'undefined' && (import.meta as any).env ? (import.meta as any).env.VITE_SUPABASE_URL : (typeof process !== 'undefined' ? process.env?.VITE_SUPABASE_URL : undefined);
+const rawSupabaseAnonKey = typeof import.meta !== 'undefined' && (import.meta as any).env ? (import.meta as any).env.VITE_SUPABASE_ANON_KEY : (typeof process !== 'undefined' ? process.env?.VITE_SUPABASE_ANON_KEY : undefined);
 
 // Check if credentials are valid and not placeholder templates
 export const isSupabaseConfigured = (): boolean => {

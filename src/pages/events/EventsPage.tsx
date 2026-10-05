@@ -35,14 +35,24 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { UnderlineTabs, StatusBadge, EmptyState } from '../../components/ui';
+import { useMobileChrome } from '../../context/MobileChromeContext';
 import { EventComposerPage } from './EventComposerPage';
 import { EventManageConsole } from './EventManageConsole';
 
 export const EventsPage: React.FC = () => {
   const { eventsList, rsvpEvent, cancelEvent, isDataLoading } = useData();
   const { currentRole, currentUser } = useAuth();
+  const { setHideMobileChrome } = useMobileChrome();
 
   const isHostRole = currentRole === 'alumni' || currentRole === 'faculty' || currentRole === 'admin';
+
+  // Mobile detection
+  const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 640);
+  useEffect(() => {
+    const handleResize = () => setIsMobileScreen(window.innerWidth < 640);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Sub-view management: list, composer (new/edit), manage
   const [currentView, setCurrentView] = useState<'list' | 'composer' | 'manage'>(() => {
@@ -67,6 +77,38 @@ export const EventsPage: React.FC = () => {
   const [noticeMsg, setNoticeMsg] = useState<string | null>(null);
   const [overflowMenuOpenId, setOverflowMenuOpenId] = useState<string | null>(null);
   const [selectedDetailEvent, setSelectedDetailEvent] = useState<EventItem | null>(null);
+
+  // Hide mobile bottom nav when detail sheet is open on mobile
+  useEffect(() => {
+    if (selectedDetailEvent && isMobileScreen) {
+      setHideMobileChrome(true);
+      return () => setHideMobileChrome(false);
+    }
+  }, [selectedDetailEvent, isMobileScreen, setHideMobileChrome]);
+
+  // Handle Esc key and back button to close event detail sheet
+  useEffect(() => {
+    if (!selectedDetailEvent) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedDetailEvent(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+
+    const onPopState = () => {
+      setSelectedDetailEvent(null);
+    };
+    if (isMobileScreen) {
+      window.history.pushState({ modal: 'event-detail' }, '');
+      window.addEventListener('popstate', onPopState);
+    }
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      if (isMobileScreen) {
+        window.removeEventListener('popstate', onPopState);
+      }
+    };
+  }, [selectedDetailEvent, isMobileScreen]);
 
   // Sync with URL parameters
   useEffect(() => {
@@ -395,98 +437,164 @@ export const EventsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Underline Tabs: Upcoming · Registered · Past · Hosting */}
-      <UnderlineTabs
-        tabs={[
-          { id: 'upcoming', label: 'Upcoming', count: upcomingCount > 0 ? upcomingCount : undefined },
-          { id: 'registered', label: 'Registered', count: registeredCount > 0 ? registeredCount : undefined },
-          { id: 'past', label: 'Past', count: pastCount > 0 ? pastCount : undefined },
-          ...(isHostRole ? [{ id: 'hosting', label: 'Hosting', count: hostingCount > 0 ? hostingCount : undefined }] : [])
-        ]}
-        activeTab={activeTab}
-        onChange={tabId => setActiveTab(tabId as any)}
-      />
+      {/* Mobile Filter & Chips Area (<640px) */}
+      <div className="space-y-3 sm:hidden">
+        {/* Search Field */}
+        <div className="relative w-full">
+          <Search className="w-4 h-4 text-[#9CA3AF] absolute left-3.5 top-3 pointer-events-none" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            placeholder="Search events or speakers"
+            className="w-full h-10 pl-9 pr-9 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl text-xs text-[#0A0A0A] placeholder:text-[#9CA3AF] focus:outline-none focus:border-[#0A0A0A] transition-colors"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              className="absolute right-3 top-3 text-[#9CA3AF] hover:text-[#0A0A0A]"
+              aria-label="Clear search"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
 
-      {/* Unboxed Single-Row Filter Controls (Section 5) */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">
-        <div className="flex items-center gap-2.5 flex-1 flex-wrap">
-          {/* Search Box */}
-          <div className="relative w-full sm:w-72">
-            <Search className="w-4 h-4 text-[#6B7280] absolute left-3 top-2.5" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Search talks, speakers, venues..."
-              className="w-full h-9 pl-9 pr-8 bg-white border border-[#6B7280] rounded-xl text-xs text-[#0A0A0A] placeholder:text-[#6B7280] focus:outline-none focus:border-[#0A0A0A] transition-colors"
-            />
-            {searchTerm && (
+        {/* Horizontally scrollable row of chips (Upcoming, Registered, Past) with edge fade and scroll-snap */}
+        <div className="relative w-full overflow-hidden">
+          <div className="flex items-center gap-1.5 overflow-x-auto snap-x snap-mandatory py-0.5 no-scrollbar scroll-smooth">
+            {[
+              { id: 'upcoming', label: 'Upcoming', count: upcomingCount },
+              { id: 'registered', label: 'Registered', count: registeredCount },
+              { id: 'past', label: 'Past', count: pastCount },
+              ...(isHostRole ? [{ id: 'hosting', label: 'Hosting', count: hostingCount }] : [])
+            ].map((chip) => {
+              const isSelected = activeTab === chip.id;
+              return (
+                <button
+                  key={chip.id}
+                  type="button"
+                  onClick={() => setActiveTab(chip.id as any)}
+                  className={`snap-start shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer touch-target-44 flex items-center gap-1.5 select-none ${
+                    isSelected
+                      ? 'bg-[#0A0A0A] text-white shadow-2xs font-semibold'
+                      : 'bg-[#F3F4F6] text-[#6B7280] hover:text-[#0A0A0A] hover:bg-[#E5E7EB]'
+                  }`}
+                >
+                  <span>{chip.label}</span>
+                  {chip.count > 0 && (
+                    <span
+                      className={`text-[10px] tabular-nums font-semibold px-1.5 py-0.2 rounded-full ${
+                        isSelected ? 'bg-white text-[#0A0A0A]' : 'bg-[#E5E7EB] text-[#4B5563]'
+                      }`}
+                    >
+                      {chip.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {/* Right edge fade */}
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-white to-transparent" />
+        </div>
+      </div>
+
+      {/* Desktop Underline Tabs & Controls (>=640px) */}
+      <div className="hidden sm:block space-y-4">
+        <UnderlineTabs
+          tabs={[
+            { id: 'upcoming', label: 'Upcoming', count: upcomingCount > 0 ? upcomingCount : undefined },
+            { id: 'registered', label: 'Registered', count: registeredCount > 0 ? registeredCount : undefined },
+            { id: 'past', label: 'Past', count: pastCount > 0 ? pastCount : undefined },
+            ...(isHostRole ? [{ id: 'hosting', label: 'Hosting', count: hostingCount > 0 ? hostingCount : undefined }] : [])
+          ]}
+          activeTab={activeTab}
+          onChange={tabId => setActiveTab(tabId as any)}
+        />
+
+        {/* Unboxed Single-Row Filter Controls (Section 5) */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">
+          <div className="flex items-center gap-2.5 flex-1 flex-wrap">
+            {/* Search Box */}
+            <div className="relative w-full sm:w-72">
+              <Search className="w-4 h-4 text-[#6B7280] absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Search talks, speakers, venues..."
+                className="w-full h-9 pl-9 pr-8 bg-white border border-[#6B7280] rounded-xl text-xs text-[#0A0A0A] placeholder:text-[#6B7280] focus:outline-none focus:border-[#0A0A0A] transition-colors"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-2.5 text-[#6B7280] hover:text-[#0A0A0A]"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Category Dropdown */}
+            <select
+              value={activeCategory}
+              onChange={e => setActiveCategory(e.target.value)}
+              className="h-9 px-3 bg-white border border-[#6B7280] rounded-xl text-xs font-medium text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] cursor-pointer"
+            >
+              <option value="All">All categories</option>
+              {EVENT_CATEGORIES.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+
+            {/* Mode Dropdown */}
+            <select
+              value={modeFilter}
+              onChange={e => setModeFilter(e.target.value as any)}
+              className="h-9 px-3 bg-white border border-[#6B7280] rounded-xl text-xs font-medium text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] cursor-pointer"
+            >
+              <option value="all">All modes</option>
+              <option value="campus">On campus</option>
+              <option value="online">Online</option>
+              <option value="hybrid">Hybrid</option>
+            </select>
+
+            {/* Time Window Dropdown */}
+            <select
+              value={timeFilter}
+              onChange={e => setTimeFilter(e.target.value as any)}
+              className="h-9 px-3 bg-white border border-[#6B7280] rounded-xl text-xs font-medium text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] cursor-pointer"
+            >
+              <option value="all">All dates</option>
+              <option value="this_week">This week</option>
+              <option value="this_month">This month</option>
+            </select>
+          </div>
+
+          {/* Counter and Reset */}
+          <div className="flex items-center gap-3 text-xs text-[#6B7280] shrink-0">
+            <span>
+              Showing <strong className="text-[#0A0A0A] font-semibold">{filteredEvents.length}</strong> event{filteredEvents.length === 1 ? '' : 's'}
+            </span>
+            {(activeCategory !== 'All' || modeFilter !== 'all' || timeFilter !== 'all' || searchTerm) && (
               <button
                 type="button"
-                onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 top-2.5 text-[#6B7280] hover:text-[#0A0A0A]"
+                onClick={() => {
+                  setActiveCategory('All');
+                  setModeFilter('all');
+                  setTimeFilter('all');
+                  setSearchTerm('');
+                }}
+                className="text-xs text-[#0A0A0A] font-medium hover:underline flex items-center gap-1 cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                <RefreshCw className="w-3 h-3" />
+                <span>Reset</span>
               </button>
             )}
           </div>
-
-          {/* Category Dropdown (Replaces overflowing chip rail) */}
-          <select
-            value={activeCategory}
-            onChange={e => setActiveCategory(e.target.value)}
-            className="h-9 px-3 bg-white border border-[#6B7280] rounded-xl text-xs font-medium text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] cursor-pointer"
-          >
-            <option value="All">All categories</option>
-            {EVENT_CATEGORIES.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-
-          {/* Mode Dropdown */}
-          <select
-            value={modeFilter}
-            onChange={e => setModeFilter(e.target.value as any)}
-            className="h-9 px-3 bg-white border border-[#6B7280] rounded-xl text-xs font-medium text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] cursor-pointer"
-          >
-            <option value="all">All modes</option>
-            <option value="campus">On campus</option>
-            <option value="online">Online</option>
-            <option value="hybrid">Hybrid</option>
-          </select>
-
-          {/* Time Window Dropdown */}
-          <select
-            value={timeFilter}
-            onChange={e => setTimeFilter(e.target.value as any)}
-            className="h-9 px-3 bg-white border border-[#6B7280] rounded-xl text-xs font-medium text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] cursor-pointer"
-          >
-            <option value="all">All dates</option>
-            <option value="this_week">This week</option>
-            <option value="this_month">This month</option>
-          </select>
-        </div>
-
-        {/* Counter and Reset */}
-        <div className="flex items-center gap-3 text-xs text-[#6B7280] shrink-0">
-          <span>
-            Showing <strong className="text-[#0A0A0A] font-semibold">{filteredEvents.length}</strong> event{filteredEvents.length === 1 ? '' : 's'}
-          </span>
-          {(activeCategory !== 'All' || modeFilter !== 'all' || timeFilter !== 'all' || searchTerm) && (
-            <button
-              type="button"
-              onClick={() => {
-                setActiveCategory('All');
-                setModeFilter('all');
-                setTimeFilter('all');
-                setSearchTerm('');
-              }}
-              className="text-xs text-[#0A0A0A] font-medium hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              <RefreshCw className="w-3 h-3" />
-              <span>Reset</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -544,7 +652,7 @@ export const EventsPage: React.FC = () => {
           </div>
         )
       ) : (
-        <div className="divide-y divide-[#E5E7EB] border-t border-b border-[#E5E7EB]">
+        <div className="divide-y divide-[#E5E7EB] border-t border-b border-[#E5E7EB] pb-[calc(var(--bottomnav-h,56px)+env(safe-area-inset-bottom,0px)+32px)] sm:pb-0">
           {filteredEvents.map(evt => {
             const dateParts = formatEventDate(evt.startsAt || evt.date);
             const isRegistered = evt.registeredUserIds.includes(currentUser.id);
@@ -565,7 +673,8 @@ export const EventsPage: React.FC = () => {
             return (
               <div
                 key={evt.id}
-                className="py-4.5 px-2 sm:px-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#FAFAFA] transition-colors rounded-lg"
+                onClick={() => setSelectedDetailEvent(evt)}
+                className="py-4.5 px-2 sm:px-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#FAFAFA] transition-colors rounded-xl cursor-pointer"
               >
                 <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
                   {/* Neutral Date Block (Day + Sentence Case Month e.g. "20 Nov") */}
@@ -580,7 +689,10 @@ export const EventsPage: React.FC = () => {
 
                   {/* 16:9 Banner Thumbnail */}
                   <div
-                    onClick={() => setSelectedDetailEvent(evt)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedDetailEvent(evt);
+                    }}
                     className="w-24 sm:w-32 md:w-36 aspect-video rounded-xl overflow-hidden bg-neutral-100 border border-[#E5E7EB] shrink-0 relative group shadow-2xs cursor-pointer select-none"
                     title="Click to view full event details"
                   >
@@ -606,8 +718,7 @@ export const EventsPage: React.FC = () => {
                   <div className="space-y-1.5 min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3
-                        onClick={() => setSelectedDetailEvent(evt)}
-                        className="font-semibold text-sm text-[#0A0A0A] tracking-tight hover:underline cursor-pointer"
+                        className="font-semibold text-sm text-[#0A0A0A] tracking-tight hover:underline cursor-pointer line-clamp-2 break-words"
                       >
                         {cleanTitle}
                       </h3>
@@ -616,6 +727,22 @@ export const EventsPage: React.FC = () => {
                       <span className="text-[11px] text-[#6B7280] font-medium">
                         · {evt.type}
                       </span>
+
+                      {/* RSVP State Badge */}
+                      {isRegistered ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <Check className="w-3 h-3" />
+                          Registered
+                        </span>
+                      ) : isWaitlisted ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                          Waitlisted
+                        </span>
+                      ) : isFull ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200">
+                          Full
+                        </span>
+                      ) : null}
 
                       {/* Status Badges for Hosting View */}
                       {activeTab === 'hosting' && evt.lifecycleStatus && (
@@ -879,15 +1006,22 @@ export const EventsPage: React.FC = () => {
           <div
             role="dialog"
             aria-modal="true"
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-[#0A0A0A]/40 backdrop-blur-xs flex flex-col justify-end sm:items-center sm:justify-center p-0 sm:p-4 overflow-y-auto"
             onClick={() => setSelectedDetailEvent(null)}
           >
             <div
-              className="bg-white rounded-2xl border border-[#E5E7EB] max-w-2xl w-full shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200"
+              className="bg-white rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#E5E7EB] max-w-2xl w-full shadow-2xl overflow-hidden max-h-[92dvh] flex flex-col animate-in slide-in-from-bottom duration-200"
               onClick={e => e.stopPropagation()}
             >
+              {/* Mobile Drag Handle */}
+              {isMobileScreen && (
+                <div className="pt-2.5 pb-1 bg-white shrink-0 flex justify-center">
+                  <div className="w-12 h-1 bg-neutral-300 rounded-full" />
+                </div>
+              )}
+
               {/* Modal Header Banner with 16:9 Aspect Ratio */}
-              <div className="relative aspect-video w-full bg-neutral-900 overflow-hidden">
+              <div className="relative aspect-video w-full bg-neutral-900 overflow-hidden shrink-0">
                 {modalEvent.bannerImage ? (
                   <img
                     src={modalEvent.bannerImage}
@@ -904,7 +1038,7 @@ export const EventsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedDetailEvent(null)}
-                  className="absolute top-3 right-3 p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full backdrop-blur-sm transition-all cursor-pointer z-10"
+                  className="absolute top-3 right-3 p-2 bg-black/60 hover:bg-black/80 text-white rounded-full backdrop-blur-sm transition-all cursor-pointer z-10 touch-target-44 flex items-center justify-center"
                   aria-label="Close modal"
                 >
                   <X className="w-4 h-4" />
@@ -921,8 +1055,8 @@ export const EventsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Modal Body Content */}
-              <div className="p-5 sm:p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              {/* Modal Body Content (Internal Scroll) */}
+              <div className="p-5 sm:p-6 space-y-4 flex-1 overflow-y-auto custom-scrollbar">
                 <div className="space-y-1">
                   <h2 className="text-xl font-bold text-[#0A0A0A] tracking-tight">
                     {cleanEventTitle(modalEvent.title, modalEvent.type)}
@@ -981,14 +1115,14 @@ export const EventsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Modal Actions Footer */}
-              <div className="p-4 sm:p-5 bg-[#FAFAFA] border-t border-[#E5E7EB] flex items-center justify-between gap-3">
+              {/* Modal Actions Sticky Footer with Safe Area Padding */}
+              <div className="p-4 sm:p-5 bg-[#FAFAFA] border-t border-[#E5E7EB] flex items-center justify-between gap-3 shrink-0 sticky bottom-0 z-10 pb-[max(1rem,env(safe-area-inset-bottom))]">
                 <button
                   type="button"
                   onClick={() => handleDownloadCalendar(modalEvent)}
-                  className="px-3 py-1.5 border border-[#6B7280] rounded-xl text-xs font-medium text-[#0A0A0A] hover:bg-white flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="h-11 min-h-[44px] px-3.5 border border-[#6B7280] rounded-xl text-xs font-medium text-[#0A0A0A] hover:bg-white flex items-center gap-1.5 transition-colors cursor-pointer touch-target-44"
                 >
-                  <CalendarPlus className="w-3.5 h-3.5" />
+                  <CalendarPlus className="w-4 h-4" />
                   <span>Add to calendar</span>
                 </button>
 
@@ -1001,7 +1135,7 @@ export const EventsPage: React.FC = () => {
                         setSelectedDetailEvent(null);
                         handleOpenManage(id);
                       }}
-                      className="px-4 py-2 bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                      className="h-11 min-h-[44px] px-5 bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer touch-target-44 flex items-center justify-center"
                     >
                       Manage event
                     </button>
@@ -1011,10 +1145,10 @@ export const EventsPage: React.FC = () => {
                       onClick={() => {
                         handleRsvp(modalEvent);
                       }}
-                      className="px-4 py-2 bg-white border border-[#0A0A0A] text-[#0A0A0A] text-xs font-semibold rounded-xl hover:bg-neutral-100 transition-colors cursor-pointer flex items-center gap-1.5"
+                      className="h-11 min-h-[44px] px-4 bg-white border border-[#0A0A0A] text-[#0A0A0A] text-xs font-semibold rounded-xl hover:bg-neutral-100 transition-colors cursor-pointer flex items-center gap-1.5 touch-target-44"
                     >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Registered (Click to cancel)</span>
+                      <Check className="w-4 h-4" />
+                      <span>Registered (Cancel)</span>
                     </button>
                   ) : (
                     <button
@@ -1022,7 +1156,7 @@ export const EventsPage: React.FC = () => {
                       onClick={() => {
                         handleRsvp(modalEvent);
                       }}
-                      className="px-4 py-2 bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                      className="h-11 min-h-[44px] px-5 bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer touch-target-44 flex items-center justify-center"
                     >
                       {isEventFull ? 'Join waitlist' : 'Register now'}
                     </button>

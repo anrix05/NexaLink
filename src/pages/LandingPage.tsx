@@ -53,7 +53,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ setActiveTab }) => {
         <ScrollProgress />
 
         {/* 5.1 Hero: Signature Moment */}
-        <HeroSection onSignIn={handleSignIn} onCreateAccount={handleCreateAccount} />
+        <HeroSection
+          onSignIn={handleSignIn}
+          onCreateAccount={handleCreateAccount}
+          onGoToDashboard={() => setActiveTab('dashboard')}
+        />
 
         {/* 5.2 Social Proof & Live Metrics Strip */}
         <MetricsStrip />

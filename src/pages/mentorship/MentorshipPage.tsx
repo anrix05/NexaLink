@@ -31,6 +31,7 @@ import {
   Calendar,
   Download,
   Plus,
+  Minus,
   ChevronRight,
   ExternalLink,
   ShieldCheck,
@@ -137,7 +138,8 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
     withdrawMentorshipRequest,
     completeMentorship,
     markMentorshipSeen,
-    setPendingChatUserId
+    setPendingChatUserId,
+    updateUserProfile
   } = useData();
 
   const { currentUser, currentRole } = useAuth();
@@ -162,10 +164,6 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
 
   // Notifications
   const [notice, setNotice] = useState<string | null>(null);
-
-  // Mentor controls
-  const [acceptingMentees, setAcceptingMentees] = useState(true);
-  const [openSlotsCount, setOpenSlotsCount] = useState(3);
 
   // Modals
   const [declineModalReq, setDeclineModalReq] = useState<MentorshipRequest | null>(null);
@@ -291,6 +289,111 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
     );
   }, [mentorshipRequests, currentUser.id]);
 
+  // Current mentor profile and bandwidth settings
+  const currentMentorProfile = useMemo(() => {
+    if (!currentUser?.id) return null;
+    return alumniList.find(a => a.id === currentUser.id) || facultyList.find(f => f.id === currentUser.id);
+  }, [currentUser, alumniList, facultyList]);
+
+  const [acceptingMentees, setAcceptingMentees] = useState(() => {
+    return currentMentorProfile?.isMentoringAvailable ?? (currentUser as any)?.isMentoringAvailable ?? true;
+  });
+  const [maxMentees, setMaxMentees] = useState<number>(() => {
+    return currentMentorProfile?.maxMentees ?? (currentUser as any)?.maxMentees ?? 3;
+  });
+  const [draftCapacity, setDraftCapacity] = useState<string>(() => String(maxMentees));
+
+  useEffect(() => {
+    if (currentMentorProfile) {
+      if (currentMentorProfile.isMentoringAvailable !== undefined) {
+        setAcceptingMentees(currentMentorProfile.isMentoringAvailable);
+      }
+      if (currentMentorProfile.maxMentees !== undefined) {
+        setMaxMentees(currentMentorProfile.maxMentees);
+        setDraftCapacity(String(currentMentorProfile.maxMentees));
+      }
+    }
+  }, [currentMentorProfile?.isMentoringAvailable, currentMentorProfile?.maxMentees]);
+
+  const activeCount = activeMentees.length;
+
+  const handleToggleAccepting = () => {
+    if (!currentUser?.id) return;
+    const nextAccepting = !acceptingMentees;
+    let nextMax = maxMentees;
+    if (nextAccepting && maxMentees === 0) {
+      nextMax = Math.max(1, activeCount);
+      setMaxMentees(nextMax);
+      setDraftCapacity(String(nextMax));
+    }
+    setAcceptingMentees(nextAccepting);
+    updateUserProfile(currentUser.id, {
+      isMentoringAvailable: nextAccepting,
+      maxMentees: nextMax
+    });
+    setNotice(nextAccepting ? 'Mentorship availability enabled: Accepting student asks.' : 'Mentorship paused: Set to busy.');
+    setTimeout(() => setNotice(null), 3000);
+  };
+
+  const handleStepCapacity = (delta: number) => {
+    if (!currentUser?.id) return;
+    const target = maxMentees + delta;
+    const minLimit = Math.max(0, activeCount);
+    if (target < minLimit || target > 20) return;
+
+    setMaxMentees(target);
+    setDraftCapacity(String(target));
+
+    const nextAccepting = target === 0 ? false : acceptingMentees;
+    if (target === 0 && acceptingMentees) {
+      setAcceptingMentees(false);
+    }
+    updateUserProfile(currentUser.id, {
+      maxMentees: target,
+      isMentoringAvailable: nextAccepting
+    });
+    setNotice(`Mentee capacity updated to ${target}.`);
+    setTimeout(() => setNotice(null), 3000);
+  };
+
+  const commitDraftCapacity = () => {
+    if (!currentUser?.id) return;
+    const trimmed = draftCapacity.trim();
+    if (trimmed === '') {
+      setDraftCapacity(String(maxMentees));
+      return;
+    }
+
+    const parsed = parseInt(trimmed, 10);
+    if (isNaN(parsed)) {
+      setDraftCapacity(String(maxMentees));
+      return;
+    }
+
+    const minFloor = activeCount;
+    if (parsed < minFloor) {
+      setDraftCapacity(String(maxMentees));
+      setNotice(`You currently have ${minFloor} active ${minFloor === 1 ? 'mentee' : 'mentees'}, so capacity can't be lower than ${minFloor}.`);
+      setTimeout(() => setNotice(null), 3500);
+      return;
+    }
+
+    const clamped = Math.min(20, Math.max(0, parsed));
+    setMaxMentees(clamped);
+    setDraftCapacity(String(clamped));
+
+    const nextAccepting = clamped === 0 ? false : acceptingMentees;
+    if (clamped === 0 && acceptingMentees) {
+      setAcceptingMentees(false);
+    }
+    updateUserProfile(currentUser.id, {
+      maxMentees: clamped,
+      isMentoringAvailable: nextAccepting
+    });
+    setNotice(`Mentee capacity updated to ${clamped}.`);
+    setTimeout(() => setNotice(null), 3000);
+  };
+
   const handleOpenSheetForMentor = (mentor?: TargetMentorInfo) => {
     setSheetTargetMentor(mentor || null);
     setIsSheetOpen(true);
@@ -372,13 +475,16 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
             )}
 
             {isMentor && (
-              <div className="flex items-center gap-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-3.5 py-2">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-3.5 py-2.5">
+                <div className="flex items-center justify-between sm:justify-start gap-2.5">
                   <span className="text-xs font-medium text-[#0A0A0A]">Accepting mentees</span>
                   <button
                     type="button"
-                    onClick={() => setAcceptingMentees(prev => !prev)}
-                    className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${
+                    role="switch"
+                    aria-checked={acceptingMentees}
+                    aria-label="Toggle accepting mentees"
+                    onClick={handleToggleAccepting}
+                    className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer shrink-0 ${
                       acceptingMentees ? 'bg-[#0A0A0A]' : 'bg-[#E5E7EB]'
                     }`}
                   >
@@ -389,17 +495,49 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
                     />
                   </button>
                 </div>
-                <div className="h-4 w-px bg-[#E5E7EB]" />
-                <div className="flex items-center gap-1.5 text-xs text-[#6B7280]">
-                  <span>Slots:</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={openSlotsCount}
-                    onChange={e => setOpenSlotsCount(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
-                    className="w-10 h-7 text-center font-semibold bg-white border border-[#E5E7EB] rounded text-xs text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A]"
-                  />
+                <div className="hidden sm:block h-6 w-px bg-[#E5E7EB]" />
+                <div className="flex items-center justify-between sm:justify-start gap-3">
+                  <div>
+                    <span className="text-xs font-medium text-[#0A0A0A] block">Mentee capacity</span>
+                    <span className="text-[11px] text-[#6B7280] block">
+                      {activeCount} of {maxMentees} in use
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      aria-label="Decrease mentee capacity"
+                      disabled={maxMentees <= Math.max(0, activeCount)}
+                      onClick={() => handleStepCapacity(-1)}
+                      className="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg sm:rounded-md border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] text-[#0A0A0A] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      aria-label="Mentee capacity value"
+                      value={draftCapacity}
+                      onChange={e => setDraftCapacity(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      onBlur={commitDraftCapacity}
+                      className="w-11 h-11 sm:w-9 sm:h-7 text-center font-semibold bg-white border border-[#E5E7EB] rounded-lg sm:rounded text-xs text-[#0A0A0A] focus:outline-none focus:border-[#0A0A0A] focus-visible:outline-2 focus-visible:outline-[#0A0A0A]"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Increase mentee capacity"
+                      disabled={maxMentees >= 20}
+                      onClick={() => handleStepCapacity(1)}
+                      className="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg sm:rounded-md border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] text-[#0A0A0A] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

@@ -2,7 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { uploadAvatar } from '../lib/storage';
 import { useData } from '../context/DataContext';
-import type { StudentProfile, AlumniProfile, FacultyProfile, PrivacyLevel, UserPrivacySettings } from '../types';
+import { profileService, type SaveProfilePatch } from '../services/profileService';
+import { supabase } from '../lib/supabase';
+import type { StudentProfile, AlumniProfile, FacultyProfile, PrivacyLevel, UserPrivacySettings, UserRole } from '../types';
 import {
   User,
   Shield,
@@ -32,7 +34,7 @@ import {
   Copy
 } from 'lucide-react';
 import { Badge, Button, SegmentedTabs, Modal, ToastNotice, TextField, PasswordField, Toggle, SelectField, TextArea } from '../components/common/UIComponents';
-import { validateEmailByRole, getEmailHintByRole, type UserRole } from '../utils/validators';
+import { validateEmailByRole, getEmailHintByRole } from '../utils/validators';
 import { getBuildInfo } from '../utils/buildInfo';
 
 export const SettingsPage: React.FC = () => {
@@ -52,7 +54,7 @@ export const SettingsPage: React.FC = () => {
   // Base Profile State
   const [name, setName] = useState(currentUser.name || '');
   const [email, setEmail] = useState(currentUser.email || '');
-  const [institutionalEmail, setInstitutionalEmail] = useState(currentUser.institutionalEmail || '');
+  const [personalEmail, setPersonalEmail] = useState(currentUser.personalEmail || '');
   const [phone, setPhone] = useState(currentUser.phone || '');
   const [department, setDepartment] = useState(currentUser.department || 'CMPN');
   const [bio, setBio] = useState(currentUser.bio || '');
@@ -74,7 +76,7 @@ export const SettingsPage: React.FC = () => {
         } else {
           showToast(`Upload failed: ${res.error}`);
         }
-      } catch (err: any) {
+      } catch {
         showToast('Failed to upload profile photo.');
       } finally {
         setIsUploadingAvatar(false);
@@ -88,7 +90,7 @@ export const SettingsPage: React.FC = () => {
   const facultyUser = currentUser as FacultyProfile;
 
   // Student specific fields
-  const [semester, setSemester] = useState(studentUser.semester || '');
+  const [semester, setSemester] = useState(studentUser.semester || 'Semester 1');
   const [skills, setSkills] = useState<string[]>(studentUser.skills || []);
   const [newSkill, setNewSkill] = useState('');
   const [areasOfInterest, setAreasOfInterest] = useState<string[]>(studentUser.areasOfInterest || []);
@@ -98,24 +100,13 @@ export const SettingsPage: React.FC = () => {
   const [certifications] = useState<string[]>(studentUser.certifications || []);
   const [resumeUrl, setResumeUrl] = useState(studentUser.resumeUrl || '');
 
-  // Keep state synchronized if currentUser profile fields update
-  useEffect(() => {
-    if (currentUser) {
-      if ((currentUser as any).semester) setSemester((currentUser as any).semester);
-      if ((currentUser as any).careerGoal) setCareerGoal((currentUser as any).careerGoal);
-      if ((currentUser as any).preferredIndustry) setPreferredIndustry((currentUser as any).preferredIndustry);
-      if ((currentUser as any).preferredHigherStudies) setPreferredHigherStudies((currentUser as any).preferredHigherStudies);
-      if ((currentUser as any).resumeUrl) setResumeUrl((currentUser as any).resumeUrl);
-    }
-  }, [currentUser]);
-
   // Alumni specific fields
   const [graduationYear, setGraduationYear] = useState(alumniUser.graduationYear || new Date().getFullYear());
   const [company, setCompany] = useState(alumniUser.company || '');
   const [designation, setDesignation] = useState(alumniUser.designation || '');
   const [higherEducationInstitute, setHigherEducationInstitute] = useState(alumniUser.higherEducationInstitute || '');
-  const [location, setLocation] = useState(alumniUser.location || '');
-  const [country, setCountry] = useState(alumniUser.country || '');
+  const [location, setLocation] = useState(alumniUser.location || 'Mumbai, India');
+  const [country, setCountry] = useState(alumniUser.country || 'India');
   const [achievements] = useState<string[]>(alumniUser.professionalAchievements || []);
 
   // Mentor Capacity
@@ -124,7 +115,7 @@ export const SettingsPage: React.FC = () => {
 
   // Field Privacy Settings
   const defaultPrivacy: UserPrivacySettings = currentUser.privacySettings || {
-    email: 'institution',
+    email: 'public',
     phone: 'private',
     company: 'public',
     higherEd: 'public'
@@ -133,11 +124,15 @@ export const SettingsPage: React.FC = () => {
   const [privacyPhone, setPrivacyPhone] = useState<PrivacyLevel>(defaultPrivacy.phone);
   const [privacyCompany, setPrivacyCompany] = useState<PrivacyLevel>(defaultPrivacy.company);
   const [privacyHigherEd, setPrivacyHigherEd] = useState<PrivacyLevel>(defaultPrivacy.higherEd);
+  const [isSavingPrivacy, setIsSavingPrivacy] = useState(false);
 
-  // Notification Preferences
-  const [emailNotifs, setEmailNotifs] = useState(true);
-  const [inAppNotifs, setInAppNotifs] = useState(true);
-  const [digestFreq, setDigestFreq] = useState<'Instant' | 'Daily Digest' | 'Weekly Digest'>('Instant');
+  // Real Notification Category Preferences (in-app only)
+  const [notifOpportunities, setNotifOpportunities] = useState(true);
+  const [notifEvents, setNotifEvents] = useState(true);
+  const [notifAnnouncements, setNotifAnnouncements] = useState(true);
+  const [notifMentorship, setNotifMentorship] = useState(true);
+  const [notifMessages, setNotifMessages] = useState(true);
+  const [isSavingNotifs, setIsSavingNotifs] = useState(false);
 
   // Faculty specific fields
   const [employeeId, setEmployeeId] = useState(facultyUser.employeeId || '');
@@ -149,7 +144,11 @@ export const SettingsPage: React.FC = () => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
+  // Status & Feedback
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -158,100 +157,317 @@ export const SettingsPage: React.FC = () => {
     setTimeout(() => setNotice(null), 3500);
   };
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  // Full synchronization when currentUser updates or loads
+  useEffect(() => {
+    if (currentUser) {
+      setName(currentUser.name || '');
+      setEmail(currentUser.email || '');
+      setPersonalEmail(currentUser.personalEmail || '');
+      setPhone(currentUser.phone || '');
+      setDepartment(currentUser.department || 'CMPN');
+      setBio(currentUser.bio || '');
+      setAvatar(currentUser.avatar || '');
+
+      if (currentRole === 'student') {
+        const s = currentUser as StudentProfile;
+        setSemester(s.semester || 'Semester 1');
+        setSkills(s.skills || []);
+        setAreasOfInterest(s.areasOfInterest || []);
+        setCareerGoal(s.careerGoal || '');
+        setPreferredIndustry(s.preferredIndustry || '');
+        setPreferredHigherStudies(s.preferredHigherStudies || '');
+        setResumeUrl(s.resumeUrl || '');
+      } else if (currentRole === 'alumni') {
+        const a = currentUser as AlumniProfile;
+        setGraduationYear(a.graduationYear || new Date().getFullYear());
+        setCompany(a.company || '');
+        setDesignation(a.designation || '');
+        setHigherEducationInstitute(a.higherEducationInstitute || '');
+        setLocation(a.location || 'Mumbai, India');
+        setCountry(a.country || 'India');
+        setSkills(a.skills || []);
+        setMaxMentees(a.maxMentees || 3);
+        setIsMentoringAvailable(a.isMentoringAvailable ?? true);
+      } else if (currentRole === 'faculty' || currentRole === 'teacher') {
+        const f = currentUser as FacultyProfile;
+        setEmployeeId(f.employeeId || '');
+        setFacDesignation(f.designation || 'Professor');
+        setResearchAreas(f.researchAreas || []);
+        setOngoingResearch(f.ongoingResearch || '');
+        setSkills(f.skills || []);
+      }
+
+      if (currentUser.privacySettings) {
+        setPrivacyEmail(currentUser.privacySettings.email || 'public');
+        setPrivacyPhone(currentUser.privacySettings.phone || 'private');
+        setPrivacyCompany(currentUser.privacySettings.company || 'public');
+        setPrivacyHigherEd(currentUser.privacySettings.higherEd || 'public');
+      }
+    }
+  }, [currentUser, currentRole]);
+
+  // Load notification preferences on mount
+  useEffect(() => {
+    if (currentUser?.id) {
+      supabase
+        .from('notification_preferences' as any)
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .maybeSingle()
+        .then(({ data }: any) => {
+          if (data) {
+            setNotifOpportunities(!data.mute_opportunities);
+            setNotifEvents(!data.mute_events);
+            setNotifAnnouncements(!data.mute_announcements);
+          }
+        });
+    }
+  }, [currentUser?.id]);
+
+  // Dirty state evaluation
+  const isDirty = React.useMemo(() => {
+    if (!currentUser) return false;
+    if (name.trim() !== (currentUser.name || '')) return true;
+    if (personalEmail.trim().toLowerCase() !== (currentUser.personalEmail || '').toLowerCase()) return true;
+    if (phone.trim() !== (currentUser.phone || '')) return true;
+    if (department !== (currentUser.department || 'CMPN')) return true;
+    if (bio.trim() !== (currentUser.bio || '')) return true;
+
+    if (currentRole === 'student') {
+      const s = currentUser as StudentProfile;
+      if (semester !== (s.semester || 'Semester 1')) return true;
+      if (careerGoal.trim() !== (s.careerGoal || '')) return true;
+      if (preferredIndustry.trim() !== (s.preferredIndustry || '')) return true;
+      if (preferredHigherStudies.trim() !== (s.preferredHigherStudies || '')) return true;
+      if (resumeUrl.trim() !== (s.resumeUrl || '')) return true;
+      if (JSON.stringify(skills) !== JSON.stringify(s.skills || [])) return true;
+      if (JSON.stringify(areasOfInterest) !== JSON.stringify(s.areasOfInterest || [])) return true;
+    } else if (currentRole === 'alumni') {
+      const a = currentUser as AlumniProfile;
+      if (Number(graduationYear) !== (a.graduationYear || new Date().getFullYear())) return true;
+      if (company.trim() !== (a.company || '')) return true;
+      if (designation.trim() !== (a.designation || '')) return true;
+      if (higherEducationInstitute.trim() !== (a.higherEducationInstitute || '')) return true;
+      if (location.trim() !== (a.location || 'Mumbai, India')) return true;
+      if (country.trim() !== (a.country || 'India')) return true;
+      if (maxMentees !== (a.maxMentees || 3)) return true;
+      if (isMentoringAvailable !== (a.isMentoringAvailable ?? true)) return true;
+      if (JSON.stringify(skills) !== JSON.stringify(a.skills || [])) return true;
+    } else if (currentRole === 'faculty' || currentRole === 'teacher') {
+      const f = currentUser as FacultyProfile;
+      if (employeeId.trim() !== (f.employeeId || '')) return true;
+      if (facDesignation.trim() !== (f.designation || 'Professor')) return true;
+      if (ongoingResearch.trim() !== (f.ongoingResearch || '')) return true;
+      if (JSON.stringify(researchAreas) !== JSON.stringify(f.researchAreas || [])) return true;
+      if (JSON.stringify(skills) !== JSON.stringify(f.skills || [])) return true;
+    }
+    return false;
+  }, [
+    currentUser, currentRole, name, personalEmail, phone, department, bio,
+    semester, careerGoal, preferredIndustry, preferredHigherStudies, resumeUrl, skills, areasOfInterest,
+    graduationYear, company, designation, higherEducationInstitute, location, country, maxMentees, isMentoringAvailable,
+    employeeId, facDesignation, ongoingResearch, researchAreas
+  ]);
+
+  // Warn on leaving with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+    setSaveError(null);
 
     if (!name || name.trim() === '') {
       setFormError('Full Name is required.');
       return;
     }
-    if (!email || email.trim() === '') {
-      setFormError('Email address is required.');
+
+    if (personalEmail && personalEmail.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(personalEmail.trim())) {
+        setFormError('Please enter a valid email address format.');
+        return;
+      }
+    }
+
+    setIsSaving(true);
+    try {
+      const patch: SaveProfilePatch = {
+        name: name.trim(),
+        phone: phone.trim(),
+        department: currentRole === 'admin' ? (currentUser.department || 'CMPN') : department,
+        bio: bio.trim(),
+        avatar,
+        personalEmail: personalEmail.trim().toLowerCase(),
+        privacySettings: {
+          email: privacyEmail,
+          phone: privacyPhone,
+          company: privacyCompany,
+          higherEd: privacyHigherEd
+        }
+      };
+
+      if (currentRole === 'student') {
+        patch.semester = semester;
+        patch.skills = skills;
+        patch.areasOfInterest = areasOfInterest;
+        patch.careerGoal = careerGoal;
+        patch.preferredIndustry = preferredIndustry;
+        patch.preferredHigherStudies = preferredHigherStudies;
+        patch.resumeUrl = resumeUrl;
+      } else if (currentRole === 'alumni') {
+        patch.company = company;
+        patch.designation = designation;
+        patch.graduationYear = Number(graduationYear);
+        patch.higherEducationInstitute = higherEducationInstitute;
+        patch.location = location;
+        patch.country = country;
+        patch.skills = skills;
+        patch.maxMentees = maxMentees;
+        patch.isMentoringAvailable = isMentoringAvailable;
+      } else if (currentRole === 'faculty' || currentRole === 'teacher') {
+        patch.employeeId = employeeId;
+        patch.designation = facDesignation;
+        patch.researchAreas = researchAreas;
+        patch.ongoingResearch = ongoingResearch;
+        patch.skills = skills;
+      }
+
+      const res = await profileService.saveProfile(currentUser.id, currentRole as UserRole, patch);
+      if (!res.success) {
+        setSaveError(res.error || 'Failed to save profile changes.');
+        showToast(res.error || 'Save failed. Your edits are preserved.');
+        return;
+      }
+
+      if (res.profile) {
+        updateCurrentUserState(res.profile);
+      }
+      addAuditLog('PROFILE_UPDATED', currentUser.name, `Updated profile attributes and settings.`, currentUser.id);
+      showToast('Profile updated and saved to server successfully!');
+    } catch (err: any) {
+      setSaveError(err.message || 'An unexpected error occurred while saving.');
+      showToast('Error saving profile. Your edits are preserved.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSavePrivacy = async () => {
+    if (!currentUser?.id) return;
+    setIsSavingPrivacy(true);
+    try {
+      const res = await profileService.saveProfile(currentUser.id, currentRole as UserRole, {
+        privacySettings: {
+          email: privacyEmail,
+          phone: privacyPhone,
+          company: privacyCompany,
+          higherEd: privacyHigherEd
+        }
+      });
+      if (!res.success) {
+        showToast(res.error || 'Failed to save privacy settings.');
+      } else {
+        if (res.profile) {
+          updateCurrentUserState(res.profile);
+        }
+        showToast('Privacy preferences saved! Changes are now enforced.');
+      }
+    } catch {
+      showToast('Failed to save privacy preferences.');
+    } finally {
+      setIsSavingPrivacy(false);
+    }
+  };
+
+  const handleSaveNotifications = async () => {
+    if (!currentUser?.id) return;
+    setIsSavingNotifs(true);
+    try {
+      const { error } = await supabase.from('notification_preferences' as any).upsert({
+        user_id: currentUser.id,
+        mute_opportunities: !notifOpportunities,
+        mute_events: !notifEvents,
+        mute_announcements: !notifAnnouncements,
+        updated_at: new Date().toISOString()
+      } as any, { onConflict: 'user_id' });
+
+      if (error) {
+        showToast(`Failed to save preferences: ${error.message}`);
+      } else {
+        showToast('Notification category preferences saved successfully!');
+      }
+    } catch {
+      showToast('Failed to save notification preferences.');
+    } finally {
+      setIsSavingNotifs(false);
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    if (!currentPassword) {
+      showToast('Please enter your current password.');
+      return;
+    }
+    if (!newPassword || newPassword.length < 8) {
+      showToast('New password must be at least 8 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showToast('New passwords do not match.');
       return;
     }
 
-    const normalizedRole: UserRole = currentRole === 'student' ? 'Student' : currentRole === 'alumni' ? 'Alumni' : currentRole === 'admin' ? 'Admin' : 'Faculty';
+    setIsUpdatingPassword(true);
+    try {
+      const { error: authErr } = await supabase.auth.signInWithPassword({
+        email: currentUser.email,
+        password: currentPassword
+      });
 
-    // B2: Single shared email validator across all roles
-    if (currentRole === 'alumni') {
-      const emailCheck = validateEmailByRole(email, 'Alumni');
-      if (!emailCheck.isValid) {
-        setFormError(emailCheck.error || 'Please enter a valid personal email address format.');
+      if (authErr) {
+        showToast('Incorrect current password. Please check your credentials.');
+        setIsUpdatingPassword(false);
         return;
       }
-    } else {
-      const targetEmail = institutionalEmail || email;
-      const emailCheck = validateEmailByRole(targetEmail, normalizedRole);
-      if (!emailCheck.isValid) {
-        setFormError(emailCheck.error || `Institutional Email must follow ${normalizedRole} format.`);
-        return;
+
+      const { error: updateErr } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (updateErr) {
+        showToast(`Failed to update password: ${updateErr.message}`);
+      } else {
+        showToast('Password updated successfully!');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
       }
+    } catch {
+      showToast('Network error while updating password.');
+    } finally {
+      setIsUpdatingPassword(false);
     }
+  };
 
-    const emailChanged = email !== currentUser.email;
-
-    // BUG 2 FIX: Admin email changes bypass self-locking re-verification, requiring current password confirmation instead
-    if (currentRole === 'admin' && emailChanged) {
-      if (!currentPassword) {
-        showToast('Security Action Required: Please enter your Current Password under the Security section below to confirm Admin email modification.');
-        return;
+  const handleForgotPassword = async () => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(currentUser.email);
+      if (error) {
+        showToast(`Reset failed: ${error.message}`);
+      } else {
+        showToast(`Password reset instructions sent to ${currentUser.email}.`);
       }
-    }
-
-    const isCriticalFieldEdited = emailChanged && currentRole !== 'admin';
-
-    const privacySettings: UserPrivacySettings = {
-      email: privacyEmail,
-      phone: privacyPhone,
-      company: privacyCompany,
-      higherEd: privacyHigherEd
-    };
-
-    const updatedProfilePayload: any = {
-      name,
-      email,
-      institutionalEmail: institutionalEmail.trim().toLowerCase() || null,
-      phone,
-      department: currentRole === 'admin' ? (currentUser.department || 'CMPN') : department,
-      bio,
-      avatar,
-      skills,
-      areasOfInterest,
-      careerGoal,
-      preferredIndustry,
-      preferredHigherStudies,
-      certifications,
-      resumeUrl,
-      semester,
-      graduationYear,
-      company,
-      designation: currentRole === 'faculty' ? facDesignation : designation,
-      higherEducationInstitute,
-      location,
-      country,
-      professionalAchievements: achievements,
-      employeeId,
-      researchAreas,
-      ongoingResearch,
-      maxMentees,
-      isMentoringAvailable,
-      privacySettings,
-      requiresReVerification: isCriticalFieldEdited
-    };
-
-    updateCurrentUserState(updatedProfilePayload as any);
-    updateUserProfile(currentUser.id, updatedProfilePayload as any);
-
-    if (currentRole === 'admin' && emailChanged) {
-      addAuditLog('ADMIN_EMAIL_UPDATED', currentUser.name, `Admin email updated to ${email} (confirmed via password).`, currentUser.id);
-      showToast('Profile updated! Admin email address modified successfully.');
-      setCurrentPassword('');
-    } else if (isCriticalFieldEdited) {
-      addAuditLog('CRITICAL_FIELD_UPDATED', currentUser.name, `Updated critical contact email to ${email}. Lightweight re-verification triggered.`, currentUser.id);
-      showToast('Profile saved! Note: Email modification has triggered a lightweight admin re-verification.');
-    } else {
-      showToast('Profile updated successfully! Recommendation engine has refreshed your matching results.');
+    } catch {
+      showToast('Failed to send reset code.');
     }
   };
 
@@ -393,33 +609,38 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="app-label text-[#0A0A0A] font-bold">Personal Email (Login)</label>
+              <label className="app-label text-[#0A0A0A] font-bold">
+                {currentRole === 'alumni' ? 'Personal Email (used to sign in)' : 'College Email (used to sign in)'}
+              </label>
               <input
                 type="email"
                 required
                 value={email}
-                onChange={e => setEmail(e.target.value)}
-                className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
+                readOnly
+                disabled
+                className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#F3F4F6] cursor-not-allowed text-[#6B7280]"
               />
+              <p className="text-[10px] text-[#6B7280] mt-1">
+                Your primary institutional authentication identifier (cannot be edited here).
+              </p>
             </div>
 
             <div>
               <label className="app-label text-[#0A0A0A] font-bold">
-                Institutional Email {currentRole === 'alumni' ? '(Read-only record)' : '(Institutional ID)'}
+                {currentRole === 'alumni' ? 'Institutional Email (Archive record)' : 'Personal / Recovery Email'}
               </label>
               <input
                 type="email"
-                value={institutionalEmail}
-                onChange={e => setInstitutionalEmail(e.target.value)}
-                disabled={currentRole === 'alumni'}
-                readOnly={currentRole === 'alumni'}
-                placeholder={currentRole === 'student' ? 'e.g. name@student.vit.edu.in' : 'e.g. name@vit.edu.in'}
-                className={`app-input w-full font-bold border-[#E5E7EB] rounded-lg ${currentRole === 'alumni' ? 'bg-[#F3F4F6] cursor-not-allowed text-[#6B7280]' : 'bg-[#FAFAFA]'}`}
+                value={personalEmail}
+                onChange={e => {
+                  setPersonalEmail(e.target.value);
+                  setSaveError(null);
+                }}
+                placeholder={currentRole === 'alumni' ? 'e.g. alumni@alumni.vit.edu.in' : 'e.g. name@gmail.com'}
+                className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
               />
               <p className="text-[10px] text-[#6B7280] mt-1">
-                {currentRole === 'alumni'
-                  ? 'Institutional record is optional and read-only for alumni.'
-                  : getEmailHintByRole(currentRole === 'student' ? 'Student' : currentRole === 'admin' ? 'Admin' : 'Faculty')}
+                Used for password resets, important account notifications, and communication recovery.
               </p>
             </div>
 
@@ -652,10 +873,25 @@ export const SettingsPage: React.FC = () => {
           )}
 
           {/* Sticky Save Action Bar on Mobile */}
-          <div className="pt-3 sm:pt-4 flex justify-end border-t border-[#E5E7EB] sticky bottom-16 lg:bottom-4 z-20 bg-white/95 backdrop-blur-md -mx-4 sm:-mx-6 px-4 sm:px-6 py-2.5 sm:py-3 border-b sm:border-b-0 rounded-b-xl">
-            <Button type="submit" variant="primary" size="md" className="w-full sm:w-auto" icon={<Save className="w-4 h-4" />}>
-              Save Profile Details
-            </Button>
+          <div className="pt-3 sm:pt-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-[#E5E7EB] sticky bottom-16 lg:bottom-4 z-20 bg-white/95 backdrop-blur-md -mx-4 sm:-mx-6 px-4 sm:px-6 py-2.5 sm:py-3 border-b sm:border-b-0 rounded-b-xl">
+            {saveError ? (
+              <div className="flex items-center gap-2 text-rose-600 text-xs font-semibold">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span className="line-clamp-1">{saveError}</span>
+              </div>
+            ) : <div />}
+            <div className="flex items-center gap-3 w-full sm:w-auto ml-auto">
+              <Button 
+                type="submit" 
+                variant="primary" 
+                size="md" 
+                className="w-full sm:w-auto" 
+                icon={<Save className="w-4 h-4" />}
+                disabled={!isDirty || isSaving}
+              >
+                {isSaving ? 'Saving Changes...' : isDirty ? 'Save Profile Details' : 'All Changes Saved'}
+              </Button>
+            </div>
           </div>
         </form>
       )}
@@ -689,9 +925,9 @@ export const SettingsPage: React.FC = () => {
                     onChange={e => f.set(e.target.value as PrivacyLevel)}
                     className="app-input w-full sm:w-auto font-bold border-[#E5E7EB] rounded-lg bg-white appearance-none pr-8 cursor-pointer text-xs"
                   >
-                    <option value="public">Public (Everyone)</option>
-                    <option value="institution">Institution Only (Logged In Users)</option>
-                    <option value="private">Private (Only Admin & Me)</option>
+                    <option value="public">All verified members</option>
+                    <option value="institution">People I mentor or am mentored by</option>
+                    <option value="private">Only me and admins</option>
                   </select>
                   <ChevronDown className="w-3.5 h-3.5 text-[#6B7280] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
@@ -705,9 +941,10 @@ export const SettingsPage: React.FC = () => {
               variant="primary"
               size="md"
               className="w-full sm:w-auto"
-              onClick={() => showToast('Privacy settings updated! Search results and profiles now enforce your visibility preferences.')}
+              disabled={isSavingPrivacy}
+              onClick={handleSavePrivacy}
             >
-              Save Privacy Preferences
+              {isSavingPrivacy ? 'Saving Preferences...' : 'Save Privacy Preferences'}
             </Button>
           </div>
         </div>
@@ -783,39 +1020,47 @@ export const SettingsPage: React.FC = () => {
           <div className="space-y-3 sm:space-y-4 max-w-xl text-xs font-sans">
             <div className="p-3.5 sm:p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl">
               <Toggle
-                checked={inAppNotifs}
-                onChange={setInAppNotifs}
-                label="In-app drawer notifications"
-                description="Receive instant alerts in top navigation bell"
+                checked={notifOpportunities}
+                onChange={setNotifOpportunities}
+                label="Job & Internship Opportunities"
+                description="Receive updates about newly posted campus and alumni job openings"
               />
             </div>
 
             <div className="p-3.5 sm:p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl">
               <Toggle
-                checked={emailNotifs}
-                onChange={setEmailNotifs}
-                label="Email alert notifications"
-                description="Forward high-priority messages to institutional email"
+                checked={notifEvents}
+                onChange={setNotifEvents}
+                label="Campus Events & Webinars"
+                description="Alerts for upcoming college workshops, hackathons, and guest sessions"
               />
             </div>
 
-            <div className="p-3.5 sm:p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
-              <div>
-                <span className="font-bold text-[#0A0A0A] block text-xs">Email Digest Frequency</span>
-                <span className="text-[11px] text-[#6B7280]">Summary frequency for unread activities</span>
-              </div>
-              <div className="relative w-full sm:w-auto shrink-0">
-                <select
-                  value={digestFreq}
-                  onChange={e => setDigestFreq(e.target.value as any)}
-                  className="app-input w-full sm:w-auto font-bold border-[#E5E7EB] rounded-lg bg-white appearance-none pr-8 cursor-pointer text-xs"
-                >
-                  <option value="Instant">Instant Alerts</option>
-                  <option value="Daily Digest">Daily Summary</option>
-                  <option value="Weekly Digest">Weekly Digest</option>
-                </select>
-                <ChevronDown className="w-3.5 h-3.5 text-[#6B7280] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
+            <div className="p-3.5 sm:p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl">
+              <Toggle
+                checked={notifAnnouncements}
+                onChange={setNotifAnnouncements}
+                label="Institutional Announcements"
+                description="Official department broadcasts and university circulars"
+              />
+            </div>
+
+            <div className="p-3.5 sm:p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl">
+              <Toggle
+                checked={notifMentorship}
+                onChange={setNotifMentorship}
+                label="Mentorship & Guidance Updates"
+                description="Status changes on mentorship requests, sessions, and bookings"
+              />
+            </div>
+
+            <div className="p-3.5 sm:p-4 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl">
+              <Toggle
+                checked={notifMessages}
+                onChange={setNotifMessages}
+                label="Direct Messages"
+                description="Instant notifications when peers or mentors send you direct messages"
+              />
             </div>
           </div>
 
@@ -825,9 +1070,10 @@ export const SettingsPage: React.FC = () => {
               variant="primary"
               size="md"
               className="w-full sm:w-auto"
-              onClick={() => showToast('Notification preferences saved successfully!')}
+              disabled={isSavingNotifs}
+              onClick={handleSaveNotifications}
             >
-              Save Preferences
+              {isSavingNotifs ? 'Saving Preferences...' : 'Save Preferences'}
             </Button>
           </div>
         </div>
@@ -846,50 +1092,42 @@ export const SettingsPage: React.FC = () => {
                 label="Current Password"
                 value={currentPassword}
                 onChange={e => setCurrentPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="Enter current password"
                 className="bg-[#FAFAFA]"
               />
               <PasswordField
-                label="New Password"
+                label="New Password (min 8 chars)"
                 value={newPassword}
                 onChange={e => setNewPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="Min 8 characters"
                 className="bg-[#FAFAFA]"
               />
               <PasswordField
                 label="Confirm New Password"
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="Re-enter new password"
                 className="bg-[#FAFAFA]"
               />
             </div>
 
-            <div className="flex justify-end pt-1">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                className="text-xs font-semibold text-[#0A0A0A] hover:underline"
+              >
+                Forgot your current password? Send password reset link to your email
+              </button>
+
               <Button
                 variant="primary"
                 size="md"
                 className="w-full sm:w-auto"
-                onClick={() => {
-                  if (!currentPassword) {
-                    showToast('Please enter your current password.');
-                    return;
-                  }
-                  if (!newPassword || newPassword.length < 6) {
-                    showToast('New password must be at least 6 characters.');
-                    return;
-                  }
-                  if (newPassword !== confirmPassword) {
-                    showToast('New passwords do not match.');
-                    return;
-                  }
-                  showToast('Password updated successfully!');
-                  setCurrentPassword('');
-                  setNewPassword('');
-                  setConfirmPassword('');
-                }}
+                disabled={isUpdatingPassword || !currentPassword || !newPassword || !confirmPassword}
+                onClick={handleUpdatePassword}
               >
-                Update Password
+                {isUpdatingPassword ? 'Verifying & Updating...' : 'Update Password'}
               </Button>
             </div>
           </div>

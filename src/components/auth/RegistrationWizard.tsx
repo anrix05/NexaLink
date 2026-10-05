@@ -188,7 +188,7 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({
       errs.email = 'Please enter a valid email address.';
     } else if (role === 'student') {
       if (!trimmedEmail.endsWith('@student.vit.edu.in') && !trimmedEmail.endsWith('@vit.edu.in')) {
-        errs.email = 'Students register with their @student.vit.edu.in address.';
+        errs.email = 'Students register with their institutional email (@student.vit.edu.in or @vit.edu.in).';
       }
     } else if (role === 'faculty') {
       if (!trimmedEmail.endsWith('@vit.edu.in')) {
@@ -697,7 +697,7 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({
                 label={role === 'alumni' ? 'Primary email address' : 'Institutional email address'}
                 hint={
                   role === 'student'
-                    ? 'Students must register with their @student.vit.edu.in address.'
+                    ? 'Students register with their institutional email (@student.vit.edu.in or @vit.edu.in).'
                     : role === 'faculty'
                     ? 'Faculty must register with their @vit.edu.in address.'
                     : 'Alumni register with their personal email address.'

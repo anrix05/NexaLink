@@ -3,6 +3,7 @@ import type { User, UserRole, AlumniProfile, StudentProfile, FacultyProfile } fr
 // Removed static import of mockData for production tree-shaking
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { authService } from '../services/authService';
+import { profileService } from '../services/profileService';
 
 interface AuthContextType {
   currentUser: User | AlumniProfile | StudentProfile | FacultyProfile;
@@ -227,47 +228,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadUserProfileFromSupabase = async (userId: string, triggerSplash: boolean = true) => {
     try {
-      const { data: userData, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      const enrichedUser = await profileService.getProfile(userId);
+      if (!enrichedUser) return false;
 
-      if (error || !userData) return false;
-
-      let enrichedUser: any = {
-        ...userData,
-        avatar: (userData.avatar_url && !userData.avatar_url.includes('photo-1535713875002')) ? userData.avatar_url : undefined,
-        isVerified: userData.is_verified,
-        verificationStatus: userData.verification_status,
-        enrollmentNo: userData.enrollment_no,
-        employeeId: userData.employee_id
-      };
-
-      if (userData.role === 'student') {
-        const { data: studentData } = await supabase
-          .from('student_profiles')
-          .select('*')
-          .eq('user_id', userId)
-          .maybeSingle();
-        if (studentData) enrichedUser = { ...enrichedUser, ...studentData };
-      } else if (userData.role === 'alumni') {
-        const { data: alumniData } = await supabase
-          .from('alumni_profiles')
-          .select('*')
-          .eq('user_id', userId)
-          .maybeSingle();
-        if (alumniData) enrichedUser = { ...enrichedUser, ...alumniData };
-      } else if (userData.role === 'faculty' || userData.role === 'teacher') {
-        const { data: facultyData } = await supabase
-          .from('faculty_profiles')
-          .select('*')
-          .eq('user_id', userId)
-          .maybeSingle();
-        if (facultyData) enrichedUser = { ...enrichedUser, ...facultyData };
-      }
-
-      setCurrentRole(userData.role as UserRole);
+      setCurrentRole(enrichedUser.role as UserRole);
       setCurrentUser(enrichedUser);
       setIsAuthenticated(true);
       wasAuthenticatedRef.current = true;

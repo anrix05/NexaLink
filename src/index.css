@@ -46,6 +46,10 @@
   --duration-base: 250ms;
   --duration-slow: 400ms;
 
+  /* Layout Height Tokens */
+  --topbar-h: 64px;
+  --bottomnav-h: 56px;
+
   /* Safe Area Insets for Mobile/Notched Screens */
   --sat: env(safe-area-inset-top, 0px);
   --sar: env(safe-area-inset-right, 0px);
@@ -58,10 +62,27 @@
   box-sizing: border-box;
 }
 
-/* Global Accessible Focus Ring */
+/* Global Accessible Focus Ring - Single unified focus style */
 *:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 0;
+  border-color: var(--focus-ring) !important;
+  box-shadow: none !important;
 }
 
 @layer base {

@@ -1,16 +1,14 @@
 import React, { useRef, useState, useCallback } from 'react';
 import { motion, useScroll, useTransform, useMotionValueEvent } from 'framer-motion';
-import { MessageSquare, FileSpreadsheet, Mail, CheckCircle2, FileText, Download } from 'lucide-react';
+import { MessageSquare, FileSpreadsheet, Mail, CheckCircle2, FileText, ArrowRight } from 'lucide-react';
 import { useReducedMotionPreference } from '../../lib/motionPreference';
 import { useMotionProfile } from '../../hooks/useMotionProfile';
-import { useData } from '../../context/DataContext';
 import { Eyebrow } from '../common/Eyebrow';
 
 export const ScrollytellingSection: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const reduceMotion = useReducedMotionPreference();
   const { shortViewport } = useMotionProfile();
-  const { alumniList } = useData();
 
   // Tap-to-jump: scrolls the document so that containerRef is at the given beat progress (0–1)
   const jumpToStep = useCallback((targetProgress: number) => {
@@ -21,8 +19,6 @@ export const ScrollytellingSection: React.FC = () => {
     const targetY = containerTop + height * targetProgress;
     window.scrollTo({ top: targetY, behavior: 'smooth' });
   }, []);
-
-  const verifiedAlumniCount = alumniList.filter((a) => a.isVerified !== false).length;
 
   const [activeStep, setActiveStep] = useState(1);
   const [beat1Visible, setBeat1Visible] = useState(true);
@@ -78,7 +74,7 @@ export const ScrollytellingSection: React.FC = () => {
   const reportProgressWidth = useTransform(
     scrollYProgress,
     [0.70, 0.88],
-    [verifiedAlumniCount > 0 ? '20%' : '0%', verifiedAlumniCount > 0 ? '85%' : '0%']
+    ['20%', '85%']
   );
 
   // Stage Header Progress Bars
@@ -158,10 +154,10 @@ export const ScrollytellingSection: React.FC = () => {
     >
       {/* 100svh Sticky Stage with vertically centered content */}
       <div className="sticky top-0 h-[100svh] w-full flex items-center justify-center overflow-hidden">
-        <div className="app-container w-full py-4 sm:py-6">
+        <div className="app-container w-full py-2 sm:py-6">
           
           {/* Top Step Progress Row: Position fixed within stage header */}
-          <div className="flex items-center justify-between pb-6 border-b border-[#E5E7EB] mb-8 sm:mb-12">
+          <div className="flex items-center justify-between pb-3 sm:pb-6 border-b border-[#E5E7EB] mb-4 sm:mb-8 lg:mb-12">
             <div className="flex items-center gap-3">
               <Eyebrow>How it works</Eyebrow>
               <span className="text-[#E5E7EB]">|</span>
@@ -196,10 +192,10 @@ export const ScrollytellingSection: React.FC = () => {
           </div>
 
           {/* Main 2-Column Scrollytelling Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center min-h-[380px]">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 lg:gap-12 items-center min-h-0 lg:min-h-[380px]">
             
             {/* Left Column: All 3 Text Beats Stacked in ONE CSS Grid Cell */}
-            <div className="lg:col-span-5 grid grid-cols-1 grid-rows-1 relative min-h-[220px]">
+            <div className="lg:col-span-5 grid grid-cols-1 grid-rows-1 relative min-h-0 sm:min-h-[140px] lg:min-h-[220px]">
               
               {/* Beat 1 Text */}
               <motion.div
@@ -212,13 +208,13 @@ export const ScrollytellingSection: React.FC = () => {
                 }}
                 aria-hidden={!beat1Visible}
                 inert={!beat1Visible}
-                className="flex flex-col justify-center space-y-3 transition-opacity"
+                className="flex flex-col justify-start lg:justify-center space-y-2 sm:space-y-3 transition-opacity"
               >
                 <Eyebrow>The problem</Eyebrow>
-                <h2 className="text-2xl sm:text-4xl font-display font-bold text-[#0A0A0A] tracking-tight leading-snug">
+                <h2 className="text-xl sm:text-3xl lg:text-4xl font-display font-bold text-[#0A0A0A] tracking-tight leading-snug">
                   Today, alumni data lives in WhatsApp groups, spreadsheets and old email lists.
                 </h2>
-                <p className="text-sm text-[#6B7280] leading-relaxed">
+                <p className="text-xs sm:text-sm text-[#6B7280] leading-relaxed">
                   Important career updates and mentorship opportunities get lost in unverified chats, leading to lost institutional memory.
                 </p>
               </motion.div>
@@ -234,13 +230,13 @@ export const ScrollytellingSection: React.FC = () => {
                 }}
                 aria-hidden={!beat2Visible}
                 inert={!beat2Visible}
-                className="flex flex-col justify-center space-y-3 transition-opacity"
+                className="flex flex-col justify-start lg:justify-center space-y-2 sm:space-y-3 transition-opacity"
               >
                 <Eyebrow>The solution</Eyebrow>
-                <h2 className="text-2xl sm:text-4xl font-display font-bold text-[#0A0A0A] tracking-tight leading-snug">
+                <h2 className="text-xl sm:text-3xl lg:text-4xl font-display font-bold text-[#0A0A0A] tracking-tight leading-snug">
                   NexaLink brings it into one verified system.
                 </h2>
-                <p className="text-sm text-[#6B7280] leading-relaxed">
+                <p className="text-xs sm:text-sm text-[#6B7280] leading-relaxed">
                   Every profile is tied to institutional enrollment records. Real students connect with authenticated alumni across Google, Microsoft, and global universities.
                 </p>
               </motion.div>
@@ -256,21 +252,21 @@ export const ScrollytellingSection: React.FC = () => {
                 }}
                 aria-hidden={!beat3Visible}
                 inert={!beat3Visible}
-                className="flex flex-col justify-center space-y-3 transition-opacity"
+                className="flex flex-col justify-start lg:justify-center space-y-2 sm:space-y-3 transition-opacity"
               >
                 <Eyebrow>The outcome</Eyebrow>
-                <h2 className="text-2xl sm:text-4xl font-display font-bold text-[#0A0A0A] tracking-tight leading-snug">
+                <h2 className="text-xl sm:text-3xl lg:text-4xl font-display font-bold text-[#0A0A0A] tracking-tight leading-snug">
                   And turns it into accreditation-ready reports.
                 </h2>
-                <p className="text-sm text-[#6B7280] leading-relaxed">
-                  One-click export for NAAC Criteria 5.4.1 and NIRF data templates. Zero manual audit panics at year-end.
+                <p className="text-xs sm:text-sm text-[#6B7280] leading-relaxed">
+                  One-click export for NAAC Criteria 5.4.1 and NIRF data templates, keeping institutional records audit-ready.
                 </p>
               </motion.div>
 
             </div>
 
             {/* Right Column: Visual Stage Stacked in ONE CSS Grid Cell */}
-            <div className="lg:col-span-7 grid grid-cols-1 grid-rows-1 items-center justify-center relative min-h-[360px]">
+            <div className="lg:col-span-7 grid grid-cols-1 grid-rows-1 items-center justify-center relative min-h-0 sm:min-h-[280px] lg:min-h-[360px]">
               
               {/* Beats 1 & 2 Visual: 3 Cards Transforming */}
               <motion.div
@@ -396,7 +392,7 @@ export const ScrollytellingSection: React.FC = () => {
                 </span>
               </motion.div>
 
-              {/* Beat 3 Visual: Accreditation Report Card */}
+              {/* Beat 3 Visual: Accreditation Report Card (Truthful sample marketing preview) */}
               <motion.div
                 style={{
                   gridArea: '1 / 1',
@@ -406,30 +402,30 @@ export const ScrollytellingSection: React.FC = () => {
                 }}
                 aria-hidden={!beat3Visible}
                 inert={!beat3Visible}
-                className="w-full max-w-md bg-white border border-[#0A0A0A] rounded-xl p-6 space-y-5"
+                className="w-full max-w-md bg-white border border-[#0A0A0A] rounded-xl p-4 sm:p-6 space-y-3 sm:space-y-5 mx-auto lg:mx-0 shadow-xs"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-lg bg-[#0A0A0A] text-white flex items-center justify-center">
-                      <FileText className="w-5 h-5" />
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[#0A0A0A] text-white flex items-center justify-center">
+                      <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-sm text-[#0A0A0A]">Institutional report</h4>
-                      <span className="text-xs text-[#6B7280]">NAAC 5.4.1 & NIRF</span>
+                      <h4 className="font-bold text-xs sm:text-sm text-[#0A0A0A]">Institutional report</h4>
+                      <span className="text-[11px] sm:text-xs text-[#6B7280]">NAAC 5.4.1 & NIRF</span>
                     </div>
                   </div>
 
-                  <span className="px-2.5 py-1 rounded bg-[#FAFAFA] border border-[#E5E7EB] text-xs font-medium text-[#0A0A0A]">
-                    {verifiedAlumniCount > 0 ? 'Export ready' : 'Sample report'}
+                  <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 rounded bg-[#FAFAFA] border border-[#E5E7EB] text-[11px] sm:text-xs font-medium text-[#0A0A0A]">
+                    Sample report
                   </span>
                 </div>
 
-                {/* Live Records Captured Bar */}
+                {/* Sample Records Captured Bar */}
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-xs text-[#6B7280]">
-                    <span>Records captured</span>
+                    <span>Sample records</span>
                     <span className="font-medium text-[#0A0A0A] tabular-nums">
-                      {verifiedAlumniCount > 0 ? `${verifiedAlumniCount} verified` : '0 records (unfilled)'}
+                      120 verified entries
                     </span>
                   </div>
                   <div className="h-2 w-full bg-[#E5E7EB] rounded-full overflow-hidden">
@@ -441,23 +437,30 @@ export const ScrollytellingSection: React.FC = () => {
                 </div>
 
                 {/* Data Summary Grid */}
-                <div className="grid grid-cols-2 gap-3 text-xs pt-1">
-                  <div className="p-2.5 rounded-lg bg-[#FAFAFA] border border-[#E5E7EB]">
-                    <span className="text-xs font-medium text-[#6B7280] block">Alumni contribution</span>
-                    <span className="font-semibold text-[#0A0A0A] mt-0.5 block">Mentorship & referrals</span>
+                <div className="grid grid-cols-2 gap-2.5 sm:gap-3 text-xs pt-1">
+                  <div className="p-2 sm:p-2.5 rounded-lg bg-[#FAFAFA] border border-[#E5E7EB]">
+                    <span className="text-[11px] sm:text-xs font-medium text-[#6B7280] block">Alumni contribution</span>
+                    <span className="font-semibold text-xs sm:text-sm text-[#0A0A0A] mt-0.5 block truncate">Mentorship & referrals</span>
                   </div>
-                  <div className="p-2.5 rounded-lg bg-[#FAFAFA] border border-[#E5E7EB]">
-                    <span className="text-xs font-medium text-[#6B7280] block">Format output</span>
-                    <span className="font-semibold text-[#0A0A0A] mt-0.5 block">CSV, PDF, Excel</span>
+                  <div className="p-2 sm:p-2.5 rounded-lg bg-[#FAFAFA] border border-[#E5E7EB]">
+                    <span className="text-[11px] sm:text-xs font-medium text-[#6B7280] block">Format output</span>
+                    <span className="font-semibold text-xs sm:text-sm text-[#0A0A0A] mt-0.5 block">CSV, PDF, Excel</span>
                   </div>
                 </div>
 
-                <div className="pt-2 flex items-center justify-between border-t border-[#E5E7EB]">
-                  <span className="text-xs text-[#6B7280]">Verified institutional dataset</span>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0A0A0A] text-white text-xs font-medium">
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Export compliance report</span>
-                  </div>
+                <div className="pt-2 flex items-center justify-between border-t border-[#E5E7EB] gap-2">
+                  <span className="text-[11px] sm:text-xs text-[#6B7280] truncate">Sample preview only</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById('academic');
+                      if (el) el.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-medium transition-colors cursor-pointer shrink-0 touch-target-44"
+                  >
+                    <span>See how it works</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </motion.div>
 

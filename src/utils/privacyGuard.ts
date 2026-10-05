@@ -4,7 +4,7 @@
  * ('public' | 'institution' | 'private') across search results, Org Lookup, and recommendation engine.
  */
 
-import type { User, AlumniProfile, StudentProfile, FacultyProfile, UserPrivacySettings } from '../types';
+import type { User, AlumniProfile, StudentProfile, FacultyProfile, UserPrivacySettings } from '../types/index.ts';
 
 export function redactUserPrivacyFields<T extends User>(
   targetUser: T,
@@ -27,6 +27,9 @@ export function redactUserPrivacyFields<T extends User>(
 
   const copy = { ...targetUser };
 
+  // Personal recovery email is strictly confidential and should never be exposed to third parties
+  copy.personalEmail = undefined;
+
   // Email privacy check
   if (privacy.email === 'private') {
     copy.email = '[Private - Restricted by User]';
@@ -36,9 +39,9 @@ export function redactUserPrivacyFields<T extends User>(
 
   // Phone privacy check
   if (privacy.phone === 'private') {
-    copy.phone = '[Private]';
+    copy.phone = undefined;
   } else if (privacy.phone === 'institution' && !isInstitutionalViewer) {
-    copy.phone = '[Institutional Access Only]';
+    copy.phone = undefined;
   }
 
   // Company privacy check for Alumni

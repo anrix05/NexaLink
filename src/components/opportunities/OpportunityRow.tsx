@@ -1,5 +1,5 @@
 import React from 'react';
-import type { JobListing } from '../../types';
+import type { JobListing, OpportunityApplicationStatus } from '../../types';
 import { normalizeOpportunityType } from '../../constants/taxonomy';
 import { formatCompensation } from '../../utils/compensationFormatter';
 import { formatDeadline } from '../../utils/formatters';
@@ -10,6 +10,7 @@ interface OpportunityRowProps {
   isSelected: boolean;
   isSaved: boolean;
   isApplied: boolean;
+  applicationStatus?: OpportunityApplicationStatus;
   matchScore?: number | null;
   onSelect: () => void;
   onToggleSave: (e: React.MouseEvent) => void;
@@ -21,6 +22,7 @@ export const OpportunityRow: React.FC<OpportunityRowProps> = ({
   isSelected,
   isSaved,
   isApplied,
+  applicationStatus,
   matchScore,
   onSelect,
   onToggleSave,
@@ -30,6 +32,12 @@ export const OpportunityRow: React.FC<OpportunityRowProps> = ({
   const normalizedType = normalizeOpportunityType(job.type);
   const formattedComp = formatCompensation(job.stipendOrSalary);
   const showMatchScore = typeof matchScore === 'number' && matchScore >= 60;
+
+  const appliedLabel = 
+    applicationStatus === 'shortlisted' ? 'Applied · Shortlisted' :
+    applicationStatus === 'viewed' ? 'Applied · Under Review' :
+    applicationStatus === 'not_selected' ? 'Applied · Not Selected' :
+    'Applied · Submitted';
 
   return (
     <div
@@ -69,7 +77,7 @@ export const OpportunityRow: React.FC<OpportunityRowProps> = ({
         <div className="min-w-0 flex-1">
           {/* Top Line: Title + Match Badge */}
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="font-semibold text-sm text-[#0A0A0A] truncate">
+            <h3 className="font-semibold text-sm text-[#0A0A0A] line-clamp-2 break-words">
               {job.title}
             </h3>
 
@@ -82,49 +90,71 @@ export const OpportunityRow: React.FC<OpportunityRowProps> = ({
             )}
 
             {isApplied && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0] text-[11px] font-medium rounded-full shrink-0">
-                <Check className="w-3 h-3 text-[#065F46]" />
-                <span>Applied</span>
+              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-semibold rounded-full shrink-0 ${
+                applicationStatus === 'shortlisted' ? 'bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]' :
+                applicationStatus === 'viewed' ? 'bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]' :
+                applicationStatus === 'not_selected' ? 'bg-[#F3F4F6] text-[#4B5563] border border-[#E5E7EB]' :
+                'bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE]'
+              }`}>
+                <Check className="w-3 h-3" />
+                <span>{appliedLabel}</span>
               </span>
             )}
           </div>
 
-          {/* Subtitle Line: Company · Location · Plain Text Type */}
+          {/* Subtitle Line 1: Company · Location */}
           <div className="flex items-center gap-1.5 text-xs text-[#6B7280] mt-1 flex-wrap">
             <span className="font-medium text-[#0A0A0A]">{job.company}</span>
-            <span>·</span>
-            <span className="flex items-center gap-1">
-              <MapPin className="w-3 h-3 text-[#6B7280]" />
-              <span>{job.location}</span>
-            </span>
-            <span>·</span>
-            <span>{normalizedType}</span>
-          </div>
-
-          {/* Bottom Line: Compensation + Deadline */}
-          <div className="flex items-center gap-3 text-xs mt-2.5 flex-wrap">
-            <span className="font-medium text-[#0A0A0A]">
-              {formattedComp}
-            </span>
-            <span>·</span>
-            <span
-              className={
-                deadlineStatus.isUrgent
-                  ? 'text-[#B45309] font-medium'
-                  : 'text-[#6B7280]'
-              }
-            >
-              {deadlineStatus.label}
-            </span>
-            {job.postedByAlumniName && (
+            {job.location && (
               <>
-                <span className="hidden sm:inline">·</span>
-                <span className="hidden sm:inline text-[#6B7280]">
-                  Posted by {job.postedByAlumniName}
+                <span>·</span>
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-[#6B7280] shrink-0" />
+                  <span>{job.location}</span>
                 </span>
               </>
             )}
           </div>
+
+          {/* Subtitle Line 2: Type · Pay · Apply by date (no dangling separators) */}
+          {(() => {
+            const metaTokens = [
+              normalizedType,
+              formattedComp,
+              deadlineStatus.label
+            ].filter(Boolean);
+
+            return (
+              <div className="flex items-center gap-1.5 text-xs text-[#6B7280] mt-1.5 flex-wrap">
+                {metaTokens.map((token, idx) => (
+                  <React.Fragment key={idx}>
+                    {idx > 0 && <span>·</span>}
+                    <span
+                      className={
+                        idx === 0
+                          ? 'font-medium text-[#0A0A0A]'
+                          : idx === 1
+                          ? 'font-mono text-[#0A0A0A]'
+                          : deadlineStatus.isUrgent
+                          ? 'text-[#B45309] font-medium'
+                          : 'text-[#6B7280]'
+                      }
+                    >
+                      {token}
+                    </span>
+                  </React.Fragment>
+                ))}
+                {job.postedByAlumniName && (
+                  <>
+                    <span className="hidden sm:inline">·</span>
+                    <span className="hidden sm:inline text-[#6B7280]">
+                      Posted by {job.postedByAlumniName}
+                    </span>
+                  </>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Quiet Actions */}
@@ -132,7 +162,7 @@ export const OpportunityRow: React.FC<OpportunityRowProps> = ({
           <button
             type="button"
             onClick={onToggleSave}
-            className={`p-2 rounded-lg border transition-colors ${
+            className={`min-w-[44px] min-h-[44px] w-11 h-11 rounded-xl border flex items-center justify-center transition-colors cursor-pointer touch-target-44 ${
               isSaved
                 ? 'bg-[#F3F4F6] border-[#0A0A0A] text-[#0A0A0A]'
                 : 'bg-white border-[#E5E7EB] text-[#6B7280] hover:text-[#0A0A0A] hover:bg-[#F9FAFB]'

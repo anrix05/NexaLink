@@ -1,34 +1,23 @@
-import React, { useMemo } from 'react';
-import { useData } from '../../context/DataContext';
+import React from 'react';
+import { usePublicStats } from '../../hooks/usePublicStats';
 import { useCountUp } from '../../hooks/useCountUp';
 import { Reveal } from './motion/Reveal';
 import { Eyebrow } from '../common/Eyebrow';
 
 export const MetricsStrip: React.FC = () => {
-  const { alumniList, mentorshipRequests, jobsList } = useData();
+  const { stats, isLoading, isError } = usePublicStats();
 
-  const verifiedAlumniCount = useMemo(() => {
-    return alumniList.filter((a) => a.isVerified !== false).length;
-  }, [alumniList]);
+  const alumniCount = stats?.verified_alumni ?? 0;
+  const membersCount = stats?.verified_members ?? 0;
+  const jobsCount = stats?.approved_jobs ?? 0;
 
-  const uniqueCountriesCount = useMemo(() => {
-    const countries = new Set(alumniList.map((a) => a.country).filter(Boolean));
-    return countries.size;
-  }, [alumniList]);
+  const showAlumniNumber = !isLoading && !isError && alumniCount >= 5;
+  const showMembersNumber = !isLoading && !isError && membersCount >= 5;
+  const showJobsNumber = !isLoading && !isError && jobsCount >= 5;
 
-  const activeMentorshipsCount = useMemo(() => {
-    return mentorshipRequests.filter(
-      (m) => m.status === 'Accepted' || m.status === 'Pending' || m.status === 'Completed'
-    ).length;
-  }, [mentorshipRequests]);
-
-  const activeJobsCount = useMemo(() => {
-    return jobsList.filter((j) => j.moderationStatus === 'Approved' || !j.moderationStatus).length;
-  }, [jobsList]);
-
-  const animatedAlumni = useCountUp(verifiedAlumniCount, 800, 0, true);
-  const animatedMentorships = useCountUp(activeMentorshipsCount, 800, 0, true);
-  const animatedJobs = useCountUp(activeJobsCount, 800, 0, true);
+  const animatedAlumni = useCountUp(showAlumniNumber ? alumniCount : 0, 800, 0, true);
+  const animatedMembers = useCountUp(showMembersNumber ? membersCount : 0, 800, 0, true);
+  const animatedJobs = useCountUp(showJobsNumber ? jobsCount : 0, 800, 0, true);
 
   return (
     <section id="metrics" className="w-full bg-[#FAFAFA] border-b border-[#E5E7EB] py-12">
@@ -36,19 +25,20 @@ export const MetricsStrip: React.FC = () => {
         {/* Header Indicator */}
         <div className="flex items-center justify-between text-xs text-[#6B7280]">
           <div className="flex items-center gap-2">
-            <Eyebrow dot>Live metrics</Eyebrow>
+            <Eyebrow dot>NexaLink so far</Eyebrow>
           </div>
-          <span className="text-[11px] text-[#6B7280]">Real-time accreditation sync</span>
         </div>
 
-        {/* 4 Stat Tiles */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* 3 Stat Tiles (Truthful aggregates from public.get_public_stats, no unverified rank/year claims) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* 1. Verified Alumni */}
           <Reveal delay={0.05}>
             <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 h-full flex flex-col justify-between hover:border-[#0A0A0A] transition-colors">
               <Eyebrow>Verified alumni</Eyebrow>
-              <div className="py-2">
-                {verifiedAlumniCount > 0 ? (
+              <div className="py-2 min-h-[44px] flex items-center">
+                {isLoading ? (
+                  <div className="h-9 w-24 bg-[#E5E7EB] animate-pulse rounded-md" />
+                ) : showAlumniNumber ? (
                   <p className="text-3xl sm:text-4xl font-sans font-bold text-[#0A0A0A] tabular-nums tracking-tight">
                     {animatedAlumni.toLocaleString()}
                   </p>
@@ -59,42 +49,56 @@ export const MetricsStrip: React.FC = () => {
                 )}
               </div>
               <span className="text-xs text-[#6B7280]">
-                {verifiedAlumniCount > 0 && uniqueCountriesCount > 0
-                  ? `Across ${uniqueCountriesCount} ${uniqueCountriesCount === 1 ? 'country' : 'countries'}`
-                  : 'Open for all graduating batches'}
+                {isLoading ? (
+                  <span className="inline-block h-3.5 w-32 bg-[#E5E7EB] animate-pulse rounded-md" />
+                ) : showAlumniNumber ? (
+                  'Graduating batches & postgraduates'
+                ) : (
+                  'Open for all graduating batches'
+                )}
               </span>
             </div>
           </Reveal>
 
-          {/* 2. Active Mentorships */}
+          {/* 2. Verified Members */}
           <Reveal delay={0.1}>
             <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 h-full flex flex-col justify-between hover:border-[#0A0A0A] transition-colors">
-              <Eyebrow>Active mentorships</Eyebrow>
-              <div className="py-2">
-                {activeMentorshipsCount > 0 ? (
+              <Eyebrow>Verified members</Eyebrow>
+              <div className="py-2 min-h-[44px] flex items-center">
+                {isLoading ? (
+                  <div className="h-9 w-24 bg-[#E5E7EB] animate-pulse rounded-md" />
+                ) : showMembersNumber ? (
                   <p className="text-3xl sm:text-4xl font-sans font-bold text-[#0A0A0A] tabular-nums tracking-tight">
-                    {animatedMentorships}
+                    {animatedMembers.toLocaleString()}
                   </p>
                 ) : (
                   <p className="text-base font-semibold text-[#0A0A0A] leading-snug">
-                    Structured 1:1 tracks
+                    Campus community onboarding
                   </p>
                 )}
               </div>
               <span className="text-xs text-[#6B7280]">
-                {activeMentorshipsCount > 0 ? '1:1 career sessions completed' : 'Pre-placement & interview prep'}
+                {isLoading ? (
+                  <span className="inline-block h-3.5 w-32 bg-[#E5E7EB] animate-pulse rounded-md" />
+                ) : showMembersNumber ? (
+                  'Students, alumni & faculty'
+                ) : (
+                  'Students, alumni & faculty network'
+                )}
               </span>
             </div>
           </Reveal>
 
-          {/* 3. Opportunities / Referrals */}
+          {/* 3. Approved Opportunities */}
           <Reveal delay={0.15}>
             <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 h-full flex flex-col justify-between hover:border-[#0A0A0A] transition-colors">
-              <Eyebrow>Job referrals</Eyebrow>
-              <div className="py-2">
-                {activeJobsCount > 0 ? (
+              <Eyebrow>Approved opportunities</Eyebrow>
+              <div className="py-2 min-h-[44px] flex items-center">
+                {isLoading ? (
+                  <div className="h-9 w-24 bg-[#E5E7EB] animate-pulse rounded-md" />
+                ) : showJobsNumber ? (
                   <p className="text-3xl sm:text-4xl font-sans font-bold text-[#0A0A0A] tabular-nums tracking-tight">
-                    {animatedJobs}
+                    {animatedJobs.toLocaleString()}
                   </p>
                 ) : (
                   <p className="text-base font-semibold text-[#0A0A0A] leading-snug">
@@ -103,22 +107,13 @@ export const MetricsStrip: React.FC = () => {
                 )}
               </div>
               <span className="text-xs text-[#6B7280]">
-                {activeJobsCount > 0 ? 'Verified corporate roles' : 'Direct alumni job postings'}
-              </span>
-            </div>
-          </Reveal>
-
-          {/* 4. Accreditation */}
-          <Reveal delay={0.2}>
-            <div className="bg-white border border-[#E5E7EB] rounded-xl p-5 h-full flex flex-col justify-between hover:border-[#0A0A0A] transition-colors">
-              <Eyebrow>Institutional rank</Eyebrow>
-              <div className="py-2">
-                <p className="text-3xl sm:text-4xl font-display font-bold text-[#0A0A0A] tracking-tight">
-                  A+ Grade
-                </p>
-              </div>
-              <span className="text-xs text-[#6B7280]">
-                NAAC & NBA accredited programmes
+                {isLoading ? (
+                  <span className="inline-block h-3.5 w-32 bg-[#E5E7EB] animate-pulse rounded-md" />
+                ) : showJobsNumber ? (
+                  'Verified opportunities & roles'
+                ) : (
+                  'Direct alumni job postings'
+                )}
               </span>
             </div>
           </Reveal>

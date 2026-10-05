@@ -2,6 +2,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { runQuery, runMutation } from './supabaseRunner';
 import type { JobListing, DepartmentCode, OpportunityApplication, OpportunityApplicationStatus } from '../types';
 import { normalizeDepartmentArray, normalizeJobStatus, normalizeModerationStatus, toPgTimestamp } from '../utils/enumMappers';
+import { mapRowToApplication } from '../utils/applicationHelpers';
 
 
 function isValidUuid(id?: string): boolean {
@@ -137,29 +138,89 @@ export const jobsService = {
   /**
    * Fetch all job applications
    */
+  /**
+   * Helper to normalize raw database application row
+   */
+  mapRowToApplication(r: any): OpportunityApplication {
+    return mapRowToApplication(r);
+  },
+
+  /**
+   * Fetch all job applications
+   */
   async getApplications(): Promise<OpportunityApplication[]> {
     if (!isSupabaseConfigured()) return [];
     try {
       const rows = await runQuery<any[]>('job_applications', async () => {
         return (supabase.from as any)('job_applications').select('*').order('applied_at', { ascending: false });
       });
-      return (rows || []).map((r: any) => ({
-        id: r.id,
-        opportunityId: r.job_id,
-        applicantId: r.applicant_id,
-        applicantName: r.applicant_name,
-        applicantEmail: r.applicant_email,
-        applicantDepartment: 'CMPN',
-        applicantYear: '2026',
-        appliedAt: r.applied_at,
-        status: (r.status?.toLowerCase() === 'shortlisted' ? 'shortlisted' : r.status?.toLowerCase() === 'not_selected' ? 'not_selected' : r.status?.toLowerCase() === 'viewed' ? 'viewed' : 'submitted') as OpportunityApplicationStatus,
-        statusUpdatedAt: r.status_updated_at || undefined,
-        studentNote: r.cover_note || undefined,
-        resumePath: r.resume_url || undefined,
-        posterNote: r.poster_note || undefined
-      }));
+      return (rows || []).map(r => this.mapRowToApplication(r));
     } catch {
       return [];
+    }
+  },
+
+  /**
+   * Fetch applications submitted by a specific student / applicant
+   */
+  async getApplicationsForApplicant(applicantId: string): Promise<OpportunityApplication[]> {
+    if (!isSupabaseConfigured() || !applicantId) return [];
+    try {
+      const rows = await runQuery<any[]>('job_applications', async () => {
+        return (supabase.from as any)('job_applications')
+          .select('*')
+          .eq('applicant_id', applicantId)
+          .order('applied_at', { ascending: false });
+      });
+      return (rows || []).map(r => this.mapRowToApplication(r));
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Fetch applications for a specific job (used by poster)
+   */
+  async getApplicationsForJob(jobId: string): Promise<OpportunityApplication[]> {
+    if (!isSupabaseConfigured() || !jobId) return [];
+    try {
+      const rows = await runQuery<any[]>('job_applications', async () => {
+        return (supabase.from as any)('job_applications')
+          .select('*')
+          .eq('job_id', jobId)
+          .order('applied_at', { ascending: false });
+      });
+      return (rows || []).map(r => this.mapRowToApplication(r));
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Generate a secure signed URL for a resume stored in private resumes bucket
+   */
+  async getSignedResumeUrl(resumePath: string): Promise<string | null> {
+    if (!resumePath) return null;
+    if (resumePath.startsWith('http://') || resumePath.startsWith('https://')) {
+      // If already a full public or object URL, extract storage key if it points to supabase storage
+      if (resumePath.includes('/resumes/')) {
+        const pathPart = resumePath.split('/resumes/')[1]?.split('?')[0];
+        if (pathPart) {
+          const { data } = await supabase.storage.from('resumes').createSignedUrl(decodeURIComponent(pathPart), 3600);
+          return data?.signedUrl || resumePath;
+        }
+      }
+      return resumePath;
+    }
+    try {
+      const { data, error } = await supabase.storage.from('resumes').createSignedUrl(resumePath, 3600);
+      if (error) {
+        console.warn('[jobsService.getSignedResumeUrl] failed:', error.message);
+        return null;
+      }
+      return data?.signedUrl || null;
+    } catch {
+      return null;
     }
   },
 
@@ -173,33 +234,52 @@ export const jobsService = {
     applicantEmail: string;
     resumeUrl?: string;
     coverNote?: string;
-  }): Promise<void> {
-    if (!isSupabaseConfigured()) return;
+  }): Promise<OpportunityApplication> {
+    if (!isSupabaseConfigured()) {
+      return {
+        id: `mock-app-${Date.now()}`,
+        opportunityId: app.opportunityId,
+        applicantId: app.applicantId,
+        applicantName: app.applicantName,
+        applicantEmail: app.applicantEmail,
+        applicantDepartment: 'CMPN',
+        applicantYear: '2026',
+        appliedAt: new Date().toISOString(),
+        status: 'submitted',
+        resumePath: app.resumeUrl,
+        studentNote: app.coverNote
+      };
+    }
     const payload = {
       job_id: app.opportunityId,
       applicant_id: app.applicantId,
       applicant_name: app.applicantName,
       applicant_email: app.applicantEmail,
       resume_url: app.resumeUrl || null,
-      cover_note: app.coverNote || null
+      cover_note: app.coverNote || null,
+      status: 'submitted'
     };
-    await runMutation('INSERT', 'job_applications', async () => {
+    const row = await runMutation('INSERT', 'job_applications', async () => {
       return (supabase.from as any)('job_applications').insert(payload).select().single();
     }, { payload });
+
+    return this.mapRowToApplication(row);
   },
 
   /**
    * Update application review status
    */
-  async updateApplicationStatus(applicationId: string, status: OpportunityApplicationStatus, note?: string): Promise<void> {
-    if (!isSupabaseConfigured()) return;
+  async updateApplicationStatus(applicationId: string, status: OpportunityApplicationStatus, note?: string): Promise<OpportunityApplication | null> {
+    if (!isSupabaseConfigured()) return null;
     const payload: any = {
       status,
       status_updated_at: new Date().toISOString()
     };
     if (note !== undefined) payload.poster_note = note;
-    await runMutation('UPDATE', 'job_applications', async () => {
+    const row = await runMutation('UPDATE', 'job_applications', async () => {
       return (supabase.from as any)('job_applications').update(payload).eq('id', applicationId).select().single();
     }, { payload });
+
+    return row ? this.mapRowToApplication(row) : null;
   }
 };

@@ -36,7 +36,7 @@ export const FormField: React.FC<FormFieldProps> = ({
         >
           <span>{label}</span>
           {required && (
-            <span className="text-[#DC2626] text-xs font-normal" aria-hidden="true">
+            <span className="text-[#6B7280] text-xs font-normal" aria-hidden="true">
               *
             </span>
           )}

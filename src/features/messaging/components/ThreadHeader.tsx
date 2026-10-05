@@ -16,7 +16,8 @@ import {
   UserCheck,
   X,
   ShieldCheck,
-  ChevronDown
+  ChevronDown,
+  ArrowLeft
 } from 'lucide-react';
 import type { ContactItem } from '../../../pages/messaging/MessagingPage';
 
@@ -94,10 +95,10 @@ export const ThreadHeader: React.FC<ThreadHeaderProps> = ({
           <button
             type="button"
             onClick={onBackMobile}
-            className="md:hidden p-2 text-[#6B7280] hover:text-[#0A0A0A] hover:bg-[#F3F4F6] rounded-lg -ml-1 transition-colors cursor-pointer"
+            className="md:hidden min-w-[44px] min-h-[44px] flex items-center justify-center text-[#0A0A0A] hover:bg-[#F3F4F6] rounded-lg -ml-2 transition-colors cursor-pointer touch-target-44 shrink-0"
             aria-label="Back to conversations"
           >
-            <span className="text-base font-semibold">←</span>
+            <ArrowLeft className="w-5 h-5 text-[#0A0A0A]" />
           </button>
         )}
 

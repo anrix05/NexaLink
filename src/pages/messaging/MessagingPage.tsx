@@ -18,6 +18,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
+import { useMobileChrome } from '../../context/MobileChromeContext';
 import type { MentorshipGuidancePurpose, UserRole, ChatMessage, MessageAttachment, ReplySnippet } from '../../types';
 import { Avatar } from '../../utils/avatarHelper';
 import { formatMessageTime, formatConversationPreview } from '../../features/messaging/utils/timeFormatters';
@@ -108,6 +109,25 @@ export const MessagingPage: React.FC = () => {
   const [activeContactId, setActiveContactId] = useState<string>('');
   const [showMobileChat, setShowMobileChat] = useState<boolean>(false);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const { setHideMobileChrome } = useMobileChrome();
+
+  // Hide mobile topbar & bottomnav when a chat thread is open on mobile
+  useEffect(() => {
+    setHideMobileChrome(showMobileChat);
+    return () => setHideMobileChrome(false);
+  }, [showMobileChat, setHideMobileChrome]);
+
+  // Support Android hardware/system back button
+  useEffect(() => {
+    const handlePopState = () => {
+      if (showMobileChat) {
+        setShowMobileChat(false);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [showMobileChat]);
 
   // Composer states
   const [draftText, setDraftText] = useState('');
@@ -677,7 +697,9 @@ export const MessagingPage: React.FC = () => {
     pendingAttachments.some(a => a.status === 'processing' || a.status === 'uploading');
 
   return (
-    <div className="h-[calc(100dvh-4rem-3.5rem)] lg:h-[calc(100dvh-4rem)] flex bg-[#FFFFFF] overflow-hidden select-text font-sans">
+    <div className={`${
+      showMobileChat ? 'h-[100dvh] h-[100svh]' : 'h-[calc(100dvh-var(--topbar-h)-var(--bottomnav-h))]'
+    } lg:h-[calc(100dvh-4rem)] flex bg-[#FFFFFF] overflow-hidden select-text font-sans`}>
       {/* ─── LEFT PANE: CONVERSATION LIST (340px) ───────────────────────── */}
       <div
         className={`w-full md:w-[340px] border-r border-[#E5E7EB] bg-white flex flex-col shrink-0 ${
@@ -785,6 +807,9 @@ export const MessagingPage: React.FC = () => {
                   onClick={() => {
                     setActiveContactId(contact.id);
                     setShowMobileChat(true);
+                    if (typeof window !== 'undefined') {
+                      window.history.pushState({ mobileChat: true, contactId: contact.id }, '');
+                    }
                   }}
                   className={`h-[72px] px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors relative ${
                     isSelected
@@ -899,7 +924,13 @@ export const MessagingPage: React.FC = () => {
                   setTimeout(() => setNotice(null), 3000);
                 }
               }}
-              onBackMobile={() => setShowMobileChat(false)}
+              onBackMobile={() => {
+                if (typeof window !== 'undefined' && window.history.state?.mobileChat) {
+                  window.history.back();
+                } else {
+                  setShowMobileChat(false);
+                }
+              }}
             />
 
             {/* In-Thread Search Bar (Collapsible) */}
@@ -1456,7 +1487,7 @@ export const MessagingPage: React.FC = () => {
             )}
 
             {/* ─── COMPOSER CONTAINER (Centered max-w-[720px]) ──────────── */}
-            <div className="border-t border-[#E5E7EB] bg-white p-3 sm:p-4 shrink-0">
+            <div className="border-t border-[#E5E7EB] bg-white p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] shrink-0">
               <div className="max-w-[720px] mx-auto relative space-y-2">
                 {/* Quoted Reply Banner */}
                 <ReplyBar reply={replyTarget} onCancel={() => setReplyTarget(null)} />

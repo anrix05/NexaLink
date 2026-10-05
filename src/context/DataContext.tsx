@@ -34,6 +34,7 @@ import { mentorshipService } from '../services/mentorshipService';
 import { messagingService, mapRowToChatMessage } from '../services/messagingService';
 import { announcementsService } from '../services/announcementsService';
 import { notificationsService } from '../services/notificationsService';
+import { profileService } from '../services/profileService';
 import { subscribeToChatMessages, subscribeToNotifications } from '../lib/realtime';
 import { parseAnnouncementMeta, serializeAnnouncementContent } from '../components/common/InstitutionalAnnouncementFeed';
 import { validateEventLeadTime, checkVenueConflict, generateCheckinCode } from '../utils/eventTimeUtils';
@@ -80,7 +81,6 @@ interface DataContextType {
   jobsList: JobListing[];
   eventsList: EventItem[];
   eventRsvps: EventRsvp[];
-  opportunityApplications: OpportunityApplication[];
   mentorshipRequests: MentorshipRequest[];
   announcements: Announcement[];
   notifications: NotificationItem[];
@@ -105,6 +105,7 @@ interface DataContextType {
   mutateUserRole: (userId: string, newRole: UserRole) => void;
   reopenVerification: (userId: string) => void;
   deleteUser: (userId: string) => Promise<void>;
+  graduateStudentToAlumni: (studentId: string, customCompany?: string, customDesignation?: string) => void;
   addJob: (job: Omit<JobListing, 'id' | 'postedDate' | 'applicantsCount' | 'status'>, callerRole?: string) => { success: boolean; statusCode?: number; error?: string; job?: JobListing };
   moderateOpportunity: (jobId: string, moderationStatus: 'Approved' | 'Rejected', reason?: string) => void;
   addEvent: (event: Omit<EventItem, 'id' | 'rsvpsCount' | 'registeredUserIds' | 'status'>) => void;
@@ -125,7 +126,6 @@ interface DataContextType {
   submitOpportunityForReview: (jobData: Partial<JobListing>, callerRole?: string) => { success: boolean; job: JobListing; isAutoPublished: boolean; message: string };
   reviewOpportunity: (jobId: string, action: 'approve' | 'request_changes' | 'reject', note?: string) => void;
   closeOpportunity: (jobId: string, reason?: string) => void;
-  updateApplicationStatus: (applicationId: string, status: OpportunityApplicationStatus, note?: string) => void;
   sendMentorshipRequest: (req: Omit<MentorshipRequest, 'id' | 'requestedDate' | 'status'>) => void;
   updateMentorshipStatus: (requestId: string, status: 'Accepted' | 'Declined' | 'Completed' | 'Expired', notes?: string, callerRole?: string) => { success: boolean; statusCode?: number; error?: string };
   submitMentorshipFeedback: (requestId: string, rating: number, review: string) => void;
@@ -157,8 +157,10 @@ interface DataContextType {
   updateAnnouncement: (announcementId: string, updates: Partial<Announcement>) => Promise<void> | void;
   deleteAnnouncement: (announcementId: string) => Promise<void> | void;
   togglePinAnnouncement: (announcementId: string) => Promise<void> | void;
-  graduateStudentToAlumni: (studentId: string, customCompany?: string, customDesignation?: string) => void;
-  applyForJob: (jobId: string) => void;
+  opportunityApplications: OpportunityApplication[];
+  applyForJob: (jobId: string, options?: { resumeUrl?: string; coverNote?: string }) => Promise<{ success: boolean; error?: string }>;
+  updateApplicationStatus: (applicationId: string, nextStatus: OpportunityApplicationStatus, posterNote?: string) => Promise<{ success: boolean; error?: string }>;
+  fetchApplications: () => Promise<void>;
   registerUserInDatabase: (userProfile: StudentProfile | AlumniProfile | FacultyProfile) => void;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
@@ -693,6 +695,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } catch (nErr) {
             console.error('Failed to load notifications or preferences:', nErr);
           }
+
+          // 11. Fetch Opportunity Applications
+          try {
+            const isHost = currentUser.role === 'admin' || currentUser.role === 'alumni' || currentUser.role === 'faculty';
+            const apps = isHost
+              ? await jobsService.getApplications()
+              : await jobsService.getApplicationsForApplicant(currentUser.id);
+            setOpportunityApplications(apps);
+          } catch (aErr) {
+            console.error('Failed to load opportunity applications:', aErr);
+          }
         }
       } catch (err) {
         console.error('Unhandled error in loadSupabaseData:', err);
@@ -1196,86 +1209,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('PROFILE_UPDATED', userId, `Updated user profile attributes & privacy preferences.`, userId);
 
     if (isSupabaseConfigured()) {
-      // 1. Update public.users table
-      const userUpdates: any = {};
-      if (updatedData.name !== undefined) userUpdates.name = updatedData.name;
-      if (updatedData.bio !== undefined) userUpdates.bio = updatedData.bio;
-      if (updatedData.avatar !== undefined) userUpdates.avatar_url = updatedData.avatar;
-      if (updatedData.phone !== undefined) userUpdates.phone = updatedData.phone;
-      if (updatedData.department !== undefined) userUpdates.department = updatedData.department;
-      if (updatedData.privacySettings !== undefined) userUpdates.privacy_settings = updatedData.privacySettings;
-      if (updatedData.personalEmail !== undefined) userUpdates.personal_email = updatedData.personalEmail;
+      const role: UserRole = currentUser?.id === userId
+        ? (currentUser.role as UserRole)
+        : (alumniList.find(a => a.id === userId) ? 'alumni'
+          : facultyList.find(f => f.id === userId) ? 'faculty'
+          : 'student');
 
-      if (Object.keys(userUpdates).length > 0) {
-        supabase.from('users').update(userUpdates).eq('id', userId).then(({ error }) => {
-          if (error) console.error('[Supabase updateUserProfile users error]', error);
-        });
-      }
-
-      // 2. Update public.student_profiles table
-      const studentUpdates: any = {};
-      if (updatedData.semester !== undefined) {
-        studentUpdates.semester = updatedData.semester;
-        studentUpdates.current_year = updatedData.semester.includes('1') || updatedData.semester.includes('2') ? 'FE'
-          : updatedData.semester.includes('3') || updatedData.semester.includes('4') ? 'SE'
-          : updatedData.semester.includes('5') || updatedData.semester.includes('6') ? 'TE'
-          : 'BE';
-      }
-      if (updatedData.skills !== undefined) studentUpdates.skills = updatedData.skills;
-      if (updatedData.areasOfInterest !== undefined) studentUpdates.areas_of_interest = updatedData.areasOfInterest;
-      if (updatedData.careerGoal !== undefined) studentUpdates.career_goal = updatedData.careerGoal;
-      if (updatedData.preferredIndustry !== undefined) studentUpdates.preferred_industry = updatedData.preferredIndustry;
-      if (updatedData.preferredHigherStudies !== undefined) studentUpdates.preferred_higher_studies = updatedData.preferredHigherStudies;
-      if (updatedData.certifications !== undefined) studentUpdates.certifications = updatedData.certifications;
-      if (updatedData.resumeUrl !== undefined) studentUpdates.resume_url = updatedData.resumeUrl;
-      if (updatedData.expectedGraduationYear !== undefined || updatedData.graduationYear !== undefined) {
-        const yr = parseInt(updatedData.expectedGraduationYear || updatedData.graduationYear, 10);
-        if (!isNaN(yr)) studentUpdates.expected_graduation_year = yr;
-      }
-
-      if (Object.keys(studentUpdates).length > 0) {
-        supabase.from('student_profiles').update(studentUpdates).eq('user_id', userId).then(({ error }) => {
-          if (error) console.error('[Supabase updateUserProfile student_profiles error]', error);
-        });
-      }
-
-      // 3. Update public.alumni_profiles table
-      const alumniUpdates: any = {};
-      if (updatedData.company !== undefined) alumniUpdates.company = updatedData.company;
-      if (updatedData.designation !== undefined) alumniUpdates.designation = updatedData.designation;
-      if (updatedData.graduationYear !== undefined) {
-        const yr = parseInt(updatedData.graduationYear, 10);
-        if (!isNaN(yr)) alumniUpdates.graduation_year = yr;
-      }
-      if (updatedData.higherEducationInstitute !== undefined) alumniUpdates.higher_education_institute = updatedData.higherEducationInstitute;
-      if (updatedData.location !== undefined) alumniUpdates.location = updatedData.location;
-      if (updatedData.country !== undefined) alumniUpdates.country = updatedData.country;
-      if (updatedData.skills !== undefined) alumniUpdates.skills = updatedData.skills;
-      if (updatedData.bio !== undefined) alumniUpdates.bio = updatedData.bio;
-      if (updatedData.professionalAchievements !== undefined) alumniUpdates.professional_achievements = updatedData.professionalAchievements;
-      if (updatedData.isMentoringAvailable !== undefined) alumniUpdates.is_mentoring_available = updatedData.isMentoringAvailable;
-      if (updatedData.maxMentees !== undefined) alumniUpdates.max_mentees = updatedData.maxMentees;
-      if (updatedData.resumeUrl !== undefined) alumniUpdates.resume_url = updatedData.resumeUrl;
-
-      if (Object.keys(alumniUpdates).length > 0) {
-        supabase.from('alumni_profiles').update(alumniUpdates).eq('user_id', userId).then(({ error }) => {
-          if (error) console.error('[Supabase updateUserProfile alumni_profiles error]', error);
-        });
-      }
-
-      // 4. Update public.faculty_profiles table
-      const facultyUpdates: any = {};
-      if (updatedData.employeeId !== undefined) facultyUpdates.employee_id = updatedData.employeeId;
-      if (updatedData.designation !== undefined) facultyUpdates.designation = updatedData.designation;
-      if (updatedData.researchAreas !== undefined) facultyUpdates.research_areas = updatedData.researchAreas;
-      if (updatedData.ongoingResearch !== undefined) facultyUpdates.ongoing_research = updatedData.ongoingResearch;
-      if (updatedData.skills !== undefined) facultyUpdates.skills = updatedData.skills;
-
-      if (Object.keys(facultyUpdates).length > 0) {
-        supabase.from('faculty_profiles').update(facultyUpdates).eq('user_id', userId).then(({ error }) => {
-          if (error) console.error('[Supabase updateUserProfile faculty_profiles error]', error);
-        });
-      }
+      profileService.saveProfile(userId, role, updatedData as any).then(res => {
+        if (!res.success) {
+          console.error('[DataContext updateUserProfile error]', res.error);
+        }
+      }).catch(err => {
+        console.error('[DataContext updateUserProfile exception]', err);
+      });
     }
   };
 
@@ -2536,28 +2482,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const updateApplicationStatus = (applicationId: string, status: OpportunityApplicationStatus, note?: string) => {
-    setOpportunityApplications(prev =>
-      prev.map(a => {
-        if (a.id === applicationId) {
-          return {
-            ...a,
-            status,
-            statusUpdatedAt: new Date().toISOString(),
-            posterNote: note ?? a.posterNote
-          };
-        }
-        return a;
-      })
-    );
-
-    if (isSupabaseConfigured()) {
-      jobsService.updateApplicationStatus(applicationId, status, note).catch((err: unknown) =>
-        console.error('[Supabase updateApplicationStatus error]', err)
-      );
-    }
-  };
-
   const sendMentorshipRequest = (reqData: Omit<MentorshipRequest, 'id' | 'requestedDate' | 'status'>) => {
     const isNetworkingOrCollab =
       reqData.requestType === 'NETWORKING' ||
@@ -3350,31 +3274,125 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await updateAnnouncement(announcementId, { isPinned: newPinned });
   };
 
-  const applyForJob = (jobId: string) => {
-    let count = 0;
-    setJobsList(prev =>
-      prev.map(job => {
-        if (job.id === jobId) {
-          count = job.applicantsCount + 1;
-          return { ...job, applicantsCount: count };
-        }
-        return job;
-      })
-    );
+  const applyForJob = async (
+    jobId: string,
+    options?: { resumeUrl?: string; coverNote?: string }
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (!currentUser?.id) {
+      return { success: false, error: 'You must be signed in to apply for opportunities.' };
+    }
 
-    if (isSupabaseConfigured()) {
-      supabase.from('jobs').update({ applicants_count: count }).eq('id', jobId).then(({ error }) => {
-        if (error) console.error('[Supabase applyForJob error]', error);
+    const targetJob = jobsList.find(j => j.id === jobId);
+    if (!targetJob) {
+      return { success: false, error: 'Opportunity could not be found.' };
+    }
+
+    if (!currentUser.isVerified) {
+      return { success: false, error: 'Your account must be verified by administration before applying to opportunities.' };
+    }
+
+    if (targetJob.postedByAlumniId === currentUser.id) {
+      return { success: false, error: 'You cannot apply to an opportunity you posted.' };
+    }
+
+    if (targetJob.status !== 'Active') {
+      return { success: false, error: 'This opportunity is closed or no longer accepting applications.' };
+    }
+
+    if (targetJob.applicationDeadline && new Date(targetJob.applicationDeadline).getTime() < Date.now()) {
+      return { success: false, error: 'The application deadline for this opportunity has passed.' };
+    }
+
+    const alreadyApplied = opportunityApplications.some(
+      a => a.opportunityId === jobId && a.applicantId === currentUser.id
+    );
+    if (alreadyApplied) {
+      return { success: false, error: 'You have already submitted an application for this opportunity.' };
+    }
+
+    try {
+      const created = await jobsService.submitApplication({
+        opportunityId: jobId,
+        applicantId: currentUser.id,
+        applicantName: currentUser.name,
+        applicantEmail: currentUser.email,
+        resumeUrl: options?.resumeUrl,
+        coverNote: options?.coverNote
       });
 
-      if (currentUser?.id) {
-        jobsService.submitApplication({
-          opportunityId: jobId,
-          applicantId: currentUser.id,
-          applicantName: currentUser.name,
-          applicantEmail: currentUser.email
-        }).catch((err: unknown) => console.error('[Supabase submitApplication error]', err));
+      // Update local applications state
+      setOpportunityApplications(prev => [created, ...prev.filter(a => a.id !== created.id)]);
+
+      // Locally increment applicants count for immediate responsiveness (server trigger maintains truth in DB)
+      setJobsList(prev =>
+        prev.map(j => (j.id === jobId ? { ...j, applicantsCount: (j.applicantsCount || 0) + 1 } : j))
+      );
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('[applyForJob error]', err);
+      return { success: false, error: err.message || 'Failed to submit application. Please retry.' };
+    }
+  };
+
+  const updateApplicationStatus = async (
+    applicationId: string,
+    nextStatus: OpportunityApplicationStatus,
+    posterNote?: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await jobsService.updateApplicationStatus(applicationId, nextStatus, posterNote);
+
+      setOpportunityApplications(prev =>
+        prev.map(a =>
+          a.id === applicationId
+            ? {
+                ...a,
+                status: nextStatus,
+                posterNote: posterNote !== undefined ? posterNote : a.posterNote,
+                statusUpdatedAt: new Date().toISOString()
+              }
+            : a
+        )
+      );
+
+      // Notify the applicant of status change
+      const targetApp = opportunityApplications.find(a => a.id === applicationId);
+      if (targetApp && targetApp.applicantId) {
+        const job = jobsList.find(j => j.id === targetApp.opportunityId);
+        const readableStatus = 
+          nextStatus === 'shortlisted' ? 'Shortlisted' :
+          nextStatus === 'not_selected' ? 'Not selected' :
+          nextStatus === 'viewed' ? 'Under Review' : 'Submitted';
+
+        notificationsService.createNotification({
+          userId: targetApp.applicantId,
+          title: 'Application Status Update',
+          body: `Your application for "${job?.title || 'the opportunity'}" has been updated to ${readableStatus}.`,
+          category: 'opportunity',
+          type: 'Application Update',
+          link: 'opportunities',
+          relatedEntityId: targetApp.opportunityId
+        }).catch(nErr => console.warn('Failed to send status update notification:', nErr));
       }
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('[updateApplicationStatus error]', err);
+      return { success: false, error: err.message || 'Failed to update application status.' };
+    }
+  };
+
+  const fetchApplications = async () => {
+    if (!currentUser?.id || !isSupabaseConfigured()) return;
+    try {
+      const isHost = currentUser.role === 'admin' || currentUser.role === 'alumni' || currentUser.role === 'faculty';
+      const apps = isHost
+        ? await jobsService.getApplications()
+        : await jobsService.getApplicationsForApplicant(currentUser.id);
+      setOpportunityApplications(apps);
+    } catch (err) {
+      console.warn('fetchApplications error:', err);
     }
   };
 
@@ -3983,6 +4001,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         togglePinAnnouncement,
         retractAnnouncement,
         applyForJob,
+        fetchApplications,
         registerUserInDatabase,
         markNotificationRead,
         markAllNotificationsRead,
