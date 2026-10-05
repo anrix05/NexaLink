@@ -3,9 +3,10 @@
  * Rendered outside dark text bubbles with middle-truncated name, file size, and Open/Download actions.
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { MessageAttachment } from '../../../types';
 import { FileText, Download, ExternalLink } from 'lucide-react';
+import { MessagingService } from '../api/messagingService';
 
 interface AttachmentPdfCardProps {
   attachment: MessageAttachment;
@@ -28,7 +29,45 @@ function formatBytes(bytes: number): string {
 }
 
 export const AttachmentPdfCard: React.FC<AttachmentPdfCardProps> = ({ attachment, isMe }) => {
-  const url = attachment.signedUrl || attachment.storagePath;
+  const [url, setUrl] = useState<string>(() => {
+    if (
+      attachment.signedUrl &&
+      (attachment.signedUrl.startsWith('blob:') ||
+        attachment.signedUrl.startsWith('http://') ||
+        attachment.signedUrl.startsWith('https://') ||
+        attachment.signedUrl.startsWith('data:'))
+    ) {
+      return attachment.signedUrl;
+    }
+    return '';
+  });
+
+  useEffect(() => {
+    if (
+      attachment.signedUrl &&
+      (attachment.signedUrl.startsWith('blob:') ||
+        attachment.signedUrl.startsWith('http://') ||
+        attachment.signedUrl.startsWith('https://') ||
+        attachment.signedUrl.startsWith('data:'))
+    ) {
+      setUrl(attachment.signedUrl);
+      return;
+    }
+
+    if (!attachment.storagePath) return;
+
+    let active = true;
+    MessagingService.getSignedUrl(attachment.storagePath, attachment.fileName).then((signed) => {
+      if (active && signed) {
+        setUrl(signed);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [attachment.storagePath, attachment.signedUrl, attachment.fileName]);
+
   const truncatedName = middleTruncate(attachment.fileName, 28);
   const sizeStr = formatBytes(attachment.sizeBytes || 0);
 

@@ -2,7 +2,7 @@
 
 ## 1. High-Level Architecture Overview
 
-NexaLink is engineered as a modern, accredited institutional platform for Vidyalankar Institute of Technology (VIT), Wadala. It utilizes a **Dual-Mode Full-Stack Architecture**: a production-grade Supabase cloud backend (PostgreSQL, GoTrue Auth, Realtime WebSockets, Storage Buckets, Row-Level Security) coupled with a resilient client-side state container layer (`AuthContext`, `DataContext`) that enables offline demo evaluation and instant persona switching.
+NexaLink is engineered as a modern, accredited institutional platform for Vidyalankar Institute of Technology (VIT), Wadala. It utilizes a **Dual-Mode Full-Stack Architecture**: a production-grade Supabase cloud backend (PostgreSQL, GoTrue Auth, Realtime WebSockets, Storage Buckets, Row-Level Security) coupled with a typed **Domain Services Layer** and a resilient client-side state container layer (`AuthContext`, `DataContext`) that enables offline demo evaluation and instant persona switching.
 
 ```
 +-----------------------------------------------------------------------------------------+
@@ -22,16 +22,31 @@ NexaLink is engineered as a modern, accredited institutional platform for Vidyal
 |      +--------------------------------+       +---------------------------------+       |
 +-----------------------------------------------------------------------------------------+
                                              |
+                                             v
++-----------------------------------------------------------------------------------------+
+|                              Domain Services Layer (v3.2)                               |
+|  +---------------------+  +--------------------+  +----------------------------------+  |
+|  |    eventsService    |  |    jobsService     |  |        mentorshipService         |  |
+|  +---------------------+  +--------------------+  +----------------------------------+  |
+|  +---------------------+  +--------------------+  +----------------------------------+  |
+|  |  messagingService   |  |announcementsService|  |       notificationsService       |  |
+|  +---------------------+  +--------------------+  +----------------------------------+  |
+|  |           supabaseRunner (Error Classifier: 42501, 23505, PGRST202, 42P01)        |  |
+|  |           enumMappers (DepartmentCode, MentorshipStatus, JobStatus, PgDates)       |  |
+|  +-----------------------------------------------------------------------------------+  |
++-----------------------------------------------------------------------------------------+
+                                             |
                       +----------------------+----------------------+
                       | (Production Cloud)                          | (Fallback / Demo)
                       v                                             v
 +-------------------------------------------+ +-------------------------------------------+
 |          Supabase Cloud Backend           | |      Client Simulation & Tree-Shaking     |
-| - Hosted PostgreSQL (17 Relational Tables)| | - Dynamic import() of mockData (DEV only) |
-| - GoTrue Auth (Dual-Email / Edge Lockout) | | - Client-side URL.createObjectURL previews|
-| - Storage Buckets (60s Signed Proof URLs) | | - Instant Persona Demo Switchers         |
+| - Hosted PostgreSQL (15 Relational Tables)| | - Dynamic import() of mockData (DEV only) |
+| - GoTrue Auth (Dual-Email / Edge Lockout) | | - Zero mock resurrection in live mode     |
+| - Storage Buckets (60s–1h Signed URLs)    | | - Instant Persona Demo Switchers          |
 | - Realtime WebSockets (NexaChats Pub/Sub) | | - Offline accreditation exports (xlsx/pdf)|
 | - Row Level Security (FORCE RLS) & RPCs   | | - In-memory mock session fallback         |
+| - Storage UPDATE policies (Upsert support)| | - Client-side URL.createObjectURL previews|
 +-------------------------------------------+ +-------------------------------------------+
 ```
 
@@ -52,37 +67,54 @@ NexaLink is engineered as a modern, accredited institutional platform for Vidyal
   `adminRole` (`'super_admin' | 'department_admin' | 'moderator'`), `permissions`, `assignedDepartment`.
 
 ### 2.2 Operational & Governance Models
-- **`JobOpportunity`:**  
-  `id`, `title`, `company`, `location`, `type` (`'full-time' | 'internship' | 'referral' | 'research'`), `department`, `description`, `requirements`, `skillsRequired`, `compensation`, `postedBy`, `postedAt`, `deadline`, `externalUrl`, `applicantsCount`.
-- **`CampusEvent`:**  
-  `id`, `title`, `description`, `category` (`'Alumni Meet' | 'Guest Lecture' | 'Technical Workshop' | 'Placement Drive' | 'Research Seminar'`), `date`, `time`, `location`, `speakerName`, `speakerRole`, `speakerCompany`, `organizerDepartment`, `capacity`, `registeredCount`, `waitlistCount`, `isVirtual`, `meetingUrl`, `materialsUrl`.
-- **`MentorshipRequest`:**  
-  `id`, `studentId`, `studentName`, `studentDepartment`, `studentEmail`, `mentorId`, `mentorName`, `mentorRole`, `purpose`, `proposedDate`, `timeslot`, `notes`, `status` (`'pending' | 'accepted' | 'declined' | 'completed'`), `createdAt`, `feedback`, `rating`, `seenAt` (timestamp preventing phantom unread badge notifications).
-- **`ChatMessage` (Messaging v2):**  
-  `id`, `senderId`, `receiverId`, `content`, `timestamp`, `category`, `isRead`, `status` (`'sending' | 'sent' | 'delivered' | 'read' | 'failed'`), `attachments` (`MessageAttachment[]`), `replyTo` (`ReplySnippet`), `reactions` (`MessageReaction[]`), `editedAt` (`string | null`), `deletedAt` (`string | null`), `clientMsgId` (`string`), `errorReason` (`string`), `isReported`, `reportReason`.
+- **`JobOpportunity` (`jobs` table):**  
+  `id`, `title`, `company`, `location`, `type`, `department`, `description`, `requirements`, `skills_required`, `stipend_or_salary`, `posted_by_alumni_id`, `posted_by_alumni_name`, `posted_by_role`, `posted_date`, `application_deadline`, `referral_provided`, `applicants_count`, `status` (`'Active' | 'Closed' | 'Pending Approval'`), `moderation_status` (`'Approved' | 'Pending Approval' | 'Rejected'`), `rejection_reason`.
+- **`OpportunityApplication` (`job_applications` table):**  
+  `id`, `job_id`, `applicant_id`, `applicant_name`, `applicant_email`, `resume_url`, `cover_note`, `status` (`'submitted' | 'viewed' | 'shortlisted' | 'not_selected'`), `applied_at`, `status_updated_at`, `poster_note`.
+- **`CampusEvent` (`events` table):**  
+  `id`, `title`, `type`, `date` (DATE format), `time`, `location_or_url`, `is_online`, `speaker_name`, `speaker_designation`, `speaker_company`, `department`, `description`, `banner_image`, `capacity_limit`, `rsvps_count`, `registered_user_ids`, `waitlist_user_ids`, `feedback_entries`, `status` (`'Upcoming' | 'Completed' | 'Cancelled'`), `host_id`, `host_name`, `host_role`, `lifecycle_status`, `checkin_code`, `checkin_opens_at`, `starts_at`, `ends_at`.
+- **`MentorshipRequest` (`mentorship_requests` table):**  
+  `id`, `student_id`, `student_name`, `student_email`, `student_department`, `student_year`, `mentor_id`, `mentor_name`, `mentor_role`, `mentor_company_or_dept`, `area_of_guidance`, `topic`, `message`, `status` (PostgreSQL enum: `'Pending' | 'Accepted' | 'Declined' | 'Completed' | 'Expired'`), `requested_date`, `scheduled_time`, `meeting_notes`, `decline_reason`, `feedback` (JSONB).
+- **`ChatMessage` (`chat_messages` table):**  
+  `id`, `client_message_id` (idempotency key), `sender_id`, `sender_name`, `sender_role`, `sender_avatar`, `receiver_id`, `content`, `timestamp`, `is_read`, `category`, `attachment_name`, `attachment_url`, `reactions` (JSONB array), `is_reported`, `report_reason`, `voice_note_url`, `voice_note_duration`, `reply_to_id`, `attachments` (JSONB array).
 - **`MessageAttachment`:**  
-  `id`, `messageId`, `conversationId`, `uploaderId`, `storagePath`, `fileName`, `mimeType`, `sizeBytes`, `scanStatus` (`'ok' | 'flagged' | 'pending'`), `signedUrl`.
-- **`ReplySnippet`:**  
-  `id`, `name`, `content`, `isDeleted`.
-- **`MessageReaction`:**  
-  `emoji`, `userId`.
-- **`InstitutionalAnnouncement`:**  
-  `id`, `title`, `content`, `category` (`'General' | 'Academic' | 'Placement' | 'Alumni' | 'Urgent'`), `targetAudience` (`'all' | 'students' | 'alumni' | 'faculty'`), `authorId`, `authorName`, `createdAt`, `expiresAt`, `isPinned`, `priority`.
-- **`RoleTransitionRequest`:**  
-  `id`, `userId`, `requestedRole`, `status` (`'pending' | 'approved' | 'rejected'`), `requestedAt`, `reviewedAt`, `reviewedByAdminId`, `rejectionReason`, `proposedAlumniData`.
-- **`AdminInvite`:**  
-  `id`, `invitedEmail`, `invitedByAdminId`, `invitedAt`, `status` (`'pending' | 'accepted' | 'revoked'`), `acceptedAt`.
-- **`AuditLogEntry`:**  
-  `id`, `timestamp`, `action`, `performedBy`, `details`, `targetUserId`, `metadata`.
+  `id`, `messageId`, `conversationId`, `uploaderId`, `storagePath`, `fileName`, `mimeType`, `sizeBytes`, `scanStatus`, `signedUrl`.
+- **`InstitutionalAnnouncement` (`announcements` table):**  
+  `id`, `title`, `content`, `category`, `target_audience`, `author`, `date`, `is_important`, `views`, `is_pinned`.
+- **`RoleTransitionRequest` (`role_transition_requests` table):**  
+  `id`, `user_id`, `requested_role`, `status`, `requested_at`, `reviewed_at`, `reviewed_by`, `rejection_reason`, `proposed_alumni_data`.
+- **`AdminInvite` (`admin_invites` table):**  
+  `id`, `email`, `role`, `department`, `token`, `status`, `invited_by`, `expires_at`, `created_at`.
+- **`AuditLogEntry` (`audit_logs` table):**  
+  `id`, `action`, `actor_role`, `actor_name`, `details`, `target_id`, `timestamp`.
+
+### 2.3 Canonical Normalization Pipeline (`src/utils/enumMappers.ts`)
+To prevent PostgreSQL constraint violations (`22P02 invalid input syntax for enum` and `23502 not-null violation`), all mutations route through deterministic normalizers:
+- **`normalizeDepartmentCode`:** Converts arbitrary department strings to canonical `DepartmentCode` (`'CMPN'`, `'INFT'`, `'EXTC'`, `'EXCS'`, `'BIOM'`).
+- **`normalizeMentorshipStatus`:** Maps lowercase client states (`'pending'`, `'accepted'`, `'declined'`, `'completed'`) to Title-cased PostgreSQL enum values.
+- **`normalizeJobStatus` & `normalizeModerationStatus`:** Normalizes opportunity states to `'Active' | 'Closed' | 'Pending Approval'` and `'Approved' | 'Pending Approval' | 'Rejected'`.
+- **`normalizeEventStatus`:** Normalizes event states to `'Upcoming' | 'Completed' | 'Cancelled'`.
+- **`toPgDate` & `toPgTimestamp`:** Ensures dates conform strictly to PostgreSQL `YYYY-MM-DD` or ISO 8601 TIMESTAMPTZ strings.
 
 ---
 
 ## 3. Key Context State Handlers (`DataContext.tsx` & `AuthContext.tsx`)
 
-| State Handler | Scope & Functionality |
+| State Handler | Scope & Persistence Functionality |
 | :--- | :--- |
 | `approveUserVerification(userId)` | Marks account verified (`isVerified: true`, `verificationStatus: 'Verified'`), logs `USER_VERIFIED`. |
 | `rejectUserVerification(userId, reason)` | Sets status to `'Rejected'`, records rejection reason, logs `USER_REJECTED`. |
+| `requestUserClarification(userId, promptText)` | Sets status to `'Needs Clarification'`, surfaces banner on user dashboard. |
+| `resubmitUserVerification(userId, docName, docUrl)` | Uploads document to `proof-documents` storage, updates user profile with permanent URL, logs audit trail, and returns record to Admin queue. |
+| `submitEventForReview(eventData)` | Validates venue conflicts and rate limits; auto-publishes for admins/faculty or queues for review; persists to `events` table via `eventsService.createEvent`. |
+| `reviewEvent(eventId, action, note)` | Transitions event lifecycle (`published`, `changes_requested`, `rejected`); persists to `events` via `eventsService.updateEvent`. |
+| `submitOpportunityForReview(jobData)` | Validates poster role; persists listing to `jobs` table via `jobsService.createJob`. |
+| `applyForJob(jobId)` | Increments applicant count on `jobs` and creates new persistent candidate record in `job_applications` table via `jobsService.submitApplication`. |
+| `updateApplicationStatus(appId, status, note)` | Updates candidate review state (`submitted`, `viewed`, `shortlisted`, `not_selected`) in `job_applications` via `jobsService.updateApplicationStatus`. |
+| `sendMentorshipRequest(reqData)` | Validates connection type; persists guidance request to `mentorship_requests` via `mentorshipService.createRequest`. |
+| `updateMentorshipStatus(id, status, notes)` | Updates request status and meeting notes via `mentorshipService.updateStatus`. |
+| `sendMessage(receiverId, text, ...)` | Dispatches message via `messagingService.sendMessage` with client outbox fallback and duplicate key idempotency. |
+| `markNotificationRead / markAllNotificationsRead` | Updates notification read status via `notificationsService.markRead` and `markAllRead`. |
 | `requestUserClarification(userId, promptText)` | Sets status to `'Needs Clarification'`, attaches `clarificationRequested` object; surfaces banner on user dashboard. |
 | `resubmitUserVerification(userId, docName, docUrl)` | Clears clarification object, updates proof document references, returns record to Admin queue with `'Pending Verification'`. |
 | `bulkGraduateStudents(studentIds, defaultEmailFormat)` | Performs real batch graduation of eligible candidates, flags legacy records requiring personal email (`loginRecoveryNeeded: true`), and writes consolidated `BULK_GRADUATION_PROVISIONAL` audit record. |
@@ -174,4 +206,12 @@ NexaLink is engineered as a modern, accredited institutional platform for Vidyal
     - `isPublicView` guarantees `Navbar.tsx` only renders public links on public views.
 12. **Rate Limiting & Password Security:**
     - 5 consecutive failed login attempts trigger a 15-minute temporary lockout via `auth-login-guard`.
-    - Secure OTP reset verification (`482910` demo / production gateway).
+    - Secure Supabase Auth email OTP verification and password recovery.
+13. **Expand-Only Migration Protocol:**
+    - Strict protocol for cloud schema updates: migrations add tables, columns, functions, and policies only. No drops, deletes, or breaking signature changes are deployed to live databases.
+    - Idempotency guards (`IF NOT EXISTS`, unique indexes on `client_message_id`) ensure safe multi-run execution.
+14. **Document Verification & Storage Resolution Pipeline:**
+    - Identity proofs and academic credentials upload to the private `proof-documents` bucket (`file_size_limit: 10MB`, MIME allowlist: PDF, PNG, JPEG).
+    - Storage `UPDATE` policies on `storage.objects` permit authenticated users to overwrite their own uploads, eliminating `42501` errors during re-uploads.
+    - `RegistrationWizard.tsx` and `VerificationPendingPage.tsx` store permanent storage URLs on `users.verification_document_url`.
+    - `VerificationQueueMasterDetail.tsx` dynamically generates fresh 1-hour signed URLs on-the-fly, enabling reliable inline image previewing and direct PDF view/download capabilities in the admin dashboard.

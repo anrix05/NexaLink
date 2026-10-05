@@ -90,12 +90,14 @@ export const subscribeToNotifications = (
           id: row.id,
           user_id: row.user_id,
           title: row.title,
-          body: row.body,
-          created_at: row.created_at ? new Date(row.created_at).toISOString().replace('T', ' ').substring(0, 16) : new Date().toISOString(),
-          type: row.type,
+          body: row.body || row.message || '',
+          category: row.category || 'general',
+          type: row.type || 'System Alert',
           is_read: row.is_read ?? false,
-          link: row.link,
-          related_entity_id: row.related_entity_id
+          created_at: row.created_at || row.date || new Date().toISOString(),
+          link: row.link || row.link_tab,
+          related_entity_id: row.related_entity_id,
+          dedupe_key: row.dedupe_key
         };
         onNewNotification(notif);
       }

@@ -12,9 +12,10 @@ import { Eyebrow } from '../common/Eyebrow';
 
 interface HeroSectionProps {
   onSignIn: () => void;
+  onCreateAccount?: () => void;
 }
 
-export const HeroSection: React.FC<HeroSectionProps> = ({ onSignIn }) => {
+export const HeroSection: React.FC<HeroSectionProps> = ({ onSignIn, onCreateAccount }) => {
   const { scrollTo } = useLenis();
   const reduceMotion = useReducedMotionPreference();
   const { scrollY } = useScroll();
@@ -80,19 +81,26 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSignIn }) => {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 pt-1">
                 <MagneticButton className="w-full sm:w-auto">
                   <button
-                    onClick={onSignIn}
+                    onClick={onCreateAccount || onSignIn}
                     className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-[#0A0A0A] text-white text-sm font-medium rounded-lg hover:bg-[#262626] transition-colors cursor-pointer touch-target-44"
                   >
-                    <span>Sign in</span>
+                    <span>Create account</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 </MagneticButton>
 
                 <button
-                  onClick={() => scrollTo('#how-it-works')}
+                  onClick={onSignIn}
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-white border border-[#E5E7EB] text-[#0A0A0A] text-sm font-medium rounded-lg hover:bg-[#FAFAFA] hover:border-[#0A0A0A] transition-colors cursor-pointer touch-target-44"
                 >
-                  <span>See how it works</span>
+                  <span>Sign in</span>
+                </button>
+
+                <button
+                  onClick={() => scrollTo('#how-it-works')}
+                  className="w-full sm:w-auto text-xs text-[#6B7280] hover:text-[#0A0A0A] transition-colors cursor-pointer py-2 px-3 text-center"
+                >
+                  See how it works ↓
                 </button>
               </div>
 

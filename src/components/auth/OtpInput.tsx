@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useCountdown } from '../../hooks/useCountdown';
 import { AnimatedCheckIcon } from '../common/UIComponents';
-import { RefreshCw, Clock } from 'lucide-react';
+import { RefreshCw, Clock, AlertCircle } from 'lucide-react';
 
 export interface OtpInputProps {
   length?: number;
@@ -14,6 +14,7 @@ export interface OtpInputProps {
   error?: string | null;
   className?: string;
   emailDestination?: string;
+  resendCooldownSeconds?: number;
 }
 
 export const OtpInput: React.FC<OtpInputProps> = ({
@@ -26,7 +27,8 @@ export const OtpInput: React.FC<OtpInputProps> = ({
   disabled = false,
   error = null,
   className = '',
-  emailDestination
+  emailDestination,
+  resendCooldownSeconds = 60
 }) => {
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const [attempts, setAttempts] = useState(0);
@@ -35,8 +37,8 @@ export const OtpInput: React.FC<OtpInputProps> = ({
   // 10-minute code validity expiry timer
   const expiryTimer = useCountdown({ initialSeconds: 600 });
 
-  // 30-second resend cooldown timer
-  const resendCooldown = useCountdown({ initialSeconds: 30, autoStart: true });
+  // 60-second resend cooldown timer (Rule 5)
+  const resendCooldown = useCountdown({ initialSeconds: resendCooldownSeconds, autoStart: true });
 
   const digits = Array.from({ length }, (_, i) => value[i] || '');
 
@@ -91,7 +93,7 @@ export const OtpInput: React.FC<OtpInputProps> = ({
   const handleResendClick = async () => {
     if (!resendCooldown.isFinished || attempts >= maxAttempts || disabled) return;
     setAttempts((prev) => prev + 1);
-    resendCooldown.reset(30);
+    resendCooldown.reset(resendCooldownSeconds);
     await onResend?.();
   };
 
@@ -105,7 +107,7 @@ export const OtpInput: React.FC<OtpInputProps> = ({
       )}
 
       {/* 6 Inputs row */}
-      <div className="flex items-center gap-2 sm:gap-2.5">
+      <div className="flex items-center gap-1.5 sm:gap-2.5 justify-center sm:justify-start">
         {Array.from({ length }).map((_, index) => {
           const isFilled = Boolean(digits[index]);
           return (
@@ -123,12 +125,12 @@ export const OtpInput: React.FC<OtpInputProps> = ({
               onPaste={handlePaste}
               disabled={disabled || isVerified}
               aria-label={`Digit ${index + 1} of ${length}`}
-              className={`w-11 h-12 sm:w-12 sm:h-12 text-center text-lg font-mono font-medium rounded-lg border transition-all duration-150 outline-none
+              className={`w-9 h-11 sm:w-12 sm:h-12 min-w-0 text-center text-base sm:text-lg font-mono font-medium rounded-lg border transition-all duration-150 outline-none
                 ${
                   isVerified
                     ? 'border-[#059669] bg-[#ECFDF5] text-[#065F46]'
                     : error
-                    ? 'border-[#DC2626] bg-[#FFFFFF] text-[#0A0A0A] focus:ring-2 focus:ring-[#DC2626]'
+                    ? 'border-[#EF4444] bg-[#FEF2F2] text-[#991B1B] focus:ring-2 focus:ring-[#EF4444]'
                     : isFilled
                     ? 'border-[#0A0A0A] bg-[#FFFFFF] text-[#0A0A0A]'
                     : 'border-[#6B7280] bg-[#FFFFFF] text-[#0A0A0A] focus:border-[#0A0A0A] focus:ring-2 focus:ring-[#0A0A0A] focus:ring-offset-2'
@@ -146,13 +148,27 @@ export const OtpInput: React.FC<OtpInputProps> = ({
         )}
       </div>
 
+      {/* Governance Rose Error Alert for invalid or expired OTP (Rule 6) */}
+      {(error || expiryTimer.isFinished) && !isVerified && (
+        <div
+          role="alert"
+          aria-live="polite"
+          className="w-full p-3 rounded-lg border border-[#FECACA] bg-[#FEE2E2] text-[#991B1B] text-xs flex items-start gap-2.5 transition-colors"
+        >
+          <AlertCircle className="w-4 h-4 text-[#991B1B] shrink-0 mt-0.5" aria-hidden="true" />
+          <span className="leading-relaxed font-medium">
+            {error || 'This verification code has expired. Please request a new code.'}
+          </span>
+        </div>
+      )}
+
       {/* Expiry and Resend Controls */}
       <div className="flex items-center justify-between text-xs text-[#6B7280] pt-1">
         <div className="flex items-center gap-1.5" role="status">
           <Clock className="w-3.5 h-3.5 text-[#6B7280]" aria-hidden="true" />
           <span>
             {expiryTimer.isFinished ? (
-              <span className="text-[#DC2626] font-medium">Code expired</span>
+              <span className="text-[#991B1B] font-medium">Code expired</span>
             ) : (
               `Expires in ${expiryTimer.formatted}`
             )}
@@ -161,7 +177,7 @@ export const OtpInput: React.FC<OtpInputProps> = ({
 
         <div>
           {attempts >= maxAttempts ? (
-            <span className="text-[#DC2626]">Maximum resend attempts reached</span>
+            <span className="text-[#991B1B]">Maximum resend attempts reached</span>
           ) : resendCooldown.isFinished ? (
             <button
               type="button"

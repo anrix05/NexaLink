@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { KeyRound, CheckCircle2, AlertCircle, ArrowLeft, Send } from 'lucide-react';
 import { Button, TextField, PasswordField } from '../components/common/UIComponents';
 import { LogoMark } from '../components/common/LogoMark';
+import { OtpInput } from '../components/auth/OtpInput';
 import { useAuth } from '../context/AuthContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
@@ -14,6 +15,8 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ setActiveT
   const {
     completePasswordReset,
     requestPasswordReset,
+    verifyPasswordResetOtp,
+    resendPasswordResetOtp,
     recoveryError,
     clearRecoveryMode,
     isRecoveryMode
@@ -34,6 +37,26 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ setActiveT
   const [isRequestingNewLink, setIsRequestingNewLink] = useState(false);
   const [requestNewLinkSuccess, setRequestNewLinkSuccess] = useState<string | null>(null);
   const [requestNewLinkError, setRequestNewLinkError] = useState<string | null>(null);
+  const [otpCode, setOtpCode] = useState('');
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
+  const [otpVerifyError, setOtpVerifyError] = useState<string | null>(null);
+
+  const handleVerifyOtp = async (code: string) => {
+    setIsVerifyingCode(true);
+    setOtpVerifyError(null);
+    try {
+      const res = await verifyPasswordResetOtp(requestEmail, code);
+      if (res.success) {
+        setLinkError(null);
+      } else {
+        setOtpVerifyError(res.message || 'Invalid or expired recovery code.');
+      }
+    } catch (err: any) {
+      setOtpVerifyError(err.message || 'Verification failed.');
+    } finally {
+      setIsVerifyingCode(false);
+    }
+  };
 
   // Check link validity and session on mount
   useEffect(() => {
@@ -197,9 +220,42 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ setActiveT
               </p>
 
               {requestNewLinkSuccess ? (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900 flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-                  <span>{requestNewLinkSuccess}</span>
+                <div className="space-y-4">
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900 flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                    <span>{requestNewLinkSuccess}</span>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-[#E5E7EB]">
+                    <p className="text-xs text-[#6B7280]">
+                      Enter the 6-digit recovery code from your email to set a new password:
+                    </p>
+                    <OtpInput
+                      value={otpCode}
+                      onChange={(code) => {
+                        setOtpCode(code);
+                        if (otpVerifyError) setOtpVerifyError(null);
+                      }}
+                      onComplete={handleVerifyOtp}
+                      onResend={() => handleRequestNewLink({ preventDefault: () => {} } as any)}
+                      error={otpVerifyError}
+                      emailDestination={requestEmail}
+                      disabled={isVerifyingCode}
+                      resendCooldownSeconds={60}
+                    />
+
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="md"
+                      disabled={otpCode.length !== 6 || isVerifyingCode}
+                      loading={isVerifyingCode}
+                      onClick={() => handleVerifyOtp(otpCode)}
+                      className="w-full mt-2"
+                    >
+                      <span>Verify code & proceed</span>
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <form onSubmit={handleRequestNewLink} className="space-y-3">

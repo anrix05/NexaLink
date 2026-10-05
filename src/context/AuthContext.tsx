@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import type { User, UserRole, AlumniProfile, StudentProfile, FacultyProfile } from '../types';
 // Removed static import of mockData for production tree-shaking
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { authService } from '../services/authService';
 
 interface AuthContextType {
   currentUser: User | AlumniProfile | StudentProfile | FacultyProfile;
@@ -16,8 +17,13 @@ interface AuthContextType {
   clearWelcomeReveal: () => void;
   switchRole: (role: UserRole) => void;
   login: (email: string, _roleOrPassword?: any, password?: string, matchedUserFromStore?: any) => Promise<{ success: boolean; message?: string }>;
+  initiateSignUp: (email: string, password: string, metadata: { name: string; role: UserRole; department: string; enrollmentNo?: string }) => Promise<{ success: boolean; message?: string; alreadyConfirmed?: boolean }>;
+  verifySignupOtp: (email: string, otp: string) => Promise<{ success: boolean; message?: string }>;
+  resendSignupOtp: (email: string) => Promise<{ success: boolean; message?: string }>;
   register: (userData: Record<string, any>, role: UserRole) => Promise<{ success: boolean; message: string }>;
   requestPasswordReset: (email: string) => Promise<{ success: boolean; message: string; otp?: string }>;
+  verifyPasswordResetOtp: (email: string, otp: string) => Promise<{ success: boolean; message?: string }>;
+  resendPasswordResetOtp: (email: string) => Promise<{ success: boolean; message?: string }>;
   confirmPasswordReset: (email: string, otp: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
   completePasswordReset: (newPassword: string) => Promise<{ success: boolean; message: string }>;
   clearRecoveryMode: () => void;
@@ -91,8 +97,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setRecoveryError(null);
   }, []);
 
-  // Rate Limiting & Account Lockout State (persisted server-side in Supabase login_attempts when configured)
-  const [activeOtps, setActiveOtps] = useState<Record<string, { otp: string; expiresAt: number }>>({});
 
   const triggerWelcomeRevealIfVerified = useCallback((user: any) => {
     if (typeof window !== 'undefined' && sessionStorage.getItem('hasShownWelcomeThisSession')) {
@@ -122,6 +126,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (savedMock) {
         try {
           const parsed = JSON.parse(savedMock);
+          if (parsed?.avatar && typeof parsed.avatar === 'string' && parsed.avatar.includes('photo-1535713875002')) {
+            delete parsed.avatar;
+          }
           setCurrentUser(parsed);
           setCurrentRole(parsed.role || 'student');
           setIsAuthenticated(true);
@@ -166,6 +173,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (savedMock) {
           try {
             const parsed = JSON.parse(savedMock);
+            if (parsed?.avatar && typeof parsed.avatar === 'string' && parsed.avatar.includes('photo-1535713875002')) {
+              delete parsed.avatar;
+            }
             setCurrentUser(parsed);
             setCurrentRole(parsed.role || 'student');
             setIsAuthenticated(true);
@@ -227,7 +237,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       let enrichedUser: any = {
         ...userData,
-        avatar: userData.avatar_url,
+        avatar: (userData.avatar_url && !userData.avatar_url.includes('photo-1535713875002')) ? userData.avatar_url : undefined,
         isVerified: userData.is_verified,
         verificationStatus: userData.verification_status,
         enrollmentNo: userData.enrollment_no,
@@ -498,109 +508,150 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: false, message: failMsg };
   };
 
+  const initiateSignUp = async (
+    email: string,
+    password: string,
+    metadata: { name: string; role: UserRole; department: string; enrollmentNo?: string }
+  ): Promise<{ success: boolean; message?: string; alreadyConfirmed?: boolean }> => {
+    const res = await authService.initiateSignUp({
+      email,
+      password,
+      name: metadata.name,
+      role: metadata.role,
+      department: metadata.department,
+      enrollmentNo: metadata.enrollmentNo
+    });
+    return {
+      success: res.ok,
+      message: res.error,
+      alreadyConfirmed: res.status === 'already_confirmed'
+    };
+  };
+
+  const verifySignupOtp = async (
+    email: string,
+    otp: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    const res = await authService.verifySignupOtp(email, otp);
+    return {
+      success: res.ok,
+      message: res.error
+    };
+  };
+
+  const resendSignupOtp = async (
+    email: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    const res = await authService.resendSignupOtp(email);
+    return {
+      success: res.ok,
+      message: res.error
+    };
+  };
+
   const register = async (userData: Record<string, any>, role: UserRole): Promise<{ success: boolean; message: string }> => {
     setLoginError(null);
     const targetEmail = (userData.email || '').replace(/^\+/, '').trim().toLowerCase();
 
-
-
-    // 2. Supabase Auth Registration
-    if (isSupabaseConfigured() && userData.password) {
+    // Supabase Auth Registration
+    if (isSupabaseConfigured() && (import.meta.env.PROD || import.meta.env.VITE_DATA_MODE !== 'mock')) {
       try {
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: targetEmail,
-          password: userData.password,
-          options: {
-            data: {
-              name: userData.name,
-              role: role,
-              department: userData.department || 'CMPN'
-            }
-          }
-        });
+        // User should already have an active session from verifyOtp (Rule 3)
+        let finalUser: any = (await supabase.auth.getUser()).data?.user;
 
-        let finalUser = authData?.user;
-
-        if (authError && authError.message.includes('already registered')) {
-          // Self-healing: if the auth user exists but the profile was orphaned due to previous errors,
-          // try to authenticate them with the provided password to repair the profile.
+        // Fallback for direct registration attempts with credentials
+        if (!finalUser && userData.password) {
           const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
             email: targetEmail,
             password: userData.password
           });
-
           if (!signInError && signInData.user) {
-            // Check if public profile exists
-            const { data: existingProfile } = await supabase.from('users').select('id').eq('id', signInData.user.id).single();
-            if (existingProfile) {
-              return { success: false, message: 'This email is already registered. Please sign in instead.' };
-            }
-            // No profile found, meaning it's an orphaned account. Proceed to create the profile.
             finalUser = signInData.user;
           } else {
-            return { success: false, message: authError.message };
-          }
-        } else if (authError) {
-          return { success: false, message: authError.message };
-        }
-
-        if (finalUser) {
-          // Call the secure RPC function to bypass RLS and create the profile
-          const { error: insertError } = await (supabase.rpc as any)('create_user_profile', {
-            p_id: finalUser.id,
-            p_name: userData.name,
-            p_email: targetEmail,
-            p_role: role,
-            p_department: userData.department || 'CMPN',
-            p_avatar_url: userData.avatar || null,
-            p_enrollment_no: userData.enrollmentNo || userData.prn || '22101A0099',
-            p_employee_id: userData.employeeId || null,
-            p_phone: userData.phone || null,
-            p_bio: userData.bio || null,
-            p_personal_email: userData.personalEmail || null,
-            p_proof_document_name: userData.proofDocumentName || null,
-            p_verification_document_url: userData.verificationDocumentUrl || null
-          });
-
-          if (insertError) {
-            if (insertError.message.includes('users_email_key') || insertError.message.includes('users_pkey') || insertError.message.includes('duplicate key value')) {
-              return { success: false, message: 'This email address is already registered. Please sign in instead.' };
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+              email: targetEmail,
+              password: userData.password,
+              options: {
+                data: {
+                  name: userData.name,
+                  role: role,
+                  department: userData.department || 'CMPN'
+                }
+              }
+            });
+            if (authError) {
+              return { success: false, message: authError.message };
             }
-            // Delete the auth user if profile creation failed to prevent orphaned accounts
-            // Note: Admin service role is needed to cleanly delete, but we at least surface the error
-            return { success: false, message: `Database Error: ${insertError.message}. (Did you update the Supabase RLS policies and email triggers?)` };
+            finalUser = authData?.user;
           }
-
-          // Insert specific role profile data to persist semester, gradYear, company, etc.
-          if (role === 'student') {
-            await supabase.from('student_profiles').insert({
-              user_id: finalUser.id,
-              enrollment_no: userData.enrollmentNo || userData.prn || '22101A0099',
-              semester: userData.semester || 'Semester 1',
-              expected_graduation_year: new Date().getFullYear() + 4 // Basic fallback
-            });
-          } else if (role === 'alumni') {
-            await supabase.from('alumni_profiles').insert({
-              user_id: finalUser.id,
-              enrollment_no: userData.enrollmentNo || '',
-              graduation_year: parseInt(userData.gradYear as string) || new Date().getFullYear(),
-              company: userData.company || '',
-              designation: userData.designation || ''
-            });
-          } else if (role === 'faculty') {
-            await supabase.from('faculty_profiles').insert({
-              user_id: finalUser.id,
-              employee_id: userData.employeeId || '',
-              designation: userData.designation || 'Professor'
-            });
-          }
-
-          const successMessage = `Registration successful! Your account status is "Pending Verification". The administrator will verify your ${
-            role === 'student' || role === 'alumni' ? 'Enrollment Number & Academic Credentials' : 'Employee ID & Official Email'
-          } before enabling login access.`;
-          return { success: true, message: successMessage };
         }
-        return { success: false, message: 'Registration failed unexpectedly.' };
+
+        if (!finalUser) {
+          return { success: false, message: 'Please complete email OTP verification before submitting registration.' };
+        }
+
+        // Call the secure RPC function to create the profile in public.users
+        const { error: insertError } = await (supabase.rpc as any)('create_user_profile', {
+          p_id: finalUser.id,
+          p_name: userData.name,
+          p_email: targetEmail,
+          p_role: role,
+          p_department: userData.department || 'CMPN',
+          p_avatar_url: userData.avatar || null,
+          p_enrollment_no: userData.enrollmentNo || userData.prn || '22101A0099',
+          p_employee_id: userData.employeeId || null,
+          p_phone: userData.phone || null,
+          p_bio: userData.bio || null,
+          p_personal_email: userData.personalEmail || null,
+          p_proof_document_name: userData.proofDocumentName || null,
+          p_verification_document_url: userData.verificationDocumentUrl || null
+        });
+
+        if (insertError) {
+          if (insertError.message.includes('users_email_key') || insertError.message.includes('users_pkey') || insertError.message.includes('duplicate key value')) {
+            return { success: false, message: 'This email address is already registered. Please sign in instead.' };
+          }
+          return { success: false, message: `Database Error: ${insertError.message}.` };
+        }
+
+        // Insert specific role profile data to persist semester, gradYear, company, etc.
+        if (role === 'student') {
+          const sem = userData.semester || userData.currentYear || 'Semester 1';
+          const yr = userData.currentYear && ['FE', 'SE', 'TE', 'BE', 'FY', 'SY'].includes(userData.currentYear)
+            ? userData.currentYear
+            : (sem.includes('1') || sem.includes('2') ? 'FE'
+              : sem.includes('3') || sem.includes('4') ? 'SE'
+              : sem.includes('5') || sem.includes('6') ? 'TE'
+              : 'BE');
+
+          await supabase.from('student_profiles').upsert({
+            user_id: finalUser.id,
+            enrollment_no: userData.enrollmentNo || userData.prn || '22101A0099',
+            prn: userData.enrollmentNo || userData.prn || undefined,
+            semester: sem,
+            current_year: yr,
+            expected_graduation_year: userData.expectedGraduationYear || (new Date().getFullYear() + 4)
+          });
+        } else if (role === 'alumni') {
+          await supabase.from('alumni_profiles').upsert({
+            user_id: finalUser.id,
+            enrollment_no: userData.enrollmentNo || '',
+            graduation_year: parseInt(userData.gradYear as string) || new Date().getFullYear(),
+            company: userData.company || '',
+            designation: userData.designation || ''
+          });
+        } else if (role === 'faculty') {
+          await supabase.from('faculty_profiles').upsert({
+            user_id: finalUser.id,
+            employee_id: userData.employeeId || '',
+            designation: userData.designation || 'Professor'
+          });
+        }
+
+        const successMessage = `Registration successful! Your account status is "Pending Verification". The administrator will verify your ${
+          role === 'student' || role === 'alumni' ? 'Enrollment Number & Academic Credentials' : 'Employee ID & Official Email'
+        } before enabling login access.`;
+        return { success: true, message: successMessage };
       } catch (err: any) {
         return { success: false, message: err.message || 'An error occurred during registration.' };
       }
@@ -618,7 +669,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         employeeId: userData.employeeId || null,
         personalEmail: userData.personalEmail || null,
         proofDocumentName: userData.proofDocumentName || null,
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
+        avatar: (userData.avatar && !userData.avatar.includes('photo-1535713875002')) ? userData.avatar : undefined,
         createdAt: new Date().toISOString()
       };
       localStorage.setItem('nexalink_auth_user', JSON.stringify(newMockUser));
@@ -640,23 +691,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'Please enter a valid institutional email address.' };
     }
 
-    if (isSupabaseConfigured()) {
-      try {
-        const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
-          redirectTo: `${window.location.origin}/reset-password`
-        });
-        if (error) {
-          return { success: false, message: error.message };
-        }
-        return {
-          success: true,
-          message: `Password reset instructions and verification link sent to ${targetEmail}.`
-        };
-      } catch (err: any) {
-        return { success: false, message: err.message || 'An error occurred during password reset request.' };
-      }
+    const res = await authService.requestPasswordReset(targetEmail);
+    if (!res.ok) {
+      return { success: false, message: res.error || 'An error occurred during password reset request.' };
     }
-    return { success: false, message: 'Supabase is not configured.' };
+    return {
+      success: true,
+      message: `Password reset verification code sent to ${targetEmail}.`
+    };
+  };
+
+  const verifyPasswordResetOtp = async (
+    email: string,
+    otp: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    const res = await authService.verifyRecoveryOtp(email, otp);
+    if (res.ok) {
+      setIsRecoveryMode(true);
+      isRecoveryModeRef.current = true;
+      setRecoveryError(null);
+    }
+    return {
+      success: res.ok,
+      message: res.error
+    };
+  };
+
+  const resendPasswordResetOtp = async (
+    email: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    const res = await authService.resendRecoveryOtp(email);
+    return {
+      success: res.ok,
+      message: res.error
+    };
   };
 
   const completePasswordReset = async (
@@ -666,23 +734,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'Password must be at least 6 characters in length.' };
     }
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && (import.meta.env.PROD || import.meta.env.VITE_DATA_MODE !== 'mock')) {
       try {
-        // 1. Update the password using the active recovery session
-        const { data: updateData, error: updateError } = await supabase.auth.updateUser({
-          password: newPassword
-        });
-
-        if (updateError) {
+        // 1. Update the password using the active recovery session (Rule 1)
+        const updateRes = await authService.updatePassword(newPassword);
+        if (!updateRes.ok) {
           return {
             success: false,
-            message: updateError.message || 'Failed to update password. Reset link may be invalid or expired.'
+            message: updateRes.error || 'Failed to update password. Reset code may be invalid or expired.'
           };
         }
 
         // 2. Properly refresh the session to exit recovery state into full authenticated session
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-        const authedUser = refreshData?.session?.user || updateData?.user || (await supabase.auth.getUser()).data?.user;
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        const authedUser = refreshData?.session?.user || updateRes.user || (await supabase.auth.getUser()).data?.user;
 
         if (!authedUser) {
           return {
@@ -730,10 +795,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const confirmPasswordReset = async (
-    _email: string,
-    _otp: string,
+    email: string,
+    otp: string,
     newPassword: string
   ): Promise<{ success: boolean; message: string }> => {
+    // Real server verification of recovery code before updating password (Rule 1 & Rule 2)
+    const verifyRes = await authService.verifyRecoveryOtp(email, otp);
+    if (!verifyRes.ok) {
+      return { success: false, message: verifyRes.error || 'Invalid or expired verification code.' };
+    }
     return completePasswordReset(newPassword);
   };
 
@@ -783,8 +853,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearWelcomeReveal: () => setWelcomeRevealName(null),
         switchRole,
         login,
+        initiateSignUp,
+        verifySignupOtp,
+        resendSignupOtp,
         register,
         requestPasswordReset,
+        verifyPasswordResetOtp,
+        resendPasswordResetOtp,
         confirmPasswordReset,
         completePasswordReset,
         logout,

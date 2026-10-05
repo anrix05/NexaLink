@@ -23,12 +23,21 @@ import type {
   OpportunityApplication,
   OpportunityApplicationStatus,
   EventLifecycleStatus,
-  OpportunityLifecycleStatus
+  OpportunityLifecycleStatus,
+  NotificationPreferences
 } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { isLiveMode } from '../lib/dataMode';
+import { eventsService } from '../services/eventsService';
+import { jobsService } from '../services/jobsService';
+import { mentorshipService } from '../services/mentorshipService';
+import { messagingService, mapRowToChatMessage } from '../services/messagingService';
+import { announcementsService } from '../services/announcementsService';
+import { notificationsService } from '../services/notificationsService';
 import { subscribeToChatMessages, subscribeToNotifications } from '../lib/realtime';
 import { parseAnnouncementMeta, serializeAnnouncementContent } from '../components/common/InstitutionalAnnouncementFeed';
 import { validateEventLeadTime, checkVenueConflict, generateCheckinCode } from '../utils/eventTimeUtils';
+
 
 const generateUUID = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -75,6 +84,11 @@ interface DataContextType {
   mentorshipRequests: MentorshipRequest[];
   announcements: Announcement[];
   notifications: NotificationItem[];
+  unreadNotificationCount: number;
+  notificationPreferences: NotificationPreferences | null;
+  latestIncomingNotification: NotificationItem | null;
+  dismissIncomingNotificationToast: () => void;
+  updateNotificationPreferences: (prefs: Partial<Omit<NotificationPreferences, 'user_id'>>) => Promise<void>;
   messages: ChatMessage[];
   auditLogs: AuditLogEntry[];
   roleTransitionRequests: RoleTransitionRequest[];
@@ -83,7 +97,7 @@ interface DataContextType {
   // Handlers
   approveUserVerification: (userId: string) => void;
   rejectUserVerification: (userId: string, reason?: string) => void;
-  requestUserClarification: (userId: string, promptText: string) => void;
+  requestUserClarification: (userId: string, promptText: string, documentType?: string) => void;
   resubmitUserVerification: (userId: string, proofDocName: string, docUrl?: string) => void;
   updateUserProfile: (userId: string, updatedData: Record<string, any>) => void;
   deactivateUser: (userId: string) => void;
@@ -228,6 +242,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return [];
   });
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences | null>(null);
+  const [latestIncomingNotification, setLatestIncomingNotification] = useState<NotificationItem | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [roleTransitionRequests, setRoleTransitionRequests] = useState<RoleTransitionRequest[]>([]);
   const [starredConversations, setStarredConversations] = useState<string[]>([]);
@@ -310,6 +326,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 .then();
             }
 
+            let mergedDocUrl = u.verification_document_url || u.clarification_requested?.documentUrl || undefined;
+            let mergedDocName = u.proof_document_name || u.clarification_requested?.documentName || undefined;
+            let mergedUserReplied = Boolean(
+              u.user_replied ||
+              u.clarification_requested?.userReplied ||
+              u.clarification_requested?.user_replied
+            );
+            let mergedUserRepliedAt = u.user_replied_at || u.clarification_requested?.userRepliedAt || undefined;
+
+            try {
+              const lastReplyStr = localStorage.getItem('nexalink_last_user_reply');
+              if (lastReplyStr) {
+                const lr = JSON.parse(lastReplyStr);
+                const userEmail = (u.email || '').toLowerCase();
+                if (lr.userId === u.id || (lr.email && userEmail && lr.email.toLowerCase() === userEmail)) {
+                  mergedDocUrl = mergedDocUrl || lr.documentUrl;
+                  mergedDocName = mergedDocName || lr.documentName;
+                  mergedUserReplied = true;
+                  mergedUserRepliedAt = mergedUserRepliedAt || lr.timestamp;
+                }
+              }
+            } catch {}
+
             const baseUser: User = {
               id: u.id,
               name: u.name,
@@ -322,8 +361,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               verificationStatus: u.verification_status,
               rejectionReason: u.rejection_reason || undefined,
               clarificationRequested: u.clarification_requested,
-              proofDocumentName: u.proof_document_name || undefined,
-              verificationDocumentUrl: u.verification_document_url || undefined,
+              proofDocumentName: mergedDocName,
+              verificationDocumentUrl: mergedDocUrl,
+              userReplied: mergedUserReplied,
+              userRepliedAt: mergedUserRepliedAt,
               isActive: u.is_active,
               enrollmentNo: u.enrollment_no || undefined,
               employeeId: u.employee_id || undefined,
@@ -430,157 +471,132 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // 2. Fetch Jobs
-        const { data: jobsData, error: jErr } = await supabase.from('jobs').select('*').order('posted_date', { ascending: false });
-        if (!jErr && jobsData && jobsData.length > 0) {
-          setJobsList(jobsData.map((j: any) => ({
-            id: j.id,
-            title: j.title,
-            company: j.company,
-            companyLogo: j.company_logo || undefined,
-            location: j.location,
-            type: j.type,
-            stipendOrSalary: j.stipend_or_salary,
-            department: j.department || [],
-            skillsRequired: j.skills_required || [],
-            postedByAlumniId: j.posted_by_alumni_id,
-            postedByAlumniName: j.posted_by_alumni_name,
-            postedByRole: j.posted_by_role || undefined,
-            postedDate: j.posted_date,
-            applicationDeadline: j.application_deadline,
-            description: j.description,
-            requirements: j.requirements || [],
-            referralProvided: j.referral_provided,
-            applicantsCount: j.applicants_count,
-            status: j.status,
-            moderationStatus: j.moderation_status,
-            rejectionReason: j.rejection_reason || undefined
-          })));
-        } else if (import.meta.env.DEV) {
+        if (isSupabaseConfigured()) {
+          try {
+            const jobs = await jobsService.getJobs();
+            if (jobs && jobs.length > 0) {
+              setJobsList(jobs);
+            } else if (!isLiveMode()) {
+              const mockData = await import('../data/mockData');
+              setJobsList(mockData.INITIAL_JOBS);
+            } else {
+              setJobsList([]);
+            }
+          } catch (e) {
+            console.error('Failed to load jobs from jobsService:', e);
+            if (!isLiveMode()) {
+              const mockData = await import('../data/mockData');
+              setJobsList(mockData.INITIAL_JOBS);
+            }
+          }
+        } else {
           const mockData = await import('../data/mockData');
           setJobsList(mockData.INITIAL_JOBS);
         }
 
+        // 2b. Fetch Job Applications
+        if (isSupabaseConfigured()) {
+          try {
+            const apps = await jobsService.getApplications();
+            if (apps && apps.length > 0) {
+              setOpportunityApplications(apps);
+            } else if (!isLiveMode()) {
+              const mockData = await import('../data/mockData');
+              setOpportunityApplications(mockData.INITIAL_APPLICATIONS || []);
+            } else {
+              setOpportunityApplications([]);
+            }
+          } catch (e) {
+            console.error('Failed to load applications from jobsService:', e);
+            if (!isLiveMode()) {
+              const mockData = await import('../data/mockData');
+              setOpportunityApplications(mockData.INITIAL_APPLICATIONS || []);
+            }
+          }
+        }
+
         // 3. Fetch Events
-        const { data: eventsData, error: eErr } = await supabase.from('events').select('*').order('date', { ascending: true });
-        if (!eErr && eventsData && eventsData.length > 0) {
-          setEventsList(eventsData.map((e: any) => ({
-            id: e.id,
-            title: e.title,
-            type: e.type,
-            date: e.date,
-            time: e.time,
-            locationOrUrl: e.location_or_url,
-            isOnline: e.is_online,
-            speakerName: e.speaker_name,
-            speakerDesignation: e.speaker_designation,
-            speakerCompany: e.speaker_company,
-            department: e.department || undefined,
-            description: e.description,
-            bannerImage: e.banner_image,
-            rsvpsCount: e.rsvps_count,
-            registeredUserIds: e.registered_user_ids || [],
-            status: e.status,
-            capacityLimit: e.capacity_limit || undefined,
-            waitlistUserIds: e.waitlist_user_ids || [],
-            feedbackEntries: e.feedback_entries || []
-          })));
-        } else if (import.meta.env.DEV) {
+        if (isSupabaseConfigured()) {
+          try {
+            const evts = await eventsService.getEvents();
+            if (evts && evts.length > 0) {
+              setEventsList(evts);
+            } else if (!isLiveMode()) {
+              const mockData = await import('../data/mockData');
+              setEventsList(mockData.INITIAL_EVENTS);
+            } else {
+              setEventsList([]);
+            }
+          } catch (e) {
+            console.error('Failed to load events from eventsService:', e);
+            if (!isLiveMode()) {
+              const mockData = await import('../data/mockData');
+              setEventsList(mockData.INITIAL_EVENTS);
+            }
+          }
+        } else {
           const mockData = await import('../data/mockData');
           setEventsList(mockData.INITIAL_EVENTS);
         }
 
         // 4. Fetch Mentorship Requests
-        const { data: mrData, error: mrErr } = await supabase.from('mentorship_requests').select('*').order('requested_date', { ascending: false });
-        if (!mrErr && mrData && mrData.length > 0) {
-          setMentorshipRequests(mrData.map((m: any) => ({
-            id: m.id,
-            studentId: m.student_id,
-            studentName: m.student_name,
-            studentEmail: m.student_email,
-            studentDepartment: m.student_department,
-            studentYear: m.student_year,
-            studentRole: m.student_role || undefined,
-            studentEnrollmentNo: m.student_enrollment_no || undefined,
-            mentorId: m.mentor_id,
-            mentorName: m.mentor_name,
-            mentorRole: m.mentor_role,
-            mentorCompanyOrDept: m.mentor_company_or_dept,
-            purposeOfRequest: m.purpose_of_request,
-            areaOfGuidance: m.area_of_guidance,
-            topic: m.topic,
-            message: m.message,
-            requestedDate: m.requested_date,
-            expiryDate: m.expiry_date || undefined,
-            status: m.status,
-            requestType: m.request_type || undefined,
-            meetingNotes: m.meeting_notes || undefined,
-            scheduledTime: m.scheduled_time || undefined,
-            proposedDate: m.proposed_date || undefined,
-            proposedTimeSlot: m.proposed_time_slot || undefined,
-            declineReason: m.decline_reason || undefined,
-            feedback: m.feedback || undefined
-          })));
-        } else if (import.meta.env.DEV) {
+        if (isSupabaseConfigured()) {
+          try {
+            const mRequests = await mentorshipService.getMentorshipRequests();
+            if (mRequests && mRequests.length > 0) {
+              setMentorshipRequests(mRequests);
+            } else if (!isLiveMode()) {
+              const mockData = await import('../data/mockData');
+              setMentorshipRequests(mockData.INITIAL_MENTORSHIP_REQUESTS);
+            } else {
+              setMentorshipRequests([]);
+            }
+          } catch (e) {
+            console.error('Failed to load mentorship requests from mentorshipService:', e);
+            if (!isLiveMode()) {
+              const mockData = await import('../data/mockData');
+              setMentorshipRequests(mockData.INITIAL_MENTORSHIP_REQUESTS);
+            }
+          }
+        } else {
           const mockData = await import('../data/mockData');
           setMentorshipRequests(mockData.INITIAL_MENTORSHIP_REQUESTS);
         }
 
         // 5. Fetch Announcements
-        const { data: ancData, error: aErr } = await supabase.from('announcements').select('*').eq('is_retracted', false).order('date', { ascending: false });
-        const deletedAncIds = getDeletedAnnouncementIds();
-
-        if (!aErr && ancData && ancData.length > 0) {
-          const loaded = ancData
-            .filter((a: any) => !deletedAncIds.has(a.id) && a.id !== 'ann-1' && !a.title?.includes('NAAC Grade A+'))
-            .map((a: any) => {
-              const { cleanContent, meta } = parseAnnouncementMeta(a.content || '');
-              const severity = (a.severity || meta?.severity || (a.is_important ? 'governance' : 'standard')) as any;
-              const expiresAt = a.expires_at || meta?.expiresAt || undefined;
-              const isPinned = a.is_pinned !== undefined && a.is_pinned !== null ? a.is_pinned : (meta?.isPinned ?? false);
-
-              return {
-                id: a.id,
-                title: a.title,
-                category: a.category,
-                author: a.author,
-                date: a.date,
-                content: cleanContent,
-                isImportant: a.is_important,
-                targetAudience: a.target_audience,
-                severity,
-                expiresAt,
-                isPinned,
-                isRetracted: a.is_retracted || false,
-                retractedAt: a.retracted_at || undefined
-              };
-            });
-          setAnnouncements(loaded);
-          try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(loaded)); } catch {}
-        } else {
-          // If Supabase returned 0 rows, check local cache only (do NOT resurrect deleted announcements)
+        if (isSupabaseConfigured()) {
           try {
-            const cached = localStorage.getItem('nexalink_announcements_cache');
-            if (cached !== null) {
-              const parsed = JSON.parse(cached);
-              if (Array.isArray(parsed)) {
-                const active = parsed.filter((a: any) => !deletedAncIds.has(a.id) && a.id !== 'ann-1' && !a.title?.includes('NAAC Grade A+'));
-                setAnnouncements(active);
-                try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(active)); } catch {}
-                return;
-              }
+            const ancs = await announcementsService.getAnnouncements();
+            const deletedAncIds = getDeletedAnnouncementIds();
+            const filtered = (ancs || []).filter(a => !deletedAncIds.has(a.id) && a.id !== 'ann-1' && !a.title?.includes('NAAC Grade A+'));
+            if (filtered.length > 0) {
+              setAnnouncements(filtered);
+              try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(filtered)); } catch {}
+            } else if (!isLiveMode()) {
+              const mockData = await import('../data/mockData');
+              setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
+            } else {
+              setAnnouncements([]);
             }
-          } catch {}
-          setAnnouncements([]);
+          } catch (e) {
+            console.error('Failed to load announcements from announcementsService:', e);
+            if (!isLiveMode()) {
+              const mockData = await import('../data/mockData');
+              setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
+            }
+          }
+        } else {
+          const mockData = await import('../data/mockData');
+          setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
         }
 
-        // 6. Fetch Chat Messages (now using supabase-chat helper)
-        const { fetchAllUserMessages, fetchReportedMessages } = await import('../lib/supabase-chat');
-        if (currentUser?.id) {
+        // 6. Fetch Chat Messages
+        if (currentUser?.id && isSupabaseConfigured()) {
           try {
-            let msgData = await fetchAllUserMessages(currentUser.id);
-            
+            let msgData = await messagingService.getMessages(currentUser.id);
+
             if (currentUser.role === 'admin') {
-              const reportedData = await fetchReportedMessages();
+              const reportedData = await messagingService.getReportedMessages();
               const existingIds = new Set(msgData.map((m: any) => m.id));
               reportedData.forEach((r: any) => {
                 if (!existingIds.has(r.id)) {
@@ -591,42 +607,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
 
             if (!msgData || msgData.length === 0) {
-              if (import.meta.env.DEV) {
+              if (!isLiveMode()) {
                 const mockData = await import('../data/mockData');
                 setMessages(mockData.INITIAL_MESSAGES);
               } else {
                 setMessages([]);
               }
             } else {
-              setMessages(msgData.map((m: any) => ({
-                id: m.id,
-                senderId: m.sender_id,
-                senderName: m.sender_name,
-                senderRole: m.sender_role,
-                senderAvatar: m.sender_avatar,
-                receiverId: m.receiver_id,
-                content: m.content,
-                timestamp: m.timestamp,
-                isRead: m.is_read,
-                category: m.category || undefined,
-                attachmentName: m.attachment_name || undefined,
-                attachmentUrl: m.attachment_url || undefined,
-                voiceNoteUrl: m.voice_note_url || undefined,
-                voiceNoteDuration: m.voice_note_duration || undefined,
-                replyTo: m.reply_to || undefined,
-                reactions: m.reactions || [],
-                isReported: m.is_reported,
-                reportedAt: m.reported_at || undefined,
-                reportedBy: m.reported_by || undefined,
-                reportReason: m.report_reason || undefined,
-                moderationStatus: m.moderation_status || undefined,
-                moderatedBy: m.moderated_by || undefined,
-                moderatedAt: m.moderated_at || undefined,
-                status: 'sent'
-              })));
+              setMessages(msgData);
             }
-          } catch (e) { console.error('Failed to load messages', e); }
+          } catch (e) {
+            console.error('Failed to load messages from messagingService:', e);
+            if (!isLiveMode()) {
+              const mockData = await import('../data/mockData');
+              setMessages(mockData.INITIAL_MESSAGES);
+            }
+          }
         }
+
 
         // Fetch Starred Conversations
         if (currentUser?.id) {
@@ -681,6 +679,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             status: i.status,
             acceptedAt: i.accepted_at || undefined
           })));
+        }
+
+        // 10. Fetch Notifications & Preferences
+        if (currentUser?.id) {
+          try {
+            const [notifs, prefs] = await Promise.all([
+              notificationsService.getNotifications(currentUser.id),
+              notificationsService.getPreferences(currentUser.id)
+            ]);
+            setNotifications(notifs);
+            setNotificationPreferences(prefs);
+          } catch (nErr) {
+            console.error('Failed to load notifications or preferences:', nErr);
+          }
         }
       } catch (err) {
         console.error('Unhandled error in loadSupabaseData:', err);
@@ -749,14 +761,56 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         return; // Don't add to UI state
       }
-      setNotifications(prev => [notif, ...prev]);
+      setNotifications(prev => {
+        if (prev.some(n => n.id === notif.id || (notif.dedupe_key && n.dedupe_key === notif.dedupe_key))) {
+          return prev;
+        }
+        return [notif, ...prev];
+      });
+
+      if (!notif.is_read) {
+        setLatestIncomingNotification(notif);
+      }
     });
+
+    // Refetch on reconnect and tab focus so nothing is missed
+    const handleRefetch = () => {
+      if (currentUser?.id && isSupabaseConfigured()) {
+        notificationsService.getNotifications(currentUser.id)
+          .then(data => setNotifications(data))
+          .catch(err => console.warn('[DataContext] Background notifications refetch error:', err));
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleRefetch();
+      }
+    };
+
+    window.addEventListener('focus', handleRefetch);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('online', handleRefetch);
 
     return () => {
       supabase.removeChannel(channel);
       notifSub.unsubscribe();
+      window.removeEventListener('focus', handleRefetch);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleRefetch);
     };
   }, [currentUser?.id, activeChatContactId]);
+
+  // Keep document.title in sync with unread notifications
+  useEffect(() => {
+    const unreadCount = notifications.filter(n => !n.is_read).length;
+    if (unreadCount > 0) {
+      const badge = unreadCount > 99 ? '99+' : `${unreadCount}`;
+      document.title = `(${badge}) NexaLink`;
+    } else {
+      document.title = 'NexaLink';
+    }
+  }, [notifications]);
 
   // Supabase Realtime Subscription for Admin Dashboard (Users & Invites)
   useEffect(() => {
@@ -807,42 +861,89 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [currentUser?.role, loadSupabaseData]);
 
+  // Cross-tab and instantaneous live sync for user document resubmission
+  useEffect(() => {
+    const handleUserReply = (detail: any) => {
+      if (!detail?.userId && !detail?.documentName) return;
+      const nowIso = detail.timestamp || new Date().toISOString();
+      const updates = {
+        verificationStatus: 'Pending Verification' as const,
+        proofDocumentName: detail.documentName,
+        verificationDocumentName: detail.documentName,
+        verificationDocumentUrl: detail.documentUrl || undefined,
+        userReplied: true,
+        userRepliedAt: nowIso
+      };
+
+      const matchUser = (u: any) =>
+        u.id === detail.userId ||
+        (detail.email && u.email && u.email.toLowerCase() === detail.email.toLowerCase());
+
+      setStudentList(prev => prev.map(s => (matchUser(s) ? { ...s, ...updates } : s)));
+      setAlumniList(prev => prev.map(a => (matchUser(a) ? { ...a, ...updates } : a)));
+      setFacultyList(prev => prev.map(f => (matchUser(f) ? { ...f, ...updates } : f)));
+    };
+
+    const onCustomEvent = (e: any) => {
+      if (e.detail) handleUserReply(e.detail);
+    };
+
+    const onStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'nexalink_last_user_reply' && e.newValue) {
+        try {
+          handleUserReply(JSON.parse(e.newValue));
+        } catch {}
+      }
+    };
+
+    window.addEventListener('nexalink_user_replied', onCustomEvent);
+    window.addEventListener('storage', onStorageEvent);
+
+    // Initial check on mount
+    try {
+      const lastReply = localStorage.getItem('nexalink_last_user_reply');
+      if (lastReply) {
+        handleUserReply(JSON.parse(lastReply));
+      }
+    } catch {}
+
+    return () => {
+      window.removeEventListener('nexalink_user_replied', onCustomEvent);
+      window.removeEventListener('storage', onStorageEvent);
+    };
+  }, []);
+
   const handleRealtimeMessageEvent = (payload: any) => {
     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
       const m = payload.new;
-      const parsedMsg: ChatMessage = {
-        id: m.id,
-        senderId: m.sender_id,
-        senderName: m.sender_name,
-        senderRole: m.sender_role,
-        senderAvatar: m.sender_avatar,
-        receiverId: m.receiver_id,
-        content: m.content,
-        timestamp: m.timestamp,
-        isRead: m.is_read,
-        category: m.category || undefined,
-        attachmentName: m.attachment_name || undefined,
-        attachmentUrl: m.attachment_url || undefined,
-        voiceNoteUrl: m.voice_note_url || undefined,
-        voiceNoteDuration: m.voice_note_duration || undefined,
-        replyTo: m.reply_to || undefined,
-        reactions: m.reactions || [],
-        isReported: m.is_reported,
-        reportedAt: m.reported_at || undefined,
-        reportedBy: m.reported_by || undefined,
-        reportReason: m.report_reason || undefined,
-        moderationStatus: m.moderation_status || undefined,
-        moderatedBy: m.moderated_by || undefined,
-        moderatedAt: m.moderated_at || undefined,
-        status: 'delivered' // or sent/read depending on is_read
-      };
+      const parsedMsg = mapRowToChatMessage(m);
 
       setMessages(prev => {
-        const exists = prev.some(msg => msg.id === parsedMsg.id);
-        if (exists) {
-          // If we already optimisticly inserted this, just update the status/fields
-          return prev.map(msg => msg.id === parsedMsg.id ? { ...parsedMsg, status: msg.status === 'read' || parsedMsg.isRead ? 'read' : 'delivered' } : msg);
+        const existingIdx = prev.findIndex(
+          msg => (parsedMsg.clientMessageId && msg.clientMessageId === parsedMsg.clientMessageId) || msg.id === parsedMsg.id
+        );
+
+        if (existingIdx !== -1) {
+          const existing = prev[existingIdx];
+          // Preserve local blob preview until signedUrl is ready
+          const mergedAttachments = parsedMsg.attachments?.map(pa => {
+            const localAtt = existing.attachments?.find(la => la.storagePath === pa.storagePath || la.fileName === pa.fileName);
+            return {
+              ...pa,
+              signedUrl: localAtt?.signedUrl || pa.signedUrl
+            };
+          }) || existing.attachments;
+
+          const updated = [...prev];
+          updated[existingIdx] = {
+            ...existing,
+            ...parsedMsg,
+            attachments: mergedAttachments,
+            status: existing.status === 'read' || parsedMsg.isRead ? 'read' : (existing.status === 'sending' ? 'sent' : 'delivered')
+          };
+          return updated;
         }
+
         return [...prev, parsedMsg];
       });
     }
@@ -967,23 +1068,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const requestUserClarification = (userId: string, promptText: string) => {
-    const clarObj = { text: promptText, requestedAt: new Date().toISOString() };
-    setAlumniList(prev => prev.map(a => (a.id === userId ? { ...a, verificationStatus: 'Needs Clarification', clarificationRequest: promptText, clarificationRequested: clarObj } : a)));
-    setStudentList(prev => prev.map(s => (s.id === userId ? { ...s, verificationStatus: 'Needs Clarification', clarificationRequest: promptText, clarificationRequested: clarObj } : s)));
-    setFacultyList(prev => prev.map(f => (f.id === userId ? { ...f, verificationStatus: 'Needs Clarification', clarificationRequest: promptText, clarificationRequested: clarObj } : f)));
+  const requestUserClarification = (userId: string, promptText: string, documentType: string = 'College ID') => {
+    const clarObj = {
+      text: promptText,
+      reason: promptText,
+      documentType,
+      requestedAt: new Date().toISOString()
+    };
+    setAlumniList(prev => prev.map(a => (a.id === userId ? { ...a, verificationStatus: 'Needs Clarification', clarificationRequest: promptText, clarificationRequested: clarObj, userReplied: false } : a)));
+    setStudentList(prev => prev.map(s => (s.id === userId ? { ...s, verificationStatus: 'Needs Clarification', clarificationRequest: promptText, clarificationRequested: clarObj, userReplied: false } : s)));
+    setFacultyList(prev => prev.map(f => (f.id === userId ? { ...f, verificationStatus: 'Needs Clarification', clarificationRequest: promptText, clarificationRequested: clarObj, userReplied: false } : f)));
 
-    addAuditLog('CLARIFICATION_REQUESTED', 'Administrator', `Requested proof document from user ID ${userId}: "${promptText}"`, userId);
+    addAuditLog('CLARIFICATION_REQUESTED', 'Administrator', `Requested proof document (${documentType}) from user ID ${userId}: "${promptText}"`, userId);
 
     if (isSupabaseConfigured()) {
-      (supabase.rpc as any)('request_user_clarification', { target_user_id: userId, clarification_instructions: promptText })
+      (supabase.rpc as any)('request_user_clarification', {
+        target_user_id: userId,
+        clarification_notes: promptText,
+        clarification_instructions: promptText,
+        document_type: documentType
+      })
         .then(({ error }: any) => {
           if (error) {
             console.warn('[RPC request_user_clarification fallback to direct update]', error.message);
-            supabase.from('users').update({
+            (supabase.from('users') as any).update({
               verification_status: 'Needs Clarification',
-              clarification_requested: clarObj
-            }).eq('id', userId).then(({ error: uErr }) => {
+              clarification_requested: clarObj,
+              user_replied: false
+            }).eq('id', userId).then(({ error: uErr }: any) => {
               if (uErr) console.error('[Supabase requestUserClarification error]', uErr);
             });
           }
@@ -992,28 +1104,82 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const resubmitUserVerification = (userId: string, proofDocName: string, docUrl?: string) => {
+    const nowIso = new Date().toISOString();
     const updates = {
       verificationStatus: 'Pending Verification' as const,
       proofDocumentName: proofDocName,
       verificationDocumentName: proofDocName,
       verificationDocumentUrl: docUrl || undefined,
-      clarificationRequest: undefined,
-      clarificationRequested: null
+      userReplied: true,
+      userRepliedAt: nowIso
     };
-    setAlumniList(prev => prev.map(a => (a.id === userId ? { ...a, ...updates } : a)));
-    setStudentList(prev => prev.map(s => (s.id === userId ? { ...s, ...updates } : s)));
-    setFacultyList(prev => prev.map(f => (f.id === userId ? { ...f, ...updates } : f)));
+
+    const matchUser = (u: any) =>
+      u.id === userId ||
+      (currentUser?.email && u.email && u.email.toLowerCase() === currentUser.email.toLowerCase());
+
+    setAlumniList(prev => prev.map(a => (matchUser(a) ? { ...a, ...updates } : a)));
+    setStudentList(prev => prev.map(s => (matchUser(s) ? { ...s, ...updates } : s)));
+    setFacultyList(prev => prev.map(f => (matchUser(f) ? { ...f, ...updates } : f)));
+
+    // Cross-tab broadcast & persistence
+    try {
+      const replyMeta = {
+        userId,
+        email: currentUser?.email,
+        documentName: proofDocName,
+        documentUrl: docUrl,
+        timestamp: nowIso
+      };
+      localStorage.setItem('nexalink_last_user_reply', JSON.stringify(replyMeta));
+      window.dispatchEvent(new CustomEvent('nexalink_user_replied', { detail: replyMeta }));
+      window.dispatchEvent(new Event('storage'));
+    } catch {}
 
     addAuditLog('VERIFICATION_DOCUMENT_RESUBMITTED', userId, `Uploaded proof document "${proofDocName}" and resubmitted for admin verification review.`, userId);
 
     if (isSupabaseConfigured()) {
-      supabase.from('users').update({
-        verification_status: 'Pending Verification',
-        proof_document_name: proofDocName,
-        verification_document_url: docUrl || null,
-        clarification_requested: null
-      }).eq('id', userId).then(({ error }) => {
-        if (error) console.error('[Supabase resubmitUserVerification error]', error);
+      const clarPayload = {
+        userReplied: true,
+        user_replied: true,
+        userRepliedAt: nowIso,
+        documentName: proofDocName,
+        documentUrl: docUrl
+      };
+
+      (supabase.rpc as any)('resubmit_verification', {
+        doc_path: docUrl || proofDocName,
+        doc_name: proofDocName
+      }).then(({ error }: any) => {
+        if (error) {
+          console.warn('[resubmit_verification RPC fallback]', error.message);
+          (supabase.from('users') as any).update({
+            verification_status: 'Pending Verification',
+            proof_document_name: proofDocName,
+            verification_document_url: docUrl || null,
+            user_replied: true,
+            user_replied_at: nowIso,
+            clarification_requested: clarPayload
+          }).eq('id', userId).then(({ error: uErr }: any) => {
+            if (uErr) {
+              console.warn('[resubmitUserVerification retry without user_replied column]', uErr.message);
+              (supabase.from('users') as any).update({
+                verification_status: 'Pending Verification',
+                proof_document_name: proofDocName,
+                verification_document_url: docUrl || null,
+                clarification_requested: clarPayload
+              }).eq('id', userId).then(({ error: minErr }: any) => {
+                if (minErr) {
+                  console.warn('[resubmitUserVerification retry with document fields only]', minErr.message);
+                  (supabase.from('users') as any).update({
+                    proof_document_name: proofDocName,
+                    verification_document_url: docUrl || null
+                  }).eq('id', userId);
+                }
+              });
+            }
+          });
+        }
       });
     }
   };
@@ -1023,20 +1189,91 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setStudentList(prev => prev.map(s => (s.id === userId ? ({ ...s, ...updatedData } as StudentProfile) : s)));
     setFacultyList(prev => prev.map(f => (f.id === userId ? ({ ...f, ...updatedData } as FacultyProfile) : f)));
 
+    if (currentUser?.id === userId) {
+      updateCurrentUserState(updatedData);
+    }
+
     addAuditLog('PROFILE_UPDATED', userId, `Updated user profile attributes & privacy preferences.`, userId);
 
     if (isSupabaseConfigured()) {
+      // 1. Update public.users table
       const userUpdates: any = {};
-      if (updatedData.name) userUpdates.name = updatedData.name;
-      if (updatedData.bio) userUpdates.bio = updatedData.bio;
-      if (updatedData.avatar) userUpdates.avatar_url = updatedData.avatar;
-      if (updatedData.phone) userUpdates.phone = updatedData.phone;
-      if (updatedData.privacySettings) userUpdates.privacy_settings = updatedData.privacySettings;
+      if (updatedData.name !== undefined) userUpdates.name = updatedData.name;
+      if (updatedData.bio !== undefined) userUpdates.bio = updatedData.bio;
+      if (updatedData.avatar !== undefined) userUpdates.avatar_url = updatedData.avatar;
+      if (updatedData.phone !== undefined) userUpdates.phone = updatedData.phone;
+      if (updatedData.department !== undefined) userUpdates.department = updatedData.department;
+      if (updatedData.privacySettings !== undefined) userUpdates.privacy_settings = updatedData.privacySettings;
       if (updatedData.personalEmail !== undefined) userUpdates.personal_email = updatedData.personalEmail;
 
       if (Object.keys(userUpdates).length > 0) {
         supabase.from('users').update(userUpdates).eq('id', userId).then(({ error }) => {
-          if (error) console.error('[Supabase updateUserProfile error]', error);
+          if (error) console.error('[Supabase updateUserProfile users error]', error);
+        });
+      }
+
+      // 2. Update public.student_profiles table
+      const studentUpdates: any = {};
+      if (updatedData.semester !== undefined) {
+        studentUpdates.semester = updatedData.semester;
+        studentUpdates.current_year = updatedData.semester.includes('1') || updatedData.semester.includes('2') ? 'FE'
+          : updatedData.semester.includes('3') || updatedData.semester.includes('4') ? 'SE'
+          : updatedData.semester.includes('5') || updatedData.semester.includes('6') ? 'TE'
+          : 'BE';
+      }
+      if (updatedData.skills !== undefined) studentUpdates.skills = updatedData.skills;
+      if (updatedData.areasOfInterest !== undefined) studentUpdates.areas_of_interest = updatedData.areasOfInterest;
+      if (updatedData.careerGoal !== undefined) studentUpdates.career_goal = updatedData.careerGoal;
+      if (updatedData.preferredIndustry !== undefined) studentUpdates.preferred_industry = updatedData.preferredIndustry;
+      if (updatedData.preferredHigherStudies !== undefined) studentUpdates.preferred_higher_studies = updatedData.preferredHigherStudies;
+      if (updatedData.certifications !== undefined) studentUpdates.certifications = updatedData.certifications;
+      if (updatedData.resumeUrl !== undefined) studentUpdates.resume_url = updatedData.resumeUrl;
+      if (updatedData.expectedGraduationYear !== undefined || updatedData.graduationYear !== undefined) {
+        const yr = parseInt(updatedData.expectedGraduationYear || updatedData.graduationYear, 10);
+        if (!isNaN(yr)) studentUpdates.expected_graduation_year = yr;
+      }
+
+      if (Object.keys(studentUpdates).length > 0) {
+        supabase.from('student_profiles').update(studentUpdates).eq('user_id', userId).then(({ error }) => {
+          if (error) console.error('[Supabase updateUserProfile student_profiles error]', error);
+        });
+      }
+
+      // 3. Update public.alumni_profiles table
+      const alumniUpdates: any = {};
+      if (updatedData.company !== undefined) alumniUpdates.company = updatedData.company;
+      if (updatedData.designation !== undefined) alumniUpdates.designation = updatedData.designation;
+      if (updatedData.graduationYear !== undefined) {
+        const yr = parseInt(updatedData.graduationYear, 10);
+        if (!isNaN(yr)) alumniUpdates.graduation_year = yr;
+      }
+      if (updatedData.higherEducationInstitute !== undefined) alumniUpdates.higher_education_institute = updatedData.higherEducationInstitute;
+      if (updatedData.location !== undefined) alumniUpdates.location = updatedData.location;
+      if (updatedData.country !== undefined) alumniUpdates.country = updatedData.country;
+      if (updatedData.skills !== undefined) alumniUpdates.skills = updatedData.skills;
+      if (updatedData.bio !== undefined) alumniUpdates.bio = updatedData.bio;
+      if (updatedData.professionalAchievements !== undefined) alumniUpdates.professional_achievements = updatedData.professionalAchievements;
+      if (updatedData.isMentoringAvailable !== undefined) alumniUpdates.is_mentoring_available = updatedData.isMentoringAvailable;
+      if (updatedData.maxMentees !== undefined) alumniUpdates.max_mentees = updatedData.maxMentees;
+      if (updatedData.resumeUrl !== undefined) alumniUpdates.resume_url = updatedData.resumeUrl;
+
+      if (Object.keys(alumniUpdates).length > 0) {
+        supabase.from('alumni_profiles').update(alumniUpdates).eq('user_id', userId).then(({ error }) => {
+          if (error) console.error('[Supabase updateUserProfile alumni_profiles error]', error);
+        });
+      }
+
+      // 4. Update public.faculty_profiles table
+      const facultyUpdates: any = {};
+      if (updatedData.employeeId !== undefined) facultyUpdates.employee_id = updatedData.employeeId;
+      if (updatedData.designation !== undefined) facultyUpdates.designation = updatedData.designation;
+      if (updatedData.researchAreas !== undefined) facultyUpdates.research_areas = updatedData.researchAreas;
+      if (updatedData.ongoingResearch !== undefined) facultyUpdates.ongoing_research = updatedData.ongoingResearch;
+      if (updatedData.skills !== undefined) facultyUpdates.skills = updatedData.skills;
+
+      if (Object.keys(facultyUpdates).length > 0) {
+        supabase.from('faculty_profiles').update(facultyUpdates).eq('user_id', userId).then(({ error }) => {
+          if (error) console.error('[Supabase updateUserProfile faculty_profiles error]', error);
         });
       }
     }
@@ -1178,44 +1415,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const isPostByAdmin = role === 'admin';
+    const tempId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined;
     const newJob: JobListing = {
       ...jobData,
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `job-${Date.now()}`,
+      id: tempId || `job-${Date.now()}`,
       postedDate: new Date().toISOString().split('T')[0],
       applicantsCount: 0,
       status: 'Pending Approval',
       moderationStatus: 'Pending Approval',
       postedByRole: isPostByAdmin ? 'admin' : (jobData.postedByRole || 'alumni')
     };
-    setJobsList([newJob, ...jobsList]);
+    setJobsList(prev => [newJob, ...prev]);
 
     addAuditLog('OPPORTUNITY_POSTED', isPostByAdmin ? 'Institutional Admin' : (jobData.postedByAlumniName || 'Publisher'), `Submitted opportunity "${jobData.title}" (Status: Pending Moderation Approval)`, newJob.id);
 
     if (isSupabaseConfigured()) {
-      supabase.from('jobs').insert({
-        id: newJob.id,
-        title: newJob.title,
-        company: newJob.company,
-        company_logo: newJob.companyLogo || null,
-        location: newJob.location,
-        type: newJob.type,
-        stipend_or_salary: newJob.stipendOrSalary,
-        department: newJob.department,
-        skills_required: newJob.skillsRequired,
-        posted_by_alumni_id: newJob.postedByAlumniId,
-        posted_by_alumni_name: newJob.postedByAlumniName,
-        posted_by_role: newJob.postedByRole || null,
-        posted_date: newJob.postedDate,
-        application_deadline: newJob.applicationDeadline,
-        description: newJob.description,
-        requirements: newJob.requirements,
-        referral_provided: newJob.referralProvided,
-        applicants_count: 0,
-        status: newJob.status,
-        moderation_status: newJob.moderationStatus
-      }).then(({ error }) => {
-        if (error) console.error('[Supabase addJob error]', error);
-      });
+      jobsService.createJob({
+        ...newJob,
+        id: tempId
+      }).then(persisted => {
+        setJobsList(prev => prev.map(j => (j.id === newJob.id ? persisted : j)));
+      }).catch(err => console.error('[Supabase addJob error]', err));
     }
 
     return { success: true, statusCode: 200, job: newJob };
@@ -1238,13 +1458,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('OPPORTUNITY_MODERATED', 'Administrator', `Set moderation status of ${jobId} to ${moderationStatus}`, jobId);
 
     if (isSupabaseConfigured()) {
-      supabase.from('jobs').update({
-        moderation_status: moderationStatus,
+      jobsService.updateJob(jobId, {
+        moderationStatus,
         status: moderationStatus === 'Approved' ? 'Active' : 'Closed',
-        rejection_reason: reason || null
-      }).eq('id', jobId).then(({ error }) => {
-        if (error) console.error('[Supabase moderateOpportunity error]', error);
-      });
+        rejectionReason: reason
+      }).catch(err => console.error('[Supabase moderateOpportunity error]', err));
     }
   };
 
@@ -1285,24 +1503,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     if (isSupabaseConfigured()) {
-      const patch: any = {};
-      if (updatedFields.title) patch.title = updatedFields.title;
-      if (updatedFields.company) patch.company = updatedFields.company;
-      if (updatedFields.location) patch.location = updatedFields.location;
-      if (updatedFields.type) patch.type = updatedFields.type;
-      if (updatedFields.stipendOrSalary) patch.stipend_or_salary = updatedFields.stipendOrSalary;
-      if (updatedFields.description) patch.description = updatedFields.description;
-      if (updatedFields.applicationDeadline) patch.application_deadline = updatedFields.applicationDeadline;
+      const patch: Partial<JobListing> = { ...updatedFields };
       if (isSubstantiveChange) {
-        patch.moderation_status = 'Pending Approval';
+        patch.moderationStatus = 'Pending Approval';
         patch.status = 'Pending Approval';
       }
-      if (Object.keys(patch).length > 0) {
-        supabase.from('jobs').update(patch).eq('id', jobId).then(({ error }) => {
-          if (error) console.error('[Supabase updateJobListing error]', error);
-        });
-      }
+      jobsService.updateJob(jobId, patch).catch(err => console.error('[Supabase updateJobListing error]', err));
     }
+
 
     return { isReModerationRequired: isSubstantiveChange };
   };
@@ -1607,56 +1815,41 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('ANNOUNCEMENT_RETRACTED', 'Administrator', `Removed announcement with ID: ${announcementId}`);
 
     if (isSupabaseConfigured()) {
-      supabase.from('announcements').update({
-        is_retracted: true,
-        retracted_at: new Date().toISOString()
-      }).eq('id', announcementId).then(({ error }) => {
-        if (error) console.error('[Supabase retractAnnouncement error]', error);
-      });
+      announcementsService.retractAnnouncement(announcementId)
+        .catch(err => console.error('[Supabase retractAnnouncement error]', err));
     }
   };
 
-  const addEvent = (eventData: Omit<EventItem, 'id' | 'rsvpsCount' | 'registeredUserIds' | 'status'>) => {
+
+  const addEvent = async (eventData: Omit<EventItem, 'id' | 'rsvpsCount' | 'registeredUserIds' | 'status'>) => {
+    const tempId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined;
     const newEvent: EventItem = {
       ...eventData,
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `evt-${Date.now()}`,
+      id: tempId || `evt-${Date.now()}`,
       rsvpsCount: 0,
       registeredUserIds: [],
-      capacityLimit: 50,
+      capacityLimit: eventData.capacityLimit || 50,
       waitlistUserIds: [],
       feedbackEntries: [],
       status: 'Upcoming'
     };
-    setEventsList([newEvent, ...eventsList]);
+    setEventsList(prev => [newEvent, ...prev]);
 
     addAuditLog('EVENT_CREATED', 'Institutional Admin', `Created event "${eventData.title}" on ${eventData.date}`, newEvent.id);
 
     if (isSupabaseConfigured()) {
-      supabase.from('events').insert({
-        id: newEvent.id,
-        title: newEvent.title,
-        type: newEvent.type,
-        date: newEvent.date,
-        time: newEvent.time,
-        location_or_url: newEvent.locationOrUrl,
-        is_online: newEvent.isOnline,
-        speaker_name: newEvent.speakerName,
-        speaker_designation: newEvent.speakerDesignation,
-        speaker_company: newEvent.speakerCompany,
-        department: newEvent.department || null,
-        description: newEvent.description,
-        banner_image: newEvent.bannerImage,
-        rsvps_count: 0,
-        registered_user_ids: [],
-        status: 'Upcoming',
-        capacity_limit: newEvent.capacityLimit || null,
-        waitlist_user_ids: [],
-        feedback_entries: []
-      }).then(({ error }) => {
-        if (error) console.error('[Supabase addEvent error]', error);
-      });
+      try {
+        const persisted = await eventsService.createEvent({
+          ...eventData,
+          id: tempId
+        });
+        setEventsList(prev => prev.map(e => (e.id === newEvent.id ? persisted : e)));
+      } catch (err) {
+        console.error('[Supabase addEvent error]', err);
+      }
     }
   };
+
 
   const rsvpEvent = (eventId: string, userId: string) => {
     let updatedEvent: EventItem | undefined;
@@ -1765,13 +1958,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     if (isSupabaseConfigured() && updatedEvent) {
-      supabase.from('events').update({
-        registered_user_ids: updatedEvent.registeredUserIds,
-        waitlist_user_ids: updatedEvent.waitlistUserIds,
-        rsvps_count: updatedEvent.rsvpsCount
-      }).eq('id', eventId).then(({ error }) => {
-        if (error) console.error('[Supabase rsvpEvent error]', error);
-      });
+      eventsService
+        .updateEventRsvp(eventId, updatedEvent.registeredUserIds, updatedEvent.waitlistUserIds || [])
+        .catch(err => console.error('[Supabase rsvpEvent error]', err));
     }
   };
 
@@ -1796,13 +1985,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     if (isSupabaseConfigured()) {
-      supabase.from('events').update({
-        feedback_entries: updatedEntries
-      }).eq('id', eventId).then(({ error }) => {
-        if (error) console.error('[Supabase submitEventFeedback error]', error);
-      });
+      eventsService
+        .submitFeedback(eventId, updatedEntries)
+        .catch(err => console.error('[Supabase submitEventFeedback error]', err));
     }
   };
+
 
   // Host-Side Event Lifecycle Handlers
   const saveEventDraft = (eventData: Partial<EventItem>) => {
@@ -1962,6 +2150,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       submittedEvent.id
     );
 
+    if (isSupabaseConfigured()) {
+      eventsService.createEvent(submittedEvent).then(persisted => {
+        setEventsList(prev => prev.map(e => (e.id === submittedEvent.id ? { ...submittedEvent, ...persisted } : e)));
+      }).catch(err => console.error('[Supabase submitEventForReview error]', err));
+    }
+
     return {
       success: true,
       event: submittedEvent,
@@ -1998,6 +2192,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       `Admin action ${action} on event ${eventId}: ${note || 'No note provided'}`,
       eventId
     );
+
+    if (isSupabaseConfigured()) {
+      eventsService.updateEvent(eventId, {
+        status: action === 'reject' ? 'Cancelled' : 'Upcoming'
+      }).catch(err => console.error('[Supabase reviewEvent error]', err));
+    }
   };
 
   const updateEvent = (eventId: string, patch: Partial<EventItem>, callerRole?: string) => {
@@ -2038,6 +2238,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     addAuditLog('EVENT_UPDATED', currentUser?.name || 'Host', `Updated event ${eventId}${requiresReview ? ' (Pending review for material changes)' : ''}`, eventId);
 
+    if (isSupabaseConfigured()) {
+      eventsService.updateEvent(eventId, patch).catch(err => console.error('[Supabase updateEvent error]', err));
+    }
+
     const event = eventsList.find(e => e.id === eventId)!;
     return { requiresReview, event };
   };
@@ -2057,6 +2261,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
     );
     addAuditLog('EVENT_CANCELLED', currentUser?.name || 'Host', `Cancelled event ${eventId}. Reason: ${reason}`, eventId);
+
+    if (isSupabaseConfigured()) {
+      eventsService.updateEvent(eventId, { status: 'Cancelled' }).catch(err => console.error('[Supabase cancelEvent error]', err));
+    }
   };
 
   const openEventCheckin = (eventId: string) => {
@@ -2257,6 +2465,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       submittedJob.id
     );
 
+    if (isSupabaseConfigured()) {
+      jobsService.createJob(submittedJob).then(persisted => {
+        setJobsList(prev => prev.map(j => (j.id === submittedJob.id ? { ...submittedJob, ...persisted } : j)));
+      }).catch(err => console.error('[Supabase submitOpportunityForReview error]', err));
+    }
+
     return {
       success: true,
       job: submittedJob,
@@ -2290,6 +2504,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     addAuditLog(`OPPORTUNITY_${action.toUpperCase()}`, currentUser?.name || 'Administrator', `Admin action ${action} on opportunity ${jobId}: ${note || 'No note'}`, jobId);
+
+    if (isSupabaseConfigured()) {
+      jobsService.updateJob(jobId, {
+        moderationStatus: action === 'approve' ? 'Approved' : 'Rejected',
+        status: action === 'approve' ? 'Active' : 'Closed',
+        rejectionReason: note
+      }).catch(err => console.error('[Supabase reviewOpportunity error]', err));
+    }
   };
 
   const closeOpportunity = (jobId: string, reason?: string) => {
@@ -2306,6 +2528,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
     );
     addAuditLog('OPPORTUNITY_CLOSED', currentUser?.name || 'Poster', `Closed opportunity ${jobId}. Reason: ${reason || 'Closed by poster'}`, jobId);
+
+    if (isSupabaseConfigured()) {
+      jobsService.updateJob(jobId, {
+        status: 'Closed'
+      }).catch(err => console.error('[Supabase closeOpportunity error]', err));
+    }
   };
 
   const updateApplicationStatus = (applicationId: string, status: OpportunityApplicationStatus, note?: string) => {
@@ -2322,6 +2550,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return a;
       })
     );
+
+    if (isSupabaseConfigured()) {
+      jobsService.updateApplicationStatus(applicationId, status, note).catch((err: unknown) =>
+        console.error('[Supabase updateApplicationStatus error]', err)
+      );
+    }
   };
 
   const sendMentorshipRequest = (reqData: Omit<MentorshipRequest, 'id' | 'requestedDate' | 'status'>) => {
@@ -2366,32 +2600,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     if (isSupabaseConfigured()) {
-      supabase.from('mentorship_requests').insert({
-        id: newReq.id,
-        student_id: newReq.studentId,
-        student_name: newReq.studentName,
-        student_email: newReq.studentEmail,
-        student_department: newReq.studentDepartment,
-        student_year: newReq.studentYear,
-        student_role: newReq.studentRole || null,
-        student_enrollment_no: newReq.studentEnrollmentNo || null,
-        mentor_id: newReq.mentorId,
-        mentor_name: newReq.mentorName,
-        mentor_role: newReq.mentorRole,
-        mentor_company_or_dept: newReq.mentorCompanyOrDept,
-        purpose_of_request: newReq.purposeOfRequest,
-        area_of_guidance: newReq.areaOfGuidance,
-        topic: newReq.topic,
-        message: newReq.message,
-        requested_date: newReq.requestedDate,
-        expiry_date: newReq.expiryDate || null,
-        status: newReq.status as any,
-        request_type: newReq.requestType || null
-      }).then(({ error }) => {
-        if (error) console.error('[Supabase sendMentorshipRequest error]', error);
-      });
+      mentorshipService.createRequest({
+        ...newReq,
+        id: newReq.id
+      }).then(persisted => {
+        setMentorshipRequests(prev => prev.map(m => (m.id === newReq.id ? persisted : m)));
+      }).catch(err => console.error('[Supabase sendMentorshipRequest error]', err));
     }
   };
+
 
   const updateMentorshipStatus = (
     requestId: string,
@@ -2422,15 +2639,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('MENTORSHIP_STATUS_UPDATE', callerRole || 'Advisor', `Updated request ${requestId} status to ${status}`, requestId);
 
     if (isSupabaseConfigured()) {
-      supabase.from('mentorship_requests').update({
-        status,
-        meeting_notes: notes || null,
-        decline_reason: status === 'Declined' ? (notes || 'Declined by mentor') : null,
-        scheduled_time: status === 'Accepted' ? 'Upcoming Saturday at 7:00 PM IST' : null
-      }).eq('id', requestId).then(({ error }) => {
-        if (error) console.error('[Supabase updateMentorshipStatus error]', error);
-      });
+      mentorshipService.updateStatus(requestId, status, {
+        meetingNotes: notes,
+        declineReason: status === 'Declined' ? (notes || 'Declined by mentor') : undefined,
+        scheduledTime: status === 'Accepted' ? 'Upcoming Saturday at 7:00 PM IST' : undefined
+      }).catch(err => console.error('[Supabase updateMentorshipStatus error]', err));
     }
+
 
     return { success: true, statusCode: 200 };
   };
@@ -2452,12 +2667,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('MENTORSHIP_FEEDBACK', 'Student', `Submitted ${rating}-star feedback rating for mentorship session.`, requestId);
 
     if (isSupabaseConfigured()) {
-      supabase.from('mentorship_requests').update({
-        status: 'Completed',
+      mentorshipService.updateStatus(requestId, 'Completed', {
         feedback: feedbackObj
-      }).eq('id', requestId).then(({ error }) => {
-        if (error) console.error('[Supabase submitMentorshipFeedback error]', error);
-      });
+      }).catch(err => console.error('[Supabase submitMentorshipFeedback error]', err));
     }
   };
 
@@ -2470,9 +2682,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
     addAuditLog('MENTORSHIP_WITHDRAWN', currentUser?.name || 'Student', `Withdrew mentorship request ${requestId}`, requestId);
     if (isSupabaseConfigured()) {
-      supabase.from('mentorship_requests').update({ status: 'Withdrawn' }).eq('id', requestId).then(({ error }) => {
-        if (error) console.error('[Supabase withdrawMentorshipRequest error]', error);
-      });
+      mentorshipService.updateStatus(requestId, 'Withdrawn')
+        .catch(err => console.error('[Supabase withdrawMentorshipRequest error]', err));
     }
   };
 
@@ -2490,13 +2701,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
     addAuditLog('MENTORSHIP_COMPLETED', currentUser?.name || 'User', `Marked mentorship request ${requestId} as completed`, requestId);
     if (isSupabaseConfigured()) {
-      const patch: any = { status: 'Completed' };
-      if (feedbackObj) patch.feedback = feedbackObj;
-      supabase.from('mentorship_requests').update(patch).eq('id', requestId).then(({ error }) => {
-        if (error) console.error('[Supabase completeMentorship error]', error);
-      });
+      mentorshipService.updateStatus(requestId, 'Completed', {
+        feedback: feedbackObj
+      }).catch(err => console.error('[Supabase completeMentorship error]', err));
     }
   };
+
 
   const markMentorshipSeen = (requestIdOrAll?: string) => {
     const now = new Date().toISOString();
@@ -2665,10 +2875,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const senderId = sender?.id ?? currentUser?.id ?? 'current-user-id';
     const senderName = sender?.name ?? currentUser?.name ?? 'Active User';
     const senderRole = sender?.role ?? currentUser?.role ?? 'student';
-    const senderAvatar = sender?.avatar ?? currentUser?.avatar ?? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80';
+    const senderAvatar = sender?.avatar ?? currentUser?.avatar ?? '';
 
-    const clientMessageId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `cid-${Date.now()}`;
-    const newMsgId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `msg-${Date.now()}`;
+    const clientMessageId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : generateUUID();
+    const newMsgId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : generateUUID();
 
     // 1. Offline Check
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -2687,6 +2897,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         attachmentName,
         attachments: attachments && attachments.length > 0 ? attachments : undefined,
         replyTo: replyTo || undefined,
+        replyToId: replyTo?.id || undefined,
         voiceNoteUrl,
         voiceNoteDuration,
         status: 'failed',
@@ -2697,8 +2908,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // 2. Length check
-    if (content.length > 2000) {
+    // 2. Length check (4000 char cap matching DB)
+    if (content.length > 4000) {
       const failedMsg: ChatMessage = {
         id: newMsgId,
         clientMessageId,
@@ -2714,6 +2925,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         attachmentName,
         attachments: attachments && attachments.length > 0 ? attachments : undefined,
         replyTo: replyTo || undefined,
+        replyToId: replyTo?.id || undefined,
         voiceNoteUrl,
         voiceNoteDuration,
         status: 'failed',
@@ -2739,6 +2951,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       attachmentName,
       attachments: attachments && attachments.length > 0 ? attachments : undefined,
       replyTo: replyTo || undefined,
+      replyToId: replyTo?.id || undefined,
       voiceNoteUrl,
       voiceNoteDuration,
       status: 'sending'
@@ -2749,69 +2962,52 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 
     if (isSupabaseConfigured() && isValidUUID(senderId) && isValidUUID(receiverId)) {
-      (supabase.rpc as any)('send_message', {
-        p_client_message_id: clientMessageId,
-        p_receiver_id: receiverId,
-        p_content: content,
-        p_category: category || null,
-        p_attachment_name: attachmentName || null,
-        p_attachment_url: null
-      }).then(
-        ({ data, error }: any) => {
-          if (error) {
-            // Direct fallback to insert with client_message_id
-            supabase.from('chat_messages').insert({
-              id: newMsg.id,
-              client_message_id: clientMessageId,
-              sender_id: senderId,
-              sender_name: senderName,
-              sender_role: senderRole,
-              sender_avatar: senderAvatar,
-              receiver_id: receiverId,
-              content,
-              timestamp: newMsg.timestamp,
-              is_read: false,
-              category: category || null,
-              attachment_name: attachmentName || null,
-              reactions: [],
-              is_reported: false
-            } as any).then(({ error: insertErr }) => {
-              if (insertErr) {
-                if (insertErr.code === '23505') {
-                  // Idempotency: duplicate key violation means message was already written!
-                  setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'sent', errorReason: undefined } : m));
-                  removeFromOutbox(newMsg.id);
-                } else {
-                  const reason = !navigator.onLine ? 'offline' : (insertErr.code === '42501' ? 'forbidden' : 'unknown');
-                  setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'failed', errorReason: reason } : m));
-                  addToOutbox({ ...newMsg, status: 'failed', errorReason: reason });
-                }
-              } else {
-                setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'sent', errorReason: undefined } : m));
-                removeFromOutbox(newMsg.id);
-                setTimeout(() => {
-                  setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'delivered' } : m));
-                }, 1200);
-              }
-            });
-          } else if (data && (data.success || data.duplicate)) {
-            setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'sent', errorReason: undefined } : m));
-            removeFromOutbox(newMsg.id);
-            setTimeout(() => {
-              setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'delivered' } : m));
-            }, 1200);
-          } else {
-            const reason = (data?.error_code as any) || 'unknown';
-            setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'failed', errorReason: reason } : m));
-            addToOutbox({ ...newMsg, status: 'failed', errorReason: reason });
+      messagingService.sendMessage({
+        senderId,
+        senderName,
+        senderRole,
+        senderAvatar,
+        receiverId,
+        content,
+        category,
+        attachmentName,
+        clientMessageId,
+        attachments,
+        replyTo,
+        replyToId: replyTo?.id,
+        voiceNoteUrl,
+        voiceNoteDuration
+      }).then(persisted => {
+        setMessages(prev => prev.map(m => {
+          if (m.id === newMsg.id || (m.clientMessageId && m.clientMessageId === clientMessageId)) {
+            // Keep local blob preview URL until server signed URL is ready
+            const mergedAttachments = persisted.attachments?.map(pa => {
+              const localAtt = m.attachments?.find(la => la.storagePath === pa.storagePath || la.fileName === pa.fileName);
+              return {
+                ...pa,
+                signedUrl: localAtt?.signedUrl || pa.signedUrl
+              };
+            }) || m.attachments;
+
+            return {
+              ...persisted,
+              attachments: mergedAttachments,
+              status: 'sent',
+              errorReason: undefined
+            };
           }
-        },
-        () => {
-          const reason = !navigator.onLine ? 'offline' : 'unknown';
-          setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, status: 'failed', errorReason: reason } : m));
-          addToOutbox({ ...newMsg, status: 'failed', errorReason: reason });
-        }
-      );
+          return m;
+        }));
+        removeFromOutbox(newMsg.id);
+        setTimeout(() => {
+          setMessages(prev => prev.map(m => (m.id === newMsg.id || m.clientMessageId === clientMessageId ? { ...m, status: 'delivered' } : m)));
+        }, 1200);
+      }).catch(err => {
+        console.error('[DataContext] Send message failed:', err);
+        const reason = !navigator.onLine ? 'offline' : (err.code === '42501' || err.status === 403 ? 'forbidden' : 'unknown');
+        setMessages(prev => prev.map(m => (m.id === newMsg.id || m.clientMessageId === clientMessageId ? { ...m, status: 'failed', errorReason: reason } : m)));
+        addToOutbox({ ...newMsg, status: 'failed', errorReason: reason });
+      });
     } else {
       // Mock / resilient local dispatch
       removeFromOutbox(newMsg.id);
@@ -2833,39 +3029,51 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 
     if (isSupabaseConfigured() && isValidUUID(msg.senderId) && isValidUUID(msg.receiverId)) {
-      (supabase.rpc as any)('send_message', {
-        p_client_message_id: msg.clientMessageId || msg.id,
-        p_receiver_id: msg.receiverId,
-        p_content: msg.content,
-        p_category: msg.category || null,
-        p_attachment_name: msg.attachmentName || null,
-        p_attachment_url: null
-      }).then(
-        ({ data, error }: any) => {
-          if (error || !data?.success) {
-            // If duplicate, it is already sent
-            if (data?.duplicate) {
-              setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'sent', errorReason: undefined } : m));
-              removeFromOutbox(messageId);
-              return;
-            }
-            const reason = !navigator.onLine ? 'offline' : ((data?.error_code as any) || 'unknown');
-            setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'failed', errorReason: reason } : m));
-            addToOutbox({ ...msg, status: 'failed', errorReason: reason });
-          } else {
-            setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'sent', errorReason: undefined } : m));
-            removeFromOutbox(messageId);
-            setTimeout(() => {
-              setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'delivered' } : m));
-            }, 1200);
+      messagingService.sendMessage({
+        senderId: msg.senderId,
+        senderName: msg.senderName,
+        senderRole: msg.senderRole,
+        senderAvatar: msg.senderAvatar,
+        receiverId: msg.receiverId,
+        content: msg.content,
+        category: msg.category,
+        attachmentName: msg.attachmentName,
+        clientMessageId: msg.clientMessageId || msg.id,
+        attachments: msg.attachments,
+        replyTo: msg.replyTo || undefined,
+        replyToId: msg.replyToId,
+        voiceNoteUrl: msg.voiceNoteUrl,
+        voiceNoteDuration: msg.voiceNoteDuration
+      }).then(persisted => {
+        setMessages(prev => prev.map(m => {
+          if (m.id === messageId || (m.clientMessageId && m.clientMessageId === msg.clientMessageId)) {
+            const mergedAttachments = persisted.attachments?.map(pa => {
+              const localAtt = m.attachments?.find(la => la.storagePath === pa.storagePath || la.fileName === pa.fileName);
+              return {
+                ...pa,
+                signedUrl: localAtt?.signedUrl || pa.signedUrl
+              };
+            }) || m.attachments;
+
+            return {
+              ...persisted,
+              attachments: mergedAttachments,
+              status: 'sent',
+              errorReason: undefined
+            };
           }
-        },
-        () => {
-          const reason = !navigator.onLine ? 'offline' : 'unknown';
-          setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'failed', errorReason: reason } : m));
-          addToOutbox({ ...msg, status: 'failed', errorReason: reason });
-        }
-      );
+          return m;
+        }));
+        removeFromOutbox(messageId);
+        setTimeout(() => {
+          setMessages(prev => prev.map(m => (m.id === messageId || (m.clientMessageId && m.clientMessageId === msg.clientMessageId) ? { ...m, status: 'delivered' } : m)));
+        }, 1200);
+      }).catch(err => {
+        console.error('[DataContext] Retry failed:', err);
+        const reason = !navigator.onLine ? 'offline' : (err.code === '42501' || err.status === 403 ? 'forbidden' : 'unknown');
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'failed', errorReason: reason } : m));
+        addToOutbox({ ...msg, status: 'failed', errorReason: reason });
+      });
     } else {
       setTimeout(() => {
         setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'sent', errorReason: undefined } : m));
@@ -3158,25 +3366,69 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       supabase.from('jobs').update({ applicants_count: count }).eq('id', jobId).then(({ error }) => {
         if (error) console.error('[Supabase applyForJob error]', error);
       });
+
+      if (currentUser?.id) {
+        jobsService.submitApplication({
+          opportunityId: jobId,
+          applicantId: currentUser.id,
+          applicantName: currentUser.name,
+          applicantEmail: currentUser.email
+        }).catch((err: unknown) => console.error('[Supabase submitApplication error]', err));
+      }
     }
   };
 
-  const markNotificationRead = (id: string) => {
+  const markNotificationRead = async (id: string) => {
+    const previous = [...notifications];
     setNotifications(prev => prev.map(n => (n.id === id ? { ...n, is_read: true } : n)));
 
     if (isSupabaseConfigured()) {
-      supabase.from('notifications').update({ is_read: true }).eq('id', id).then(({ error }) => {
-        if (error) console.error('[Supabase markNotificationRead error]', error);
-      });
+      try {
+        await notificationsService.markRead(id);
+      } catch (err) {
+        console.error('[Supabase markNotificationRead error, rolling back]', err);
+        setNotifications(previous);
+      }
     }
   };
 
-  const markAllNotificationsRead = () => {
+  const markAllNotificationsRead = async () => {
+    const previous = [...notifications];
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+
     if (isSupabaseConfigured() && currentUser?.id) {
-      supabase.from('notifications').update({ is_read: true }).eq('user_id', currentUser.id).eq('is_read', false).then(({ error }) => {
-        if (error) console.error('[Supabase markAllNotificationsRead error]', error);
-      });
+      try {
+        await notificationsService.markAllRead(currentUser.id);
+      } catch (err) {
+        console.error('[Supabase markAllNotificationsRead error, rolling back]', err);
+        setNotifications(previous);
+      }
+    }
+  };
+
+  const updateNotificationPreferences = async (newPrefs: Partial<Omit<NotificationPreferences, 'user_id'>>) => {
+    if (!currentUser?.id) return;
+    const previous = notificationPreferences;
+    const optimistic: NotificationPreferences = previous
+      ? { ...previous, ...newPrefs }
+      : {
+          user_id: currentUser.id,
+          mute_opportunities: false,
+          mute_events: false,
+          mute_announcements: false,
+          ...newPrefs
+        };
+
+    setNotificationPreferences(optimistic);
+
+    if (isSupabaseConfigured()) {
+      try {
+        const saved = await notificationsService.updatePreferences(currentUser.id, newPrefs);
+        setNotificationPreferences(saved);
+      } catch (err) {
+        console.error('[Supabase updateNotificationPreferences error, rolling back]', err);
+        setNotificationPreferences(previous);
+      }
     }
   };
 
@@ -3734,6 +3986,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         registerUserInDatabase,
         markNotificationRead,
         markAllNotificationsRead,
+        unreadNotificationCount: notifications.filter(n => !n.is_read).length,
+        notificationPreferences,
+        updateNotificationPreferences,
+        latestIncomingNotification,
+        dismissIncomingNotificationToast: () => setLatestIncomingNotification(null),
         addAuditLog,
         roleTransitionRequests,
         submitRoleTransitionRequest,

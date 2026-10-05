@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { LogoMark } from './LogoMark';
 import { replayIntro } from '../../lib/intro';
 import { useReducedMotionPreference, toggleReducedMotionPreference } from '../../lib/motionPreference';
+import { SUPPORT_EMAIL } from '../../config/auth';
 
 interface FooterProps {
   setActiveTab: (tab: string) => void;
@@ -233,8 +234,8 @@ const FullPublicFooter: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
                   </a>
                 </p>
                 <p>
-                  <a href="mailto:alumni@vit.edu.in" className="hover:text-[#0A0A0A] transition-colors underline-offset-2 hover:underline py-2 inline-block truncate touch-target-44">
-                    alumni@vit.edu.in
+                  <a href={`mailto:${SUPPORT_EMAIL}`} className="hover:text-[#0A0A0A] transition-colors underline-offset-2 hover:underline py-2 inline-block truncate touch-target-44">
+                    {SUPPORT_EMAIL}
                   </a>
                 </p>
               </div>
@@ -302,6 +303,14 @@ const FullPublicFooter: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
               className="hover:text-[#0A0A0A] cursor-pointer transition-colors bg-transparent border-none py-2.5 px-2 text-xs font-medium text-[#6B7280] min-h-[44px] inline-flex items-center touch-target-44"
             >
               Privacy policy
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('privacy')}
+              className="hover:text-[#0A0A0A] cursor-pointer transition-colors bg-transparent border-none py-2.5 px-2 text-xs font-medium text-[#6B7280] min-h-[44px] inline-flex items-center touch-target-44"
+            >
+              Cookies & storage
             </button>
           </div>
         </div>

@@ -69,6 +69,7 @@ export interface ContactItem {
   department: string;
   designation?: string;
   type?: 'alumni' | 'faculty' | 'student';
+  gradYear?: string;
   skills: string[];
   online: boolean;
   lastSeen?: string;
@@ -154,45 +155,58 @@ export const MessagingPage: React.FC = () => {
   // 1. Directory Profiles for contact resolution
   const allDirectoryProfiles = useMemo(() => {
     return [
-      ...alumniList.map(a => ({
-        id: a.id,
-        name: a.name,
-        avatarUrl: a.avatar || '',
-        company: a.company || 'Alumni',
-        designation: (a.designation && a.designation.toLowerCase() !== 'alumni') ? a.designation : 'Software Engineer',
-        department: a.department || 'Engineering',
-        type: 'alumni' as const,
-        skills: a.skills || [],
-        online: true,
-        lastSeen: 'today at 10:42 AM',
-        lastMessageTopic: 'Career Mentorship' as MentorshipGuidancePurpose
-      })),
-      ...facultyList.map(f => ({
-        id: f.id,
-        name: f.name,
-        avatarUrl: f.avatar || '',
-        company: 'Vidyalankar Institute of Technology',
-        designation: (f.designation && f.designation.toLowerCase() !== 'faculty') ? f.designation : 'Professor',
-        department: f.department || 'CMPN',
-        type: 'faculty' as const,
-        skills: f.researchAreas || [],
-        online: true,
-        lastSeen: 'today at 11:00 AM',
-        lastMessageTopic: 'Research Guidance' as MentorshipGuidancePurpose
-      })),
-      ...studentList.map(s => ({
-        id: s.id,
-        name: s.name,
-        avatarUrl: s.avatar || '',
-        company: 'Student',
-        designation: 'Student',
-        department: s.department || 'Engineering',
-        type: 'student' as const,
-        skills: s.skills || [],
-        online: true,
-        lastSeen: 'today at 11:30 AM',
-        lastMessageTopic: 'General Mentorship' as MentorshipGuidancePurpose
-      }))
+      ...alumniList.map(a => {
+        const gradYear = (a as any).graduationYear || (a as any).gradYear;
+        const comp = a.company && a.company.toLowerCase() !== 'alumni' ? a.company : '';
+        const desig = (a.designation && a.designation.toLowerCase() !== 'alumni') ? a.designation : '';
+        return {
+          id: a.id,
+          name: a.name,
+          avatarUrl: a.avatar || '',
+          company: comp,
+          designation: desig,
+          department: a.department || 'Engineering',
+          type: 'alumni' as const,
+          gradYear: gradYear ? String(gradYear) : undefined,
+          skills: a.skills || [],
+          online: false,
+          lastSeen: 'Active recently',
+          lastMessageTopic: 'Career Mentorship' as MentorshipGuidancePurpose
+        };
+      }),
+      ...facultyList.map(f => {
+        const deptStr = f.department || 'CMPN';
+        const desigStr = f.designation && f.designation.toLowerCase() !== 'faculty' ? f.designation : 'Professor';
+        return {
+          id: f.id,
+          name: f.name,
+          avatarUrl: f.avatar || '',
+          company: 'Vidyalankar Institute of Technology',
+          designation: desigStr,
+          department: deptStr,
+          type: 'faculty' as const,
+          skills: f.researchAreas || [],
+          online: false,
+          lastSeen: 'Active recently',
+          lastMessageTopic: 'Research Guidance' as MentorshipGuidancePurpose
+        };
+      }),
+      ...studentList.map(s => {
+        const yearStr = (s as any).currentYear ? `${(s as any).currentYear} Year` : 'Student';
+        return {
+          id: s.id,
+          name: s.name,
+          avatarUrl: s.avatar || '',
+          company: s.department || 'Engineering',
+          designation: yearStr,
+          department: s.department || 'Engineering',
+          type: 'student' as const,
+          skills: s.skills || [],
+          online: false,
+          lastSeen: 'Active recently',
+          lastMessageTopic: 'General Mentorship' as MentorshipGuidancePurpose
+        };
+      })
     ];
   }, [alumniList, facultyList, studentList]);
 
@@ -399,25 +413,26 @@ export const MessagingPage: React.FC = () => {
         if (mime.startsWith('image/')) {
           const processed = await processChatImage(file, mime as any);
           const previewUrl = URL.createObjectURL(processed.thumbBlob);
+          const width = processed.width;
+          const height = processed.height;
 
           setPendingAttachments(prev =>
             prev.map(item =>
               item.id === tempId
-                ? { ...item, previewUrl, progress: 50, status: 'uploading' }
+                ? { ...item, previewUrl, width, height, progress: 40, status: 'uploading' }
                 : item
             )
           );
 
-          // Upload to storage or local fallback
+          // Upload to storage with strict path: {senderId}/{receiverId}/{uuid}-{safeFileName}
           const storagePath = await MessagingService.uploadAttachment(
+            currentUserId,
             activeContactId,
-            tempId,
             processed.processedBlob,
             file.name,
-            false,
             (pct: number) => {
               setPendingAttachments(prev =>
-                prev.map(item => (item.id === tempId ? { ...item, progress: 50 + pct / 2 } : item))
+                prev.map(item => (item.id === tempId ? { ...item, progress: 40 + pct * 0.6 } : item))
               );
             }
           );
@@ -425,21 +440,29 @@ export const MessagingPage: React.FC = () => {
           setPendingAttachments(prev =>
             prev.map(item =>
               item.id === tempId
-                ? { ...item, previewUrl: storagePath, progress: 100, status: 'ready' }
+                ? { ...item, storagePath, progress: 100, status: 'ready' }
                 : item
             )
           );
         } else {
           // PDF document
+          const previewUrl = URL.createObjectURL(file);
+          setPendingAttachments(prev =>
+            prev.map(item =>
+              item.id === tempId
+                ? { ...item, previewUrl, progress: 20, status: 'uploading' }
+                : item
+            )
+          );
+
           const storagePath = await MessagingService.uploadAttachment(
+            currentUserId,
             activeContactId,
-            tempId,
             file,
             file.name,
-            false,
             (pct: number) => {
               setPendingAttachments(prev =>
-                prev.map(item => (item.id === tempId ? { ...item, progress: pct } : item))
+                prev.map(item => (item.id === tempId ? { ...item, progress: 20 + pct * 0.8 } : item))
               );
             }
           );
@@ -447,7 +470,7 @@ export const MessagingPage: React.FC = () => {
           setPendingAttachments(prev =>
             prev.map(item =>
               item.id === tempId
-                ? { ...item, previewUrl: storagePath, progress: 100, status: 'ready' }
+                ? { ...item, storagePath, progress: 100, status: 'ready' }
                 : item
             )
           );
@@ -515,16 +538,18 @@ export const MessagingPage: React.FC = () => {
     }
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-    // Format attachments into MessageAttachment models
+    // Format attachments into MessageAttachment models preserving local blob preview
     const messageAttachments: MessageAttachment[] = currentAttachments.map(att => ({
       id: att.id,
       messageId: clientMsgId,
       conversationId: activeContactId,
       uploaderId: currentUserId,
-      storagePath: att.previewUrl || att.name,
+      storagePath: att.storagePath || '',
       fileName: att.name,
       mimeType: att.mimeType,
       sizeBytes: att.file.size,
+      width: att.width,
+      height: att.height,
       scanStatus: 'ok',
       signedUrl: att.previewUrl
     }));
@@ -780,11 +805,6 @@ export const MessagingPage: React.FC = () => {
                       size={44}
                       className="border border-[#E5E7EB]"
                     />
-                    {contact.online && (
-                      <span
-                        className="w-2.5 h-2.5 rounded-full absolute bottom-0 right-0 ring-2 ring-white bg-[#0A0A0A]"
-                      />
-                    )}
                   </div>
 
                   {/* Meta */}
@@ -936,16 +956,37 @@ export const MessagingPage: React.FC = () => {
                 )}
 
                 {rawThreadMessages.length === 0 ? (
-                  <div className="py-20 text-center text-[#6B7280] space-y-3">
-                    <div className="w-10 h-10 rounded-full bg-[#FAFAFA] border border-[#E5E7EB] flex items-center justify-center mx-auto text-[#0A0A0A]">
-                      <MessageSquare className="w-5 h-5" />
+                  <div className="py-16 text-center text-[#6B7280] space-y-4">
+                    <div className="flex justify-center">
+                      <Avatar
+                        src={activeContact.avatarUrl}
+                        name={activeContact.name}
+                        size={64}
+                        className="border-2 border-[#E5E7EB] shadow-2xs"
+                      />
                     </div>
-                    <h3 className="font-semibold text-sm text-[#0A0A0A]">
-                      Start a direct discussion with {activeContact.name}
-                    </h3>
-                    <p className="text-xs text-[#6B7280] max-w-sm mx-auto leading-relaxed">
-                      This peer thread is protected under the Vidyalankar Institutional Code of Conduct.
-                    </p>
+                    <div className="space-y-1">
+                      <h3 className="font-semibold text-base text-[#0A0A0A]">
+                        Say hello to {activeContact.name}
+                      </h3>
+                      <p className="text-xs text-[#6B7280] max-w-sm mx-auto leading-relaxed">
+                        Start your direct discussion or share files. All messages are private between you two.
+                      </p>
+                    </div>
+                    <div className="pt-2 flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const firstName = activeContact.name.split(' ')[0] || activeContact.name;
+                          setDraftText(`Hi ${firstName}, I'd love to connect!`);
+                          textareaRef.current?.focus();
+                        }}
+                        className="px-4 py-2 bg-[#F3F4F6] hover:bg-[#E5E7EB] text-[#0A0A0A] rounded-full text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                      >
+                        <span>👋</span>
+                        <span>Say hello to {activeContact.name.split(' ')[0]}</span>
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   rawThreadMessages.map((msg, index) => {
@@ -1241,21 +1282,6 @@ export const MessagingPage: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Standalone Attachments */}
-                          {msg.attachments && msg.attachments.length > 0 && (
-                            <div className="space-y-1.5 mb-1">
-                              {/* Images Grid */}
-                              <AttachmentGrid attachments={msg.attachments} isMe={isMe} />
-
-                              {/* PDF Cards */}
-                              {msg.attachments
-                                .filter(a => a.mimeType === 'application/pdf')
-                                .map(pdfAtt => (
-                                  <AttachmentPdfCard key={pdfAtt.id} attachment={pdfAtt} isMe={isMe} />
-                                ))}
-                            </div>
-                          )}
-
                           {/* Inline Editing Form */}
                           {editingMessageId === msg.id ? (
                             <div className="w-full max-w-md p-2.5 bg-white border border-[#0A0A0A] rounded-2xl shadow-sm space-y-2">
@@ -1290,22 +1316,40 @@ export const MessagingPage: React.FC = () => {
                               <span>This message was deleted</span>
                             </div>
                           ) : (
-                            /* Active Text Message Bubble */
-                            msg.content && (
-                              <div
-                                className={`relative ${
-                                  isEmojiOnlyMsg
-                                    ? 'text-3xl py-1 select-none'
-                                    : `p-3 px-4 max-w-[70%] text-xs leading-relaxed whitespace-pre-wrap break-words ${
-                                        isMe
-                                          ? `bg-[#0A0A0A] text-white ${isGroupEnd ? 'rounded-[18px] rounded-br-[6px]' : 'rounded-[18px]'}`
-                                          : `bg-[#F3F4F6] text-[#0A0A0A] ${isGroupEnd ? 'rounded-[18px] rounded-bl-[6px]' : 'rounded-[18px]'}`
-                                      }`
-                                }`}
-                              >
-                                {msg.content}
-                              </div>
-                            )
+                            /* Mixed message: text on top, attachments below */
+                            <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[85%] space-y-1.5`}>
+                              {/* Active Text Message Bubble */}
+                              {msg.content && (
+                                <div
+                                  className={`relative ${
+                                    isEmojiOnlyMsg
+                                      ? 'text-3xl py-1 select-none'
+                                      : `p-3 px-4 text-xs leading-relaxed whitespace-pre-wrap break-words ${
+                                          isMe
+                                            ? `bg-[#0A0A0A] text-white ${isGroupEnd && (!msg.attachments || msg.attachments.length === 0) ? 'rounded-[18px] rounded-br-[6px]' : 'rounded-[18px]'}`
+                                            : `bg-[#F3F4F6] text-[#0A0A0A] ${isGroupEnd && (!msg.attachments || msg.attachments.length === 0) ? 'rounded-[18px] rounded-bl-[6px]' : 'rounded-[18px]'}`
+                                        }`
+                                  }`}
+                                >
+                                  {msg.content}
+                                </div>
+                              )}
+
+                              {/* Attachments below text */}
+                              {msg.attachments && msg.attachments.length > 0 && (
+                                <div className={`space-y-1.5 w-full flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                                  {/* Images Grid */}
+                                  <AttachmentGrid attachments={msg.attachments} isMe={isMe} />
+
+                                  {/* PDF Cards */}
+                                  {msg.attachments
+                                    .filter(a => a.mimeType === 'application/pdf')
+                                    .map(pdfAtt => (
+                                      <AttachmentPdfCard key={pdfAtt.id} attachment={pdfAtt} isMe={isMe} />
+                                    ))}
+                                </div>
+                              )}
+                            </div>
                           )}
 
                           {/* Reaction Chips */}
@@ -1330,26 +1374,38 @@ export const MessagingPage: React.FC = () => {
                               )}
                               <time dateTime={timeInfo.iso}>{timeInfo.timeStr}</time>
 
-                              {/* Status word + ticks only on LAST SENT message in the thread */}
-                              {isMe && !isFailed && !isDeleted && msg.id === lastSentMsgId && (
+                              {/* Status word + ticks */}
+                              {isMe && !isDeleted && (
                                 <span className="inline-flex items-center gap-1">
                                   <span>·</span>
-                                  {msg.status === 'read' ? (
-                                    <span className="flex items-center gap-0.5 text-[#0A0A0A] font-medium">
-                                      <span>Read</span>
-                                      <CheckCheck className="w-3.5 h-3.5 text-[#0A0A0A]" />
-                                    </span>
-                                  ) : msg.status === 'delivered' ? (
+                                  {msg.status === 'sending' ? (
                                     <span className="flex items-center gap-0.5 text-[#6B7280]">
-                                      <span>Delivered</span>
-                                      <CheckCheck className="w-3.5 h-3.5 text-[#6B7280]" />
+                                      <span>Sending</span>
+                                      <Clock className="w-3 h-3 text-[#6B7280] animate-pulse" />
                                     </span>
-                                  ) : (
-                                    <span className="flex items-center gap-0.5 text-[#6B7280]">
-                                      <span>Sent</span>
-                                      <Check className="w-3.5 h-3.5 text-[#6B7280]" />
+                                  ) : isFailed ? (
+                                    <span className="flex items-center gap-0.5 text-[#991B1B] font-medium">
+                                      <span>Failed</span>
+                                      <AlertCircle className="w-3.5 h-3.5 text-[#991B1B]" />
                                     </span>
-                                  )}
+                                  ) : msg.id === lastSentMsgId ? (
+                                    msg.status === 'read' ? (
+                                      <span className="flex items-center gap-0.5 text-[#0A0A0A] font-medium">
+                                        <span>Read</span>
+                                        <CheckCheck className="w-3.5 h-3.5 text-[#0A0A0A]" />
+                                      </span>
+                                    ) : msg.status === 'delivered' ? (
+                                      <span className="flex items-center gap-0.5 text-[#6B7280]">
+                                        <span>Delivered</span>
+                                        <CheckCheck className="w-3.5 h-3.5 text-[#6B7280]" />
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-0.5 text-[#6B7280]">
+                                        <span>Sent</span>
+                                        <Check className="w-3.5 h-3.5 text-[#6B7280]" />
+                                      </span>
+                                    )
+                                  ) : null}
                                 </span>
                               )}
                             </div>

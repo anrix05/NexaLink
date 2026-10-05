@@ -1,18 +1,26 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Database, Lock, Server, FileCheck2, UserCheck, Trash2 } from 'lucide-react';
+import { SUPPORT_EMAIL } from '../../config/auth';
+import { usePageMeta } from '../../hooks/usePageMeta';
 
 interface DataGovernancePageProps {
   setActiveTab?: (tab: string) => void;
 }
 
 export const DataGovernancePage: React.FC<DataGovernancePageProps> = ({ setActiveTab }) => {
+  usePageMeta({
+    title: 'Data Governance & DPDP',
+    description: 'Data Governance and institutional data protection policies for NexaLink, Vidyalankar Institute of Technology.',
+    noIndex: false
+  });
+
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#FAFAFA] font-sans text-[#0A0A0A] py-12 md:py-20">
       <div className="max-w-4xl mx-auto px-6">
         <button
           onClick={() => setActiveTab?.('landing')}
-          className="inline-flex items-center gap-2 text-xs font-medium text-[#6B7280] hover:text-[#0A0A0A] transition-colors mb-8"
+          className="inline-flex items-center gap-2 text-xs font-medium text-[#6B7280] hover:text-[#0A0A0A] transition-colors mb-8 cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Home
@@ -122,7 +130,9 @@ export const DataGovernancePage: React.FC<DataGovernancePageProps> = ({ setActiv
                   <p>For inquiries regarding data storage, compliance, or to request a data audit, please contact the institutional IT department.</p>
                   <div className="pt-2 border-t border-[#E5E7EB]">
                     <p className="font-bold text-[#0A0A0A] mt-2">IT Cell, VIT</p>
-                    <p className="font-mono text-xs mt-1">support@vit.edu.in</p>
+                    <a href={`mailto:${SUPPORT_EMAIL}`} className="font-mono text-xs mt-1 block text-[#0A0A0A] hover:underline">
+                      {SUPPORT_EMAIL}
+                    </a>
                     <p className="font-mono text-xs mt-1">+91 22 2416 1126</p>
                   </div>
                 </div>

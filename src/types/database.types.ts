@@ -641,20 +641,26 @@ export interface Database {
       };
       send_message_v2: {
         Args: {
-          p_conversation_id: string;
           p_client_message_id: string;
-          p_content: string;
-          p_reply_to_id?: string | null;
+          p_receiver_id: string;
+          p_content?: string;
           p_attachments?: Json;
+          p_reply_to_id?: string | null;
         };
         Returns: {
           success: boolean;
           duplicate?: boolean;
-          message_id?: string;
+          id?: string;
+          client_message_id?: string;
+          sender_id?: string;
+          sender_name?: string;
+          sender_role?: string;
+          sender_avatar?: string;
+          receiver_id?: string;
+          content?: string;
+          attachments?: Json;
+          reply_to_id?: string | null;
           timestamp?: string;
-          status?: string;
-          error_code?: string;
-          message?: string;
         };
       };
       get_or_create_conversation: {

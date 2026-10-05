@@ -54,16 +54,21 @@ const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
 
 export class MessagingService {
   /**
-   * Fetches signed URL for a private attachment with in-memory caching
+   * Fetches signed URL for a private attachment with in-memory caching (1 hour TTL)
    */
   public static async getSignedUrl(storagePath: string, downloadFilename?: string): Promise<string> {
+    if (!storagePath) return '';
+    // If it's already a blob:, data:, or full external url, return as-is
+    if (storagePath.startsWith('blob:') || storagePath.startsWith('data:') || storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
+      return storagePath;
+    }
+
     const cached = signedUrlCache.get(storagePath);
-    if (cached && cached.expiresAt > Date.now() + 30000) {
+    if (cached && cached.expiresAt > Date.now() + 60000) {
       return cached.url;
     }
 
     if (!isSupabaseConfigured()) {
-      // In local mode or mock mode, check if we have an object URL or data URL
       return storagePath;
     }
 
@@ -75,7 +80,7 @@ export class MessagingService {
 
       const { data, error } = await supabase.storage
         .from('chat-attachments')
-        .createSignedUrl(storagePath, 300, options); // 5 min TTL
+        .createSignedUrl(storagePath, 3600, options); // 1 hour TTL
 
       if (error || !data?.signedUrl) {
         throw error || new Error('Failed to create signed URL');
@@ -83,7 +88,7 @@ export class MessagingService {
 
       signedUrlCache.set(storagePath, {
         url: data.signedUrl,
-        expiresAt: Date.now() + 270000 // 4.5 minutes
+        expiresAt: Date.now() + 3500 * 1000 // 58 minutes
       });
 
       return data.signedUrl;
@@ -93,49 +98,91 @@ export class MessagingService {
   }
 
   /**
-   * Uploads an attachment to Supabase Storage with progress simulation/tracking
+   * Batch resolves signed URLs for private attachments
+   */
+  public static async getSignedUrls(storagePaths: string[]): Promise<Record<string, string>> {
+    const result: Record<string, string> = {};
+    const toFetch: string[] = [];
+
+    for (const p of storagePaths) {
+      if (!p) continue;
+      if (p.startsWith('blob:') || p.startsWith('data:') || p.startsWith('http://') || p.startsWith('https://')) {
+        result[p] = p;
+        continue;
+      }
+      const cached = signedUrlCache.get(p);
+      if (cached && cached.expiresAt > Date.now() + 60000) {
+        result[p] = cached.url;
+      } else {
+        toFetch.push(p);
+      }
+    }
+
+    if (toFetch.length === 0 || !isSupabaseConfigured()) {
+      return result;
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from('chat-attachments')
+        .createSignedUrls(toFetch, 3600);
+
+      if (!error && Array.isArray(data)) {
+        for (const item of data) {
+          if (item.signedUrl && item.path) {
+            signedUrlCache.set(item.path, {
+              url: item.signedUrl,
+              expiresAt: Date.now() + 3500 * 1000
+            });
+            result[item.path] = item.signedUrl;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[MessagingService] Failed to batch fetch signed URLs:', e);
+    }
+
+    return result;
+  }
+
+  /**
+   * Uploads an attachment to Supabase Storage with strict path format {senderId}/{receiverId}/{uuid}-{safeFileName}
    */
   public static async uploadAttachment(
-    conversationId: string,
-    messageId: string,
+    senderId: string,
+    receiverId: string,
     file: File | Blob,
     filename: string,
-    isThumb = false,
     onProgress?: (percent: number) => void
   ): Promise<string> {
     const ext = filename.split('.').pop()?.toLowerCase() || 'bin';
-    const uuid = crypto.randomUUID();
-    const storagePath = isThumb
-      ? `${conversationId}/${messageId}/thumb_${uuid}.${ext}`
-      : `${conversationId}/${messageId}/${uuid}.${ext}`;
+    const uuid = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`;
+    const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+    // Strict path structure: {senderId}/{receiverId}/{uuid}-{safeFileName}
+    const storagePath = `${senderId}/${receiverId}/${uuid}-${safeName}`;
 
     if (!isSupabaseConfigured()) {
-      // Return a base64 / blob URL for local resilient demo mode
       if (onProgress) {
         onProgress(50);
         await new Promise(r => setTimeout(r, 60));
         onProgress(100);
       }
-      return new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-      });
+      return storagePath;
     }
 
-    // Direct upload to private 'chat-attachments' bucket
-    const { error } = await supabase.storage
+    const { data, error } = await supabase.storage
       .from('chat-attachments')
       .upload(storagePath, file, {
+        cacheControl: '3600',
         upsert: false
       });
 
-    if (error) {
-      throw new Error(`Upload failed: ${error.message}`);
+    if (error || !data?.path) {
+      throw new Error(`Upload failed: ${error?.message || 'Storage error'}`);
     }
 
     if (onProgress) onProgress(100);
-    return storagePath;
+    return data.path;
   }
 
   /**
@@ -197,35 +244,35 @@ export class MessagingService {
     }
 
     try {
-      // Format attachments for JSONB RPC argument
+      // Format attachments for JSONB RPC argument matching send_message_v2 schema
       const formattedAttachments = (payload.attachments || []).map(a => ({
-        storage_path: a.storagePath,
-        thumb_path: a.thumbPath || null,
-        file_name: a.fileName,
-        mime_type: a.mimeType,
-        size_bytes: a.sizeBytes,
+        path: a.storagePath,
+        name: a.fileName,
+        mime: a.mimeType,
+        size: a.sizeBytes,
         width: a.width || null,
         height: a.height || null
       }));
 
       const { data, error } = await supabase.rpc('send_message_v2', {
-        p_conversation_id: payload.conversationId,
         p_client_message_id: payload.clientMessageId,
+        p_receiver_id: payload.receiverId,
         p_content: payload.content,
         p_reply_to_id: payload.replyToId || null,
         p_attachments: formattedAttachments
       });
 
       if (error) throw error;
-      if (!data?.success) {
-        throw new Error(data?.message || data?.error_code || 'Failed to send message');
+      const res = data as any;
+      if (!res?.success) {
+        throw new Error(res?.message || res?.error_code || 'Failed to send message');
       }
 
       OutboxManager.remove(payload.clientMessageId);
       return {
-        messageId: data.message_id || '',
-        timestamp: data.timestamp || new Date().toISOString(),
-        duplicate: data.duplicate
+        messageId: res?.id || res?.message_id || '',
+        timestamp: res?.timestamp || new Date().toISOString(),
+        duplicate: res?.duplicate
       };
     } catch (err: any) {
       OutboxManager.markFailed(payload.clientMessageId, err.message || 'unknown');

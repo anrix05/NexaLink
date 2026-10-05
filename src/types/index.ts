@@ -35,7 +35,11 @@ export interface User {
   verificationStatus?: AccountVerificationStatus;
   rejectionReason?: string;
   clarificationRequest?: string;
-  clarificationRequested?: { text: string; requestedAt: string } | null;
+  clarificationRequested?: { text: string; reason?: string; documentType?: string; requestedAt: string } | null;
+  userReplied?: boolean;
+  userRepliedAt?: string;
+  emailConfirmedAt?: string;
+  email_confirmed_at?: string;
   proofDocumentName?: string;
   verificationDocumentUrl?: string;
   verificationDocumentName?: string;
@@ -572,9 +576,11 @@ export interface NotificationItem {
   body: string;
   created_at: string;
   type: NotificationType;
+  category?: 'opportunity' | 'event' | 'announcement' | 'mentorship' | 'verification' | 'admin' | 'general' | string;
   is_read: boolean;
   link?: string;
   related_entity_id?: string;
+  dedupe_key?: string;
 }
 
 export interface AuditLogEntry {
@@ -616,12 +622,17 @@ export interface RoleTransitionRequest {
 }
 
 export interface NotificationPreferences {
-  emailNotifications: boolean;
-  inAppNotifications: boolean;
-  digestFrequency: 'Instant' | 'Daily Digest' | 'Weekly Digest';
-  notifyOnMentorship: boolean;
-  notifyOnJobs: boolean;
-  notifyOnEvents: boolean;
+  user_id?: string;
+  mute_opportunities?: boolean;
+  mute_events?: boolean;
+  mute_announcements?: boolean;
+  emailNotifications?: boolean;
+  inAppNotifications?: boolean;
+  digestFrequency?: 'Instant' | 'Daily Digest' | 'Weekly Digest';
+  notifyOnMentorship?: boolean;
+  notifyOnJobs?: boolean;
+  notifyOnEvents?: boolean;
+  updated_at?: string;
 }
 
 export type AnnouncementSeverity = 'standard' | 'actionable' | 'governance' | 'academic';

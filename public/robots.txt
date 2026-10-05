@@ -1,6 +1,9 @@
 User-agent: *
 Allow: /$
 Allow: /?*
+Allow: /privacy
+Allow: /terms
+Allow: /data-governance
 Disallow: /dashboard
 Disallow: /directory
 Disallow: /mentorship
@@ -10,3 +13,5 @@ Disallow: /settings
 Disallow: /reports
 Disallow: /admin-console
 Disallow: /feedback
+
+Sitemap: https://nexalink.vit.edu.in/sitemap.xml

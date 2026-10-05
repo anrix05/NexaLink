@@ -10,7 +10,7 @@ export interface FileValidationResult {
 }
 
 export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
-export const MAX_FILES_PER_MESSAGE = 5;
+export const MAX_FILES_PER_MESSAGE = 4;
 
 /**
  * Sniffs the magic bytes of a file slice to verify actual content type

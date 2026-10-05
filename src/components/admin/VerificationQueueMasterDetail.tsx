@@ -17,6 +17,7 @@ import {
 import { MasterDetail, StatusBadge, EmptyState } from '../ui';
 import { AnimatedCheckIcon } from '../common/UIComponents';
 import type { UserRole } from '../../types';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 
 export interface VerificationItem {
   id: string;
@@ -85,6 +86,54 @@ export const VerificationQueueMasterDetail: React.FC<VerificationQueueMasterDeta
   });
 
   const selectedItem = items.find(i => i.id === selectedId) || null;
+  const [resolvedDocUrl, setResolvedDocUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const rawUrl =
+      selectedItem?.documentUrl ||
+      selectedItem?.raw?.verification_document_url ||
+      selectedItem?.raw?.verificationDocumentUrl ||
+      selectedItem?.raw?.clarification_requested?.documentUrl;
+
+    if (!rawUrl) {
+      setResolvedDocUrl(null);
+      return;
+    }
+
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('data:')) {
+      setResolvedDocUrl(rawUrl);
+      return;
+    }
+
+    if (isSupabaseConfigured()) {
+      const cleanPath = rawUrl.replace(/^proof-documents\//, '');
+      supabase.storage
+        .from('proof-documents')
+        .createSignedUrl(cleanPath, 3600)
+        .then(({ data }) => {
+          if (isMounted) {
+            setResolvedDocUrl(data?.signedUrl || rawUrl);
+          }
+        })
+        .catch(() => {
+          if (isMounted) setResolvedDocUrl(rawUrl);
+        });
+    } else {
+      setResolvedDocUrl(rawUrl);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    selectedItem?.id,
+    selectedItem?.documentUrl,
+    selectedItem?.raw?.verification_document_url,
+    selectedItem?.raw?.verificationDocumentUrl,
+    selectedItem?.raw?.clarification_requested?.documentUrl,
+    selectedItem?.raw?.clarificationRequested?.documentUrl
+  ]);
 
   const handleSelect = (id: string) => {
     setSelectedId(id);
@@ -198,6 +247,19 @@ export const VerificationQueueMasterDetail: React.FC<VerificationQueueMasterDeta
                       }
                       label={item.type === 'role_transition' ? 'Graduation transition' : item.role}
                     />
+                    {(Boolean(
+                      item.raw?.user_replied ||
+                      item.raw?.userReplied ||
+                      item.raw?.clarification_requested?.userReplied ||
+                      item.raw?.clarification_requested?.user_replied ||
+                      item.raw?.clarificationRequested?.userReplied ||
+                      item.raw?.clarificationRequested?.user_replied ||
+                      (item.documentUrl && (item.raw?.clarification_requested || item.raw?.clarificationRequest || item.raw?.clarificationRequested))
+                    )) && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-medium bg-[#FEF3C7] text-[#B45309] rounded">
+                        User replied
+                      </span>
+                    )}
                   </div>
 
                   <div className="text-[11px] text-[#6B7280] truncate mt-0.5">
@@ -252,7 +314,7 @@ export const VerificationQueueMasterDetail: React.FC<VerificationQueueMasterDeta
         </span>
         <span>
           <kbd className="px-1.5 py-0.5 bg-white border border-[#E5E7EB] rounded text-[10px] font-mono text-[#0A0A0A]">C</kbd>
-          <span className="ml-1">Clarify</span>
+          <span className="ml-1">Request Document</span>
         </span>
         <span>
           <kbd className="px-1.5 py-0.5 bg-white border border-[#E5E7EB] rounded text-[10px] font-mono text-[#0A0A0A]">R</kbd>
@@ -274,6 +336,19 @@ export const VerificationQueueMasterDetail: React.FC<VerificationQueueMasterDeta
               tone={selectedItem.type === 'role_transition' ? 'indigo' : 'neutral'}
               label={selectedItem.type === 'role_transition' ? 'Role transition' : selectedItem.role}
             />
+            {(Boolean(
+              selectedItem.raw?.user_replied ||
+              selectedItem.raw?.userReplied ||
+              selectedItem.raw?.clarification_requested?.userReplied ||
+              selectedItem.raw?.clarification_requested?.user_replied ||
+              selectedItem.raw?.clarificationRequested?.userReplied ||
+              selectedItem.raw?.clarificationRequested?.user_replied ||
+              (selectedItem.documentUrl && (selectedItem.raw?.clarification_requested || selectedItem.raw?.clarificationRequest || selectedItem.raw?.clarificationRequested))
+            )) && (
+              <span className="px-2 py-0.5 text-xs font-medium bg-[#FEF3C7] text-[#B45309] rounded-full">
+                User replied
+              </span>
+            )}
           </div>
           <p className="text-xs text-[#6B7280] mt-0.5">
             Registered: {selectedItem.email} · Department: {selectedItem.department}
@@ -286,10 +361,10 @@ export const VerificationQueueMasterDetail: React.FC<VerificationQueueMasterDeta
             type="button"
             onClick={() => onClarify(selectedItem.id)}
             className="px-3 py-1.5 border border-[#6B7280] hover:bg-white text-[#0A0A0A] text-xs font-medium rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
-            title="Press C to clarify"
+            title="Press C to request document"
           >
             <HelpCircle className="w-3.5 h-3.5" />
-            <span>Clarify</span>
+            <span>Request Document</span>
           </button>
           <button
             type="button"
@@ -307,7 +382,7 @@ export const VerificationQueueMasterDetail: React.FC<VerificationQueueMasterDeta
             title="Press A to approve"
           >
             <Check className="w-3.5 h-3.5" />
-            <span>Approve verification</span>
+            <span>Approve</span>
           </button>
         </div>
       </div>
@@ -337,7 +412,7 @@ export const VerificationQueueMasterDetail: React.FC<VerificationQueueMasterDeta
                   {selectedItem.email.includes('vit.edu.in') ? (
                     <span className="text-[#065F46]">✓ Institutional email validated</span>
                   ) : (
-                    <span className="text-[#B45309]">Personal email (proof required)</span>
+                    <span className="text-[#B45309]">Personal email ({resolvedDocUrl ? 'proof attached' : 'No document yet'})</span>
                   )}
                 </td>
               </tr>
@@ -361,13 +436,13 @@ export const VerificationQueueMasterDetail: React.FC<VerificationQueueMasterDeta
         </div>
       </div>
 
-      {/* Document Previewer with 60s Signed URL Link */}
+      {/* Document Previewer with Secure Signed URL Link */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h4 className="text-xs font-semibold text-[#0A0A0A]">Verification document</h4>
-          {selectedItem.documentUrl && (
+          {resolvedDocUrl && (
             <a
-              href={selectedItem.documentUrl}
+              href={resolvedDocUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-[#0A0A0A] hover:underline flex items-center gap-1 font-medium"
@@ -378,32 +453,42 @@ export const VerificationQueueMasterDetail: React.FC<VerificationQueueMasterDeta
           )}
         </div>
 
-        {selectedItem.documentUrl ? (
+        {resolvedDocUrl ? (
           <div className="border border-[#E5E7EB] rounded-lg p-4 bg-white text-center space-y-3">
             <div className="flex items-center justify-center gap-2 text-xs text-[#6B7280]">
               <FileText className="w-4 h-4 text-[#0A0A0A]" />
               <span className="font-medium text-[#0A0A0A]">
                 {selectedItem.documentName || 'Scanned_ID_Card.pdf'}
               </span>
-              <span>· 60s secure signed link</span>
+              <span>· Secure signed link</span>
             </div>
             {/* If it's an image, preview inline */}
-            {selectedItem.documentUrl.match(/\.(png|jpg|jpeg|webp)$/i) || selectedItem.documentUrl.startsWith('data:image') ? (
+            {resolvedDocUrl.match(/\.(png|jpg|jpeg|webp)($|\?)/i) || resolvedDocUrl.startsWith('data:image') ? (
               <img
-                src={selectedItem.documentUrl}
+                src={resolvedDocUrl}
                 alt="Verification Proof"
                 className="max-h-64 mx-auto rounded border border-[#E5E7EB] object-contain"
               />
             ) : (
-              <div className="p-6 bg-[#FAFAFA] rounded-md border border-dashed border-[#E5E7EB] text-xs text-[#6B7280]">
-                Document attached for compliance review.
+              <div className="p-6 bg-[#FAFAFA] rounded-md border border-dashed border-[#E5E7EB] text-xs text-[#6B7280] space-y-2">
+                <p>Document attached for compliance review.</p>
+                <a
+                  href={resolvedDocUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#0A0A0A] text-white rounded text-xs font-medium hover:bg-[#262626]"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>View / Download Document</span>
+                </a>
               </div>
             )}
           </div>
         ) : (
-          <div className="p-4 border border-[#E5E7EB] rounded-lg bg-white text-xs text-[#B45309] flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-[#B45309] shrink-0" />
-            <span>No proof document attached with this application. You may request clarification.</span>
+          <div className="p-4 border border-[#E5E7EB] rounded-lg bg-white text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-[#6B7280] shrink-0" />
+            <span className="font-semibold text-[#0A0A0A]">No document yet</span>
+            <span className="text-[#6B7280]">— This applicant did not attach an institutional proof document. You may approve, request document, or reject.</span>
           </div>
         )}
       </div>

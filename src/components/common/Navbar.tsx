@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ArrowRight
 } from 'lucide-react';
+import { NotificationBell } from '../notifications/NotificationBell';
 
 interface NavbarProps {
   activeTab: string;
@@ -376,92 +377,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                 </button>
 
                 {/* Notifications Dropdown */}
-                <div className="relative navbar-popover-container">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowNotifications(!showNotifications);
-                      setShowProfileMenu(false);
-                      if (notificationCount > 0) clearNotifications();
-                    }}
-                    className="p-2 text-[#6B7280] hover:text-[#0A0A0A] transition relative rounded-lg border border-[#E5E7EB] hover:bg-[#FAFAFA] bg-white touch-target-44"
-                    title="Notifications"
-                  >
-                    <Bell className="w-4 h-4" />
-                    {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#0A0A0A] text-white text-[9px] font-mono font-bold flex items-center justify-center">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </button>
-
-                  {showNotifications && (
-                    <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-[#E5E7EB] rounded-xl p-4 z-50 text-xs space-y-3 font-sans animate-in fade-in zoom-in-95 duration-150">
-                      <div className="flex items-center justify-between pb-2.5 border-b border-[#E5E7EB] font-sans font-medium text-xs text-[#6B7280]">
-                        <span>Notifications & alerts</span>
-                        <span className="px-2 py-0.5 bg-[#FAFAFA] border border-[#E5E7EB] rounded-full text-[#0A0A0A] tabular-nums font-medium text-[11px]">
-                          {unreadCount} unread
-                        </span>
-                      </div>
-
-                      <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
-                        {notifications.length === 0 ? (
-                          <div className="flex flex-col items-center justify-center py-8 text-center px-4">
-                            <Bell className="w-8 h-8 text-[#E5E7EB] mb-3" strokeWidth={1} />
-                            <p className="text-[#6B7280] text-sm font-medium">All caught up</p>
-                            <p className="text-[#6B7280] text-xs mt-1">Check back later for updates</p>
-                          </div>
-                        ) : (
-                          <>
-                            {unreadCount > 0 && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  markAllNotificationsRead();
-                                }}
-                                className="w-full text-right text-xs font-medium text-[#0A0A0A] hover:text-[#6B7280] mb-1 cursor-pointer"
-                              >
-                                Mark all as read
-                              </button>
-                            )}
-                            {notifications.map(n => (
-                              <div
-                                key={n.id}
-                                onClick={() => {
-                                  markNotificationRead(n.id);
-                                  if (n.link) {
-                                    if (n.link.startsWith('messaging?contact=')) {
-                                      setActiveTab('messaging');
-                                    } else {
-                                      setActiveTab(n.link);
-                                    }
-                                  }
-                                  setShowNotifications(false);
-                                }}
-                                className={`p-3 rounded-lg border cursor-pointer transition ${
-                                  n.is_read
-                                    ? 'bg-[#FAFAFA] border-[#E5E7EB] opacity-75'
-                                    : 'bg-white border-[#0A0A0A] text-[#0A0A0A] font-medium'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between font-sans font-medium text-xs text-[#0A0A0A] mb-1">
-                                  <span>{n.title}</span>
-                                  <span className="text-[#6B7280] text-[10px] capitalize">{n.type}</span>
-                                </div>
-                                <p className="text-[#374151] text-xs leading-snug font-normal">
-                                  {n.body}
-                                </p>
-                                <span className="block text-[11px] text-[#6B7280] mt-1">
-                                  {n.created_at}
-                                </span>
-                              </div>
-                            ))}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <NotificationBell activeTab={activeTab} setActiveTab={setActiveTab} />
 
                 {/* Profile Identity Card & Dropdown Menu */}
                 <div className="relative navbar-popover-container">

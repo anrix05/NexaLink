@@ -21,24 +21,24 @@ export const FinalCtaSection: React.FC<FinalCtaSectionProps> = ({ onSignIn, onCr
 
       <div className="app-container space-y-16 relative z-10">
         
-        {/* 5.10 Testimonial: Single Quiet Pull-Quote */}
+        {/* 5.10 Institutional Mission Card */}
         <Reveal delay={0.05}>
           <div className="max-w-3xl mx-auto p-6 sm:p-8 bg-white border border-[#E5E7EB] rounded-2xl relative">
             <Quote className="w-8 h-8 text-[#0A0A0A]/10 absolute top-6 right-6 pointer-events-none" />
             <div className="space-y-4">
-              <Eyebrow>Alumni perspective</Eyebrow>
+              <Eyebrow>Institutional mission</Eyebrow>
               <p className="text-base sm:text-lg text-[#0A0A0A] font-serif italic leading-relaxed">
-                “Vidyalankar Institute of Technology provided the architectural foundation for my engineering journey. Staying directly connected with junior engineers through structured mentorship is both rewarding and vital for industry readiness.”
+                “NexaLink was built to give every Vidyalankar engineering student access to the structured, verified alumni network they deserve — turning career conversations from luck into a reliable institutional resource.”
               </p>
               <div className="pt-2 border-t border-[#E5E7EB] flex items-center justify-between">
                 <div>
-                  <span className="text-xs font-bold text-[#0A0A0A] block">Rushabh Sanghavi</span>
+                  <span className="text-xs font-bold text-[#0A0A0A] block">NexaLink Project Team</span>
                   <span className="text-[11px] text-[#6B7280]">
-                    Senior Software Engineer at Google · Carnegie Mellon University MS Alum · VIT Wadala
+                    Vidyalankar Institute of Technology · Alumni Engagement Cell
                   </span>
                 </div>
                 <span className="px-2 py-0.5 rounded bg-[#FAFAFA] border border-[#E5E7EB] text-[10px] font-sans font-medium text-[#0A0A0A]">
-                  Verified
+                  Institutional
                 </span>
               </div>
             </div>

@@ -13,6 +13,9 @@ export interface PendingAttachmentItem {
   sizeStr: string;
   mimeType: 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf';
   previewUrl?: string;
+  storagePath?: string;
+  width?: number;
+  height?: number;
   progress: number;
   status: 'validating' | 'processing' | 'uploading' | 'ready' | 'error';
   error?: string;

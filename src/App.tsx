@@ -33,7 +33,13 @@ import { DataGovernancePage } from './pages/legal/DataGovernancePage';
 import { IntroOverlay } from './components/intro/IntroOverlay';
 import { StyleguidePage } from './pages/dev/StyleguidePage';
 import { PublicCertificateVerifyPage } from './pages/verify/PublicCertificateVerifyPage';
+import { validateDataMode } from './lib/dataMode';
+import { DataModeErrorBanner } from './components/common/DataModeErrorBanner';
+import { GlobalErrorToaster } from './components/common/GlobalErrorToaster';
+import { useData } from './context/DataContext';
+import { NotificationToast } from './components/notifications/NotificationToast';
 import type { AlumniProfile } from './types';
+
 
 const getInitialActiveTab = (): string => {
   if (typeof window === 'undefined') return 'landing';
@@ -71,6 +77,19 @@ const MainContent: React.FC = () => {
   const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => typeof window !== 'undefined' && window.innerWidth < 1024);
   const [adminBypassWarning, setAdminBypassWarning] = useState<boolean>(false);
   const { currentRole, currentUser, isAuthenticated, welcomeRevealName, clearWelcomeReveal, isCheckingSession, isRecoveryMode } = useAuth();
+  const { latestIncomingNotification, dismissIncomingNotificationToast, markNotificationRead } = useData();
+  const [isOffline, setIsOffline] = React.useState(() => typeof navigator !== 'undefined' && !navigator.onLine);
+
+  React.useEffect(() => {
+    const onOnline = () => setIsOffline(false);
+    const onOffline = () => setIsOffline(true);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
 
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -111,6 +130,75 @@ const MainContent: React.FC = () => {
       setActiveTab('reset-password');
     }
   }, [isRecoveryMode]);
+
+  // ── URL ↔ State synchronisation (Back/Forward button support) ───────────────
+  //
+  // Tab-to-path mapping (public/private routes get pretty paths; internal
+  // portal tabs use ?tab= params so we don't need server routing changes).
+  const TAB_PATH_MAP: Record<string, string> = {
+    landing: '/',
+    auth: '/auth',
+    'reset-password': '/reset-password',
+    verify: '/verify',
+    styleguide: '/dev/styleguide',
+    'accept-admin-invite': '/accept-admin-invite',
+    privacy: '/privacy',
+    terms: '/terms',
+    'data-governance': '/data-governance',
+  };
+
+  const tabToUrl = (tab: string, sub?: string): string => {
+    if (TAB_PATH_MAP[tab]) return TAB_PATH_MAP[tab];
+    const url = new URL(window.location.href);
+    url.pathname = '/';
+    url.search = '';
+    url.searchParams.set('tab', tab);
+    if (sub) url.searchParams.set('subtab', sub);
+    return url.pathname + url.search;
+  };
+
+  // Push history entry whenever activeTab changes (driven by JS state, not popstate).
+  const isPopstate = React.useRef(false);
+
+  React.useEffect(() => {
+    if (isPopstate.current) {
+      isPopstate.current = false;
+      return;
+    }
+    const newUrl = tabToUrl(activeTab);
+    const currentUrl = window.location.pathname + window.location.search;
+    if (newUrl !== currentUrl) {
+      window.history.pushState({ tab: activeTab }, '', newUrl);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // Listen for browser Back/Forward and restore state.
+  React.useEffect(() => {
+    const onPopState = () => {
+      isPopstate.current = true;
+      const path = window.location.pathname;
+      const params = new URLSearchParams(window.location.search);
+      if (path.startsWith('/verify')) { setActiveTab('verify'); return; }
+      if (path.startsWith('/reset-password')) { setActiveTab('reset-password'); return; }
+      if (path === '/dev/styleguide' || path === '/styleguide') { setActiveTab('styleguide'); return; }
+      if (path === '/auth') { setActiveTab('auth'); return; }
+      if (path === '/privacy') { setActiveTab('privacy'); return; }
+      if (path === '/terms') { setActiveTab('terms'); return; }
+      if (path === '/data-governance') { setActiveTab('data-governance'); return; }
+      const tabParam = params.get('tab');
+      if (tabParam) {
+        const sub = params.get('subtab') ?? undefined;
+        handleTabChange(tabParam, sub);
+      } else {
+        setActiveTab('landing');
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // ── end URL sync ─────────────────────────────────────────────────────────────
 
   React.useEffect(() => {
     window.scrollTo(0, 0);
@@ -302,6 +390,28 @@ const MainContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] text-[#0A0A0A] font-sans antialiased flex flex-col justify-between w-full max-w-full overflow-x-clip min-w-0">
+      {/* Skip-to-content: hidden until focused (WCAG 2.4.1) */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[9999] focus:px-4 focus:py-2 focus:bg-[#0A0A0A] focus:text-white focus:text-sm focus:font-medium focus:rounded-lg focus:shadow-lg"
+      >
+        Skip to main content
+      </a>
+
+      {/* Global offline banner (B18) */}
+      {isOffline && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="fixed top-0 left-0 right-0 z-[9998] flex items-center justify-center gap-2 bg-[#B45309] text-white text-xs font-medium py-2 px-4 text-center"
+        >
+          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728M15.536 8.464a5 5 0 010 7.072M12 11v1m0 4h.01M9.172 14.828A4.001 4.001 0 0112 7a4 4 0 012.828 7.828" />
+          </svg>
+          You’re offline. Check your network connection to continue using NexaLink.
+        </div>
+      )}
+
       <AnimatePresence>
         {welcomeRevealName && (
           <WelcomeReveal
@@ -337,7 +447,7 @@ const MainContent: React.FC = () => {
           )}
         </AppShell>
       ) : (
-        <main className="flex-1 w-full max-w-full min-w-0 overflow-x-clip">
+        <main id="main-content" className="flex-1 w-full max-w-full min-w-0 overflow-x-clip">
           <AnimatePresence mode="wait">
             {activeTab === 'auth' ? (
               <motion.div
@@ -454,11 +564,30 @@ const MainContent: React.FC = () => {
 
       {/* Footer rendered for public and verified portal pages only (hidden for unverified pending and verify views) */}
       {!isUnverified && !isPortalTab && activeTab !== 'verify' && <Footer setActiveTab={setActiveTab} isPublicPage={true} />}
+
+      {/* Global Realtime Notification Toast */}
+      <NotificationToast
+        notification={latestIncomingNotification}
+        onDismiss={dismissIncomingNotificationToast}
+        onClick={(n) => {
+          if (!n.is_read) markNotificationRead(n.id);
+          dismissIncomingNotificationToast();
+          if (n.link) {
+            if (n.link.startsWith('messaging?contact=')) {
+              setActiveTab('messaging');
+            } else {
+              setActiveTab(n.link);
+            }
+          }
+        }}
+      />
     </div>
   );
 };
 
 export function App() {
+  const dataModeStatus = validateDataMode();
+
   const [shouldMountIntro] = useState<boolean>(() => {
     if (typeof document === 'undefined') return false;
     try {
@@ -475,9 +604,14 @@ export function App() {
     return document.documentElement.dataset.intro === 'play';
   });
 
+  if (!dataModeStatus.ok) {
+    return <DataModeErrorBanner reason={dataModeStatus.errorReason || 'Invalid data mode configuration.'} />;
+  }
+
   return (
     <AuthProvider>
       <DataProvider>
+        <GlobalErrorToaster />
         {shouldMountIntro && <IntroOverlay />}
         <MainContent />
       </DataProvider>
@@ -486,3 +620,4 @@ export function App() {
 }
 
 export default App;
+

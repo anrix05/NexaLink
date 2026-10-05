@@ -127,15 +127,43 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
     - **Ghost Session Protection:** Implemented `isMockSessionRef` in `AuthContext` to prevent asynchronous Supabase token refreshes from forcefully logging out local development mock sessions.
     - **Landing Page Polish:** Simplified hero copy and navigation IDs (`#overview`, `#features`, `#benefits`, `#academic`) for better readability and SEO indexing.
 
+18. **Live Database Reality & Sprint 2 Persistence Hardening**
+    - **Database Reality & Expand-Only Protocol:** Remote Supabase project `wyjfmtksmumvzqugppys` was found running on the initial client-shaped schema with permissive RLS, missing columns, and missing RPCs. All fixes strictly follow the **Expand-Only protocol** (additive tables, columns, functions, policies; zero drops or breaking changes).
+    - **Elimination of the Mock Resurrection Loop:** In `DataContext.tsx`, empty database tables (`rows.length === 0`) previously fell back to `mockData.INITIAL_*` on refresh, tricking users into seeing mock data overwrite new entries. In live mode (`isLiveMode()`), tables initialize strictly to `[]` when empty and hydrate exclusively from Supabase.
+    - **Domain Services Architecture:** Decoupled raw PostgREST queries from React context into strongly typed domain services:
+      - `eventsService.ts`: Full event CRUD, RSVP attendee tracking, feedback logging, and date/status normalization.
+      - `jobsService.ts`: Opportunity management, status/branch normalization, and student application lifecycle (`job_applications`).
+      - `mentorshipService.ts`: Title-case enum mapping (`'Pending'`, `'Accepted'`, `'Declined'`, `'Completed'`), meeting notes, and feedback persistence.
+      - `messagingService.ts`: Realtime chat streaming, client-side outbox queuing, duplicate rejection, and idempotent dispatch.
+      - `announcementsService.ts` & `notificationsService.ts`: Institutional broadcast queries and read-status tracking.
+      - `supabaseRunner.ts`: Robust PostgREST query runner mapping error codes (`42501` RLS, `PGRST202` RPC missing, `23505` unique violation, `MutationDidNotPersistError`).
+    - **P0 Schema Hotfixes Executed on Live DB:**
+      - `users`: Added `storage_path` column and installed `trg_protect_user_privileged_fields` trigger to block non-admin self-elevation to admin or self-verification.
+      - `announcements`: Added `views` counter column.
+      - `chat_messages`: Added `client_message_id`, `reactions`, `is_reported`, `report_reason`, `voice_note_url`, `voice_note_duration`, `reply_to_id`, and `attachments`.
+      - `mentorship_requests`: Added `meeting_notes`, `decline_reason`, `scheduled_time`, and `feedback`.
+      - `jobs`: Added `moderation_status`, `rejection_reason`, and `target_branches`.
+    - **Phase B Expand-Only Migrations:**
+      - Realtime streaming: Added `chat_messages` to `supabase_realtime` publication and installed idempotent `send_message` RPC.
+      - Event & Opportunity extensions: Added `host_id`, `host_name`, `host_role`, `lifecycle_status`, `checkin_code`, `checkin_opens_at`, `starts_at`, `ends_at` to `events`, and created `public.job_applications` with RLS.
+      - Storage RLS Hardening: Added `UPDATE` policy on `storage.objects` for user folders (fixing `{ upsert: true }` 42501 errors when re-uploading avatars/resumes), and added `INSERT` policy for `event-certificates`.
+    - **End-to-End Document Verification Resolution:**
+      - Fixed `RegistrationWizard.tsx` to retain uploaded storage URLs and transmit `verificationDocumentUrl` in the registration payload.
+      - Fixed `VerificationPendingPage.tsx` to upload clarification files to `proof-documents` storage before resubmission rather than passing temporary `blob:` URLs.
+      - Fixed `VerificationQueueMasterDetail.tsx` to dynamically resolve fresh 1-hour signed URLs from the private `proof-documents` bucket for images and PDFs, providing an interactive **"View / Download Document"** action and inline image preview.
+    - **Data Mode & Global Error Telemetry:**
+      - `src/lib/dataMode.ts`: Enforces strict data mode (`live` vs `mock`) and mounts an un-dismissible `DataModeErrorBanner.tsx` if environment variables are mismatched.
+      - `GlobalErrorToaster.tsx`: Accessible toast notification system with a one-click **"Copy Debug Payload"** feature that captures operation, table, payload, and Supabase error codes for instant troubleshooting.
+
 ---
 
 ## 3. Technology Stack
 
 - **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, Framer Motion, Lucide React icons
-- **State Management:** React Context API (`AuthContext`, `DataContext`) with optimistic RPC integration
+- **State Management:** React Context API (`AuthContext`, `DataContext`) backed by strongly-typed Domain Services layer (`eventsService`, `jobsService`, `mentorshipService`, `messagingService`, `announcementsService`, `notificationsService`)
 - **Export Capabilities:** `jspdf`, `jspdf-autotable`, `xlsx`, `papaparse`
-- **Backend & Cloud:** Supabase Hosted PostgreSQL (17 Relational Tables), GoTrue Auth, Realtime WebSockets, Supabase Edge Functions (`auth-login-guard`, `accept-admin-invite`)
-- **Security:** `FORCE ROW LEVEL SECURITY`, `private` schema helper RPCs, append-only SHA-256 hash-chained `audit_logs`, server-side brute-force lockout, 60s signed storage URLs
+- **Backend & Cloud:** Supabase Hosted PostgreSQL (15 Relational Tables), GoTrue Auth, Realtime WebSockets (`chat_messages`, `users`, `admin_invites`), Storage Buckets (`avatars`, `resumes`, `proof-documents`, `chat-attachments`, `event-certificates`)
+- **Security:** `FORCE ROW LEVEL SECURITY`, `protect_user_privileged_fields` trigger, `is_admin()` security definer functions, storage owner-scoped RLS policies, 1-hour signed private document URLs, and client-side error telemetry
 
 ---
 
@@ -147,4 +175,7 @@ NexaLink (formerly AlumniConnect) is a centralized web platform engineered for V
 - [x] **Phase 4: Backend Hardening & Privileged RPC Architecture** (FORCE RLS, security definer stored procedures, cryptographic audit trail, server-side lockout, storage hardening)
 - [x] **Phase 5: "Open Canvas" Redesign & Design System Linting** (Unbordered whitespace architecture, AppShell, TopBar, SidebarNav, PageHeader, StatStrip, ListRow, FocusPanel, MasterDetail, RightRail, UnderlineTabs, zero design lint warnings)
 - [x] **v3.0 Release:** Unified institutional platform with 4 fluid responsive tiers, verified graduation safeguards, and production security guards
+- [x] **v3.2 Persistence & Live Cloud Synchronization:** Expand-only live Supabase hardening, elimination of mock resurrection loop, domain services layer, Realtime chat streaming, job applications persistence, storage upsert policies, and end-to-end admin proof document viewer resolution
+- [x] **v3.3 Security & RLS Policy Hardening:** Search-path escalation fix on `is_admin()`, lockout shielding on `login_attempts`, server-enforced chat edit (≤15 min) and delete (≤60 min) windows, RSVP/feedback column-level trigger guards on `events`, poster note isolation on `job_applications`, role transition insert guards, and services layer unit test suite (`scripts/test-services.mjs` 18/18 passing)
+
 

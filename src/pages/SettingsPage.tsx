@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { uploadAvatar } from '../lib/storage';
 import { useData } from '../context/DataContext';
@@ -97,6 +97,17 @@ export const SettingsPage: React.FC = () => {
   const [preferredHigherStudies, setPreferredHigherStudies] = useState(studentUser.preferredHigherStudies || '');
   const [certifications] = useState<string[]>(studentUser.certifications || []);
   const [resumeUrl, setResumeUrl] = useState(studentUser.resumeUrl || '');
+
+  // Keep state synchronized if currentUser profile fields update
+  useEffect(() => {
+    if (currentUser) {
+      if ((currentUser as any).semester) setSemester((currentUser as any).semester);
+      if ((currentUser as any).careerGoal) setCareerGoal((currentUser as any).careerGoal);
+      if ((currentUser as any).preferredIndustry) setPreferredIndustry((currentUser as any).preferredIndustry);
+      if ((currentUser as any).preferredHigherStudies) setPreferredHigherStudies((currentUser as any).preferredHigherStudies);
+      if ((currentUser as any).resumeUrl) setResumeUrl((currentUser as any).resumeUrl);
+    }
+  }, [currentUser]);
 
   // Alumni specific fields
   const [graduationYear, setGraduationYear] = useState(alumniUser.graduationYear || new Date().getFullYear());
@@ -475,12 +486,20 @@ export const SettingsPage: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-5 text-xs">
                 <div>
                   <label className="app-label text-[#0A0A0A] font-bold">Semester</label>
-                  <input
-                    type="text"
-                    value={semester}
-                    onChange={e => setSemester(e.target.value as any)}
-                    className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA]"
-                  />
+                  <div className="relative">
+                    <select
+                      value={semester || 'Semester 1'}
+                      onChange={e => setSemester(e.target.value as any)}
+                      className="app-input w-full font-bold border-[#E5E7EB] rounded-lg bg-[#FAFAFA] appearance-none pr-8 cursor-pointer"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
+                        <option key={sem} value={`Semester ${sem}`}>
+                          Semester {sem}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-[#6B7280] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
                 </div>
 
                 <div>

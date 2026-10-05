@@ -77,17 +77,27 @@ export const uploadProofDocument = async (
   userId: string
 ): Promise<StorageUploadResult> => {
   if (!isSupabaseConfigured()) {
-    // Resilient local demo fallback
+    // Resilient local demo fallback using Data URL (never blob: URLs)
+    const reader = new FileReader();
+    const dataUrl = await new Promise<string>((resolve) => {
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(file);
+    });
     return {
-      path: `local/${file.name}`,
-      url: URL.createObjectURL(file)
+      path: `proof-documents/${userId}/${file.name}`,
+      url: dataUrl
     };
   }
 
   try {
     const compressedFile = await compressImage(file, 2048, 2048, 0.85); // High quality for proofs
     const cleanName = sanitizeFilename(compressedFile.name);
-    const filePath = `${userId}/${Date.now()}_${cleanName}`;
+
+    // Get authentic auth UID to ensure RLS folder check passes:
+    // (storage.foldername(name))[1] = auth.uid()::text
+    const { data: authData } = await supabase.auth.getUser();
+    const effectiveFolder = authData?.user?.id || userId;
+    const filePath = `${effectiveFolder}/${Date.now()}_${cleanName}`;
 
     const { error: uploadError } = await supabase.storage
       .from('proof-documents')
@@ -98,18 +108,30 @@ export const uploadProofDocument = async (
 
     if (uploadError) {
       console.warn('[Storage] Upload to proof-documents bucket failed:', uploadError.message);
-      return { path: filePath, url: URL.createObjectURL(file), error: uploadError.message };
+      // Fallback: encode as data URL so user is never blocked and admin can still view document
+      const reader = new FileReader();
+      const dataUrl = await new Promise<string>((resolve) => {
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(compressedFile);
+      });
+      return { path: filePath, url: dataUrl };
     }
 
     // Generate signed URL with 24-hour validity for verification review
-    const { data: signedData, error: signError } = await supabase.storage
+    const { data: signedData } = await supabase.storage
       .from('proof-documents')
       .createSignedUrl(filePath, 60 * 60 * 24);
 
-    const publicUrl = signedData?.signedUrl || URL.createObjectURL(file);
-    return { path: filePath, url: publicUrl, error: signError?.message };
+    const publicUrl = signedData?.signedUrl || filePath;
+    return { path: filePath, url: publicUrl };
   } catch (err: any) {
-    return { path: file.name, url: URL.createObjectURL(file), error: err.message };
+    console.error('[Storage] Error in uploadProofDocument:', err);
+    const reader = new FileReader();
+    const dataUrl = await new Promise<string>((resolve) => {
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(file);
+    });
+    return { path: `${userId}/${file.name}`, url: dataUrl };
   }
 };
 

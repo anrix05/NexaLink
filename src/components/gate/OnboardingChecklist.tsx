@@ -7,7 +7,7 @@ import type { GateDerivedState } from './ReviewStatusHero';
 export interface OnboardingChecklistProps {
   state: VerificationStatePayload;
   derivedState: GateDerivedState;
-  onUploadClick: () => void;
+  onUploadClick?: () => void;
   onVerifyRecoveryClick: () => void;
   className?: string;
 }
@@ -15,13 +15,10 @@ export interface OnboardingChecklistProps {
 export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
   state,
   derivedState,
-  onUploadClick,
   onVerifyRecoveryClick,
   className = ''
 }) => {
   const isPending = state.status === 'Pending Verification' || state.status === 'Needs Clarification';
-  const hasDoc = state.hasDocument;
-  const docName = state.documentName || 'Proof document';
   const emailVerified = state.recoveryEmailVerified;
   const maskedEmail = state.recoveryEmailMasked || 'personal email';
 
@@ -29,8 +26,8 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
   const submittedStr = `Submitted ${formatIstTimestamp(state.submittedAt)}`;
 
   return (
-    <div className={`w-full flex flex-col gap-3 ${className}`}>
-      <div className="flex items-center justify-between">
+    <div className={`w-full flex flex-col gap-2 ${className}`}>
+      <div className="flex items-center justify-between pb-1">
         <h2 className="text-sm font-medium text-[#0A0A0A]">
           What happens next
         </h2>
@@ -41,7 +38,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
         )}
       </div>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col border-t border-[#E5E7EB]">
         {/* Row 1: Registration submitted */}
         <ChecklistRow
           status="done"
@@ -63,7 +60,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
               <button
                 type="button"
                 onClick={onVerifyRecoveryClick}
-                className="text-xs font-medium text-[#0A0A0A] hover:underline px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-[#0A0A0A]"
+                className="text-xs font-medium text-[#0A0A0A] hover:underline px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-[#0A0A0A] min-h-[44px] flex items-center"
               >
                 Enter code
               </button>
@@ -71,28 +68,12 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
           }
         />
 
-        {/* Row 3: Proof document (Replace stays available while in review!) */}
-        <ChecklistRow
-          status={hasDoc ? 'done' : 'active'}
-          title="Proof document"
-          subtitle={hasDoc ? docName : 'Verification document required'}
-          action={
-            <button
-              type="button"
-              onClick={onUploadClick}
-              className="text-xs font-medium text-[#0A0A0A] hover:underline px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-[#0A0A0A]"
-            >
-              {hasDoc ? 'Replace' : 'Upload'}
-            </button>
-          }
-        />
-
-        {/* Row 4: Administrator review */}
+        {/* Row 3: Administrator review */}
         <ChecklistRow
           status={
             state.status === 'Verified'
               ? 'done'
-              : derivedState === 'in_review'
+              : derivedState === 'in_review' || (derivedState as any) === 'action_needed'
               ? 'active'
               : 'locked'
           }
@@ -107,3 +88,4 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
     </div>
   );
 };
+

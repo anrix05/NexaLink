@@ -1,18 +1,26 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Scale, Lock, BookOpen, AlertTriangle, MessageSquareWarning } from 'lucide-react';
+import { ArrowLeft, Scale, BookOpen, AlertTriangle, MessageSquareWarning, ShieldCheck } from 'lucide-react';
+import { SUPPORT_EMAIL } from '../../config/auth';
+import { usePageMeta } from '../../hooks/usePageMeta';
 
 interface TermsOfServicePageProps {
   setActiveTab?: (tab: string) => void;
 }
 
 export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ setActiveTab }) => {
+  usePageMeta({
+    title: 'Terms of Service',
+    description: 'Terms of Service, acceptable use guidelines, and governance policies for NexaLink, Vidyalankar Institute of Technology.',
+    noIndex: false
+  });
+
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#FAFAFA] font-sans text-[#0A0A0A] py-12 md:py-20">
       <div className="max-w-4xl mx-auto px-6">
         <button
           onClick={() => setActiveTab?.('landing')}
-          className="inline-flex items-center gap-2 text-xs font-medium text-[#6B7280] hover:text-[#0A0A0A] transition-colors mb-8"
+          className="inline-flex items-center gap-2 text-xs font-medium text-[#6B7280] hover:text-[#0A0A0A] transition-colors mb-8 cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Home
@@ -34,53 +42,61 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ setActiv
               </h1>
             </div>
             <p className="text-sm md:text-base text-[#6B7280] max-w-2xl leading-relaxed">
-              These terms govern your use of the NexaLink platform. By creating an account and accessing the platform, you agree to adhere to these rules of conduct and policies.
+              These terms govern access and use of the NexaLink institutional platform by students, alumni, and faculty of Vidyalankar Institute of Technology (VIT Wadala).
             </p>
-            <p className="text-xs text-[#6B7280] pt-2">
-              Effective Date: {new Date().getFullYear()}-01-01 • Version 1.0
-            </p>
+            <div className="flex flex-wrap items-center gap-4 text-xs text-[#6B7280] pt-2">
+              <span>Effective Date: 2026-10-05</span>
+              <span>•</span>
+              <span>Version: 1.1 (Production Pilot)</span>
+            </div>
           </header>
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-10 items-start">
-            
             {/* Main Content Area */}
-            <div className="md:col-span-8 space-y-10">
-              
-              <div className="p-5 bg-amber-50 border border-amber-200/60 rounded-xl flex items-start gap-3 text-sm font-medium text-amber-900">
-                <Lock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <p>
-                  <strong>Note for Administration:</strong> This is a structural placeholder. Prior to production launch, please have your institutional legal team review and finalize this document.
-                </p>
-              </div>
+            <div className="md:col-span-8 space-y-10 text-xs sm:text-sm">
+              <section className="space-y-4">
+                <div className="flex items-center gap-2 text-[#0A0A0A]">
+                  <ShieldCheck className="w-5 h-5" />
+                  <h2 className="font-display font-black text-lg sm:text-xl tracking-tight">1. Academic Pilot Disclaimer</h2>
+                </div>
+                <div className="space-y-3 text-[#374151] leading-relaxed">
+                  <p>
+                    NexaLink is currently operated as an internal academic pilot for the Vidyalankar Institute of Technology engineering community. The platform is intended to facilitate verified peer networking, mentorship matching, and alumni data centralization.
+                  </p>
+                  <p>
+                    Participation in NexaLink does not constitute official college endorsement of external commercial job postings, referral outcomes, or third-party employer hiring decisions.
+                  </p>
+                </div>
+              </section>
 
               <section className="space-y-4">
                 <div className="flex items-center gap-2 text-[#0A0A0A]">
                   <BookOpen className="w-5 h-5" />
-                  <h2 className="font-display font-black text-xl tracking-tight">1. Platform Eligibility</h2>
+                  <h2 className="font-display font-black text-lg sm:text-xl tracking-tight">2. Platform Eligibility & Credential Verification</h2>
                 </div>
-                <div className="prose prose-sm max-w-none text-[#374151] leading-relaxed">
-                  <p>Access to NexaLink is strictly limited to verified members of Vidyalankar Institute of Technology, including:</p>
-                  <ul className="list-disc pl-5 mt-2 space-y-1">
-                    <li>Currently enrolled students with a valid PRN/Enrollment Number.</li>
-                    <li>Graduated alumni verified against institutional records.</li>
-                    <li>Current faculty members and institutional administrators.</li>
+                <div className="space-y-3 text-[#374151] leading-relaxed">
+                  <p>Access is restricted strictly to bona fide members of Vidyalankar Institute of Technology:</p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li><strong>Students:</strong> Enrolled students with an active PRN and valid college email or recovery ID.</li>
+                    <li><strong>Alumni:</strong> Graduated engineering cohorts verified through official institutional graduation rosters or credential documentation.</li>
+                    <li><strong>Faculty & Staff:</strong> Active teaching and research staff holding institutional credentials.</li>
                   </ul>
-                  <p className="mt-2">Falsification of identity or institutional affiliation will result in immediate and permanent termination of access.</p>
+                  <p>Falsification of enrollment numbers, PRNs, or employee IDs will result in permanent account deactivation.</p>
                 </div>
               </section>
 
               <section className="space-y-4">
                 <div className="flex items-center gap-2 text-[#0A0A0A]">
                   <AlertTriangle className="w-5 h-5" />
-                  <h2 className="font-display font-black text-xl tracking-tight">2. Code of Conduct</h2>
+                  <h2 className="font-display font-black text-lg sm:text-xl tracking-tight">3. Acceptable Use & Conduct</h2>
                 </div>
-                <div className="prose prose-sm max-w-none text-[#374151] leading-relaxed">
-                  <p>NexaLink is a professional and academic networking environment. Users must agree to:</p>
-                  <ul className="list-disc pl-5 mt-2 space-y-1">
-                    <li>Maintain a professional, respectful tone in all public and private interactions.</li>
-                    <li>Refrain from posting spam, promotional content, or malicious links.</li>
-                    <li>Respect the privacy of other members by not scraping or distributing their contact information.</li>
-                    <li>Ensure all job referrals and opportunities posted are legitimate and relevant.</li>
+                <div className="space-y-3 text-[#374151] leading-relaxed">
+                  <p>All members agree to uphold high standards of professional integrity:</p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li>Maintain polite, constructive, and professional communication across mentorship and NexaChats threads.</li>
+                    <li>Never scrape, bulk harvest, or re-distribute peer contact details outside the platform.</li>
+                    <li>Ensure all shared job referrals and corporate opportunities represent legitimate professional openings.</li>
+                    <li>Refrain from posting promotional spam, unauthorized advertising, or malicious content.</li>
                   </ul>
                 </div>
               </section>
@@ -88,37 +104,37 @@ export const TermsOfServicePage: React.FC<TermsOfServicePageProps> = ({ setActiv
               <section className="space-y-4">
                 <div className="flex items-center gap-2 text-[#0A0A0A]">
                   <MessageSquareWarning className="w-5 h-5" />
-                  <h2 className="font-display font-black text-xl tracking-tight">3. Content Moderation & Liability</h2>
+                  <h2 className="font-display font-black text-lg sm:text-xl tracking-tight">4. Moderation & Account Suspension</h2>
                 </div>
-                <div className="prose prose-sm max-w-none text-[#374151] leading-relaxed">
+                <div className="space-y-3 text-[#374151] leading-relaxed">
                   <p>
-                    Vidyalankar Institute of Technology reserves the right, but assumes no obligation, to monitor communications and content posted on NexaLink. We may remove any content or suspend accounts that violate these Terms at our sole discretion.
-                  </p>
-                  <p className="mt-2">
-                    The institution is not liable for agreements, interactions, or outcomes resulting from mentorship or employment connections made through the platform.
+                    Vidyalankar Institute of Technology reserves the right to review reported content, moderate job postings, and suspend accounts that breach institutional guidelines or student conduct codes.
                   </p>
                 </div>
               </section>
-
             </div>
 
             {/* Sidebar Contact Area */}
             <div className="md:col-span-4 sticky top-6">
-              <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 shadow-sm space-y-5">
-                <h3 className="font-display font-bold text-sm text-[#0A0A0A]">
-                  Legal Contact
+              <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 shadow-none space-y-4 font-sans text-xs">
+                <h3 className="font-bold text-sm text-[#0A0A0A] flex items-center gap-2">
+                  <Scale className="w-4 h-4 text-[#0A0A0A]" /> Platform Governance
                 </h3>
-                <div className="text-sm text-[#6B7280] space-y-3 leading-relaxed">
-                  <p>For reports of abuse, terms violations, or legal inquiries, please contact the administrative team.</p>
-                  <div className="pt-2 border-t border-[#E5E7EB]">
-                    <p className="font-bold text-[#0A0A0A] mt-2">Disciplinary Commitee</p>
-                    <p className="font-mono text-xs mt-1">legal@vit.edu.in</p>
-                    <p className="font-mono text-xs mt-1">+91 22 2416 1126</p>
+                <div className="text-[#6B7280] space-y-3 leading-relaxed">
+                  <p>For terms inquiries, reports of misconduct, or appeal of verification decisions:</p>
+                  <div className="pt-2 border-t border-[#E5E7EB] space-y-1.5">
+                    <p className="font-bold text-[#0A0A0A]">Disciplinary & Compliance Team</p>
+                    <a
+                      href={`mailto:${SUPPORT_EMAIL}`}
+                      className="text-[#0A0A0A] hover:underline font-mono text-xs block"
+                    >
+                      {SUPPORT_EMAIL}
+                    </a>
+                    <p className="text-[11px] text-[#6B7280]">Vidyalankar Institute of Technology, Wadala, Mumbai 400037</p>
                   </div>
                 </div>
               </div>
             </div>
-
           </div>
         </motion.div>
       </div>

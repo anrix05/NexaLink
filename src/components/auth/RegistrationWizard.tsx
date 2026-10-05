@@ -14,7 +14,11 @@ import { SelectInput, type SelectOption } from './SelectInput';
 import { DEPARTMENTS } from '../../data/constants';
 import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/authService';
+import { supabase } from '../../lib/supabase';
+import { REQUIRE_ALUMNI_PROOF_AT_SIGNUP } from '../../config/auth';
 import type { DepartmentCode, UserRole } from '../../types';
+
+export { REQUIRE_ALUMNI_PROOF_AT_SIGNUP };
 
 export interface RegistrationWizardProps {
   onSwitchToSignIn: () => void;
@@ -46,7 +50,7 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({
   onRegistrationComplete,
   className = ''
 }) => {
-  const { register } = useAuth();
+  const { register, initiateSignUp, verifySignupOtp, resendSignupOtp } = useAuth();
   const shouldReduceMotion = useReducedMotion();
 
   // Wizard Step: 1, 2, or 3
@@ -68,12 +72,16 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({
   const [personalRecoveryEmail, setPersonalRecoveryEmail] = useState('');
   const [password, setPassword] = useState('');
   const [consentAccepted, setConsentAccepted] = useState(false);
+  const [isInitiatingSignUp, setIsInitiatingSignUp] = useState(false);
 
-  // Step 3: Verification tasks
-  const [recoveryOtp, setRecoveryOtp] = useState('');
-  const [recoveryEmailVerified, setRecoveryEmailVerified] = useState(false);
+  // Step 3: Verification tasks (Rule 3: OTP right after signUp, before users insert & proof upload)
+  const [signupOtp, setSignupOtp] = useState('');
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [uploadedDocName, setUploadedDocName] = useState<string>('');
+  const [uploadedDocUrl, setUploadedDocUrl] = useState<string>('');
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -158,6 +166,11 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({
       if (!gradYear.trim()) {
         errs.gradYear = 'Graduation year is required.';
       }
+      if (!prn.trim()) {
+        errs.prn = 'PRN / Enrollment number is required.';
+      } else if (prn.trim().length < 6) {
+        errs.prn = 'PRN / Enrollment number must be at least 6 characters.';
+      }
     }
 
     setStepErrors(errs);
@@ -223,17 +236,51 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({
     }
   };
 
-  const handleContinueFromStep2 = (e: React.FormEvent) => {
+  const handleContinueFromStep2 = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateStep2()) return;
     setServerError(null);
-    // Transition to Step 3 (Verify and submit)
-    setDirection(1);
-    setStep(3);
+    setIsInitiatingSignUp(true);
+
+    try {
+      const res = await initiateSignUp(
+        email.trim().toLowerCase(),
+        password,
+        {
+          name: name.trim(),
+          role: role as UserRole,
+          department,
+          enrollmentNo: prn.trim().toUpperCase()
+        }
+      );
+
+      if (!res.success) {
+        setServerError(res.message || 'Failed to initiate registration.');
+        setIsInitiatingSignUp(false);
+        return;
+      }
+
+      if (res.alreadyConfirmed) {
+        setEmailVerified(true);
+      }
+
+      // Transition to Step 3 (Verify and submit)
+      setDirection(1);
+      setStep(3);
+    } catch (err: any) {
+      setServerError(err.message || 'Failed to initiate registration.');
+    } finally {
+      setIsInitiatingSignUp(false);
+    }
   };
 
-  // Step 3 file upload
+  // Step 3 file upload (runs AFTER verifyOtp succeeds, Rule 3)
   const handleProofSelect = async (file: File) => {
+    if (!emailVerified) {
+      setOtpError('Please verify your email code above before uploading proof documents.');
+      return;
+    }
+
     setProofFile(file);
     setIsUploadingDoc(true);
     setUploadProgress(20);
@@ -250,10 +297,16 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({
     }, 150);
 
     try {
-      const res = await authService.submitProofDocument(file, 'current-user');
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || 'current-user';
+
+      const res = await authService.submitProofDocument(file, userId);
       clearInterval(progressInterval);
       setUploadProgress(100);
       setUploadedDocName(file.name);
+      if (res.url) {
+        setUploadedDocUrl(res.url);
+      }
     } catch {
       clearInterval(progressInterval);
     } finally {
@@ -261,20 +314,50 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({
     }
   };
 
-  // Step 3 recovery OTP verify
+  // Step 3 institutional email OTP verify (Rule 1, Rule 2, Rule 3)
   const handleVerifyOtp = async (code: string) => {
+    setIsVerifyingOtp(true);
+    setOtpError(null);
     try {
-      const res = await authService.verifyRecoveryOtp(code);
-      if (res.ok) {
-        setRecoveryEmailVerified(true);
+      const res = await verifySignupOtp(email.trim().toLowerCase(), code);
+      if (res.success) {
+        setEmailVerified(true);
+        setOtpError(null);
+      } else {
+        setOtpError(res.message || 'Incorrect verification code. Please check the 6-digit code and try again.');
       }
-    } catch {
-      // ignore
+    } catch (err: any) {
+      setOtpError(err.message || 'Verification failed.');
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
+  // Step 3 resend OTP with 60-second cooldown (Rule 1 & Rule 5)
+  const handleResendOtp = async () => {
+    setOtpError(null);
+    try {
+      const res = await resendSignupOtp(email.trim().toLowerCase());
+      if (!res.success) {
+        setOtpError(res.message || 'Failed to resend verification code.');
+      }
+    } catch (err: any) {
+      setOtpError(err.message || 'Failed to resend verification code.');
     }
   };
 
   // Final Submit for Review
   const handleFinalSubmit = async () => {
+    const isAlumniProofRequired = role === 'alumni' && REQUIRE_ALUMNI_PROOF_AT_SIGNUP;
+
+    if (!emailVerified) {
+      setServerError('Please verify your institutional email OTP before submitting.');
+      return;
+    }
+    if (isAlumniProofRequired && !proofFile && !uploadedDocName) {
+      setServerError('Please upload an institutional proof document.');
+      return;
+    }
     setIsSubmitting(true);
     setServerError(null);
 
@@ -286,16 +369,25 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({
         department,
         role,
         personalEmail: role === 'student' ? personalRecoveryEmail.trim().toLowerCase() : email.trim().toLowerCase(),
-        proofDocumentName: uploadedDocName || proofFile?.name || 'college_id.pdf'
+        proofDocumentName: uploadedDocName || proofFile?.name || undefined,
+        verificationDocumentUrl: uploadedDocUrl || undefined
       };
 
       if (role === 'student') {
         payload.enrollmentNo = prn.trim().toUpperCase();
-        payload.currentYear = semester;
+        payload.prn = prn.trim().toUpperCase();
+        payload.semester = semester;
+        payload.currentYear = semester.includes('1') || semester.includes('2') ? 'FE'
+          : semester.includes('3') || semester.includes('4') ? 'SE'
+          : semester.includes('5') || semester.includes('6') ? 'TE'
+          : 'BE';
       } else if (role === 'faculty') {
         payload.employeeId = employeeId.trim().toUpperCase();
       } else if (role === 'alumni') {
+        payload.enrollmentNo = prn.trim().toUpperCase();
+        payload.prn = prn.trim().toUpperCase();
         payload.graduationYear = parseInt(gradYear, 10) || 2023;
+        payload.gradYear = parseInt(gradYear, 10) || 2023;
         payload.company = organization.trim();
       }
 
@@ -321,7 +413,9 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({
     }
   };
 
-  const isStep3Ready = recoveryEmailVerified && (Boolean(proofFile) || Boolean(uploadedDocName));
+  const isAlumniProofRequired = role === 'alumni' && REQUIRE_ALUMNI_PROOF_AT_SIGNUP;
+  const hasUploadedProof = Boolean(proofFile) || Boolean(uploadedDocName);
+  const isStep3Ready = emailVerified && (!isAlumniProofRequired || hasUploadedProof);
 
   return (
     <div className={`w-full flex flex-col gap-6 ${className}`}>
@@ -537,6 +631,27 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({
                   </FormField>
 
                   <FormField
+                    id="reg-alumni-prn"
+                    label="PRN / Enrollment number"
+                    hint="Your college Permanent Registration Number or Enrollment number."
+                    error={stepErrors.prn}
+                    required
+                  >
+                    <TextInput
+                      id="reg-alumni-prn"
+                      value={prn}
+                      onChange={(e) => {
+                        setPrn(e.target.value.toUpperCase());
+                        if (stepErrors.prn) setStepErrors((prev) => ({ ...prev, prn: '' }));
+                      }}
+                      placeholder="e.g. 20181A0042"
+                      className="font-mono"
+                      autoCapitalize="characters"
+                      isInvalid={Boolean(stepErrors.prn)}
+                    />
+                  </FormField>
+
+                  <FormField
                     id="reg-org"
                     label="Current organization (optional)"
                     hint="Your current company or higher education institution."
@@ -697,7 +812,7 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({
                 </label>
 
                 <p className="text-[11px] text-[#6B7280] pl-6 leading-relaxed">
-                  Your information is processed in accordance with the Digital Personal Data Protection Act (DPDP) and institutional governance rules.
+                  Your information is processed in accordance with the Digital Personal Data Protection Act (DPDP) and institutional governance rules. Upon verification, your professional affiliation and skills become visible to verified VIT peers; private contact details remain protected and controllable in settings.
                 </p>
 
                 {stepErrors.consent && (
@@ -711,14 +826,14 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  aria-busy={isSubmitting}
+                  disabled={isInitiatingSignUp}
+                  aria-busy={isInitiatingSignUp}
                   className="w-full h-12 rounded-lg bg-[#0A0A0A] text-[#FFFFFF] text-sm font-medium hover:bg-[#262626] transition-colors inline-flex items-center justify-center gap-2 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-[#0A0A0A] focus:ring-offset-2 disabled:bg-[#FAFAFA] disabled:text-[#6B7280] disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? (
+                  {isInitiatingSignUp ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin shrink-0" aria-hidden="true" />
-                      <span>Creating account...</span>
+                      <span>Creating account & sending OTP...</span>
                     </>
                   ) : (
                     <>
@@ -746,17 +861,21 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({
                   Verify and submit
                 </h2>
                 <p className="text-xs text-[#6B7280]">
-                  Complete both tasks below to submit your registration for administrator verification.
+                  {role === 'alumni'
+                    ? (REQUIRE_ALUMNI_PROOF_AT_SIGNUP
+                        ? 'Confirm your email verification code and attach your institutional proof document.'
+                        : 'Confirm your email verification code. You may also attach proof for faster approval.')
+                    : 'Confirm your institutional email verification code before administrator review.'}
                 </p>
               </div>
 
-              {/* Task 1: Verify Recovery Email */}
+              {/* Task 1: Verify Institutional Email OTP (Rule 1 & Rule 3) */}
               <div className="p-4 rounded-lg border border-[#E5E7EB] bg-[#FFFFFF] flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-[#0A0A0A] flex items-center gap-2">
-                    <span>1. Verify {role === 'student' ? 'recovery' : 'login'} email</span>
+                    <span>1. Confirm email verification code</span>
                   </span>
-                  {recoveryEmailVerified && (
+                  {emailVerified && (
                     <span className="text-xs text-[#059669] font-medium inline-flex items-center gap-1">
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Verified</span>
@@ -765,56 +884,90 @@ export const RegistrationWizard: React.FC<RegistrationWizardProps> = ({
                 </div>
 
                 <OtpInput
-                  value={recoveryOtp}
-                  onChange={setRecoveryOtp}
+                  value={signupOtp}
+                  onChange={(val) => {
+                    setSignupOtp(val);
+                    if (otpError) setOtpError(null);
+                  }}
                   onComplete={handleVerifyOtp}
-                  isVerified={recoveryEmailVerified}
-                  emailDestination={role === 'student' ? personalRecoveryEmail : email}
+                  onResend={handleResendOtp}
+                  isVerified={emailVerified}
+                  error={otpError}
+                  emailDestination={email}
+                  disabled={isVerifyingOtp}
+                  resendCooldownSeconds={60}
                 />
               </div>
 
-              {/* Task 2: Upload Proof Document */}
-              <div className="p-4 rounded-lg border border-[#E5E7EB] bg-[#FFFFFF] flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-[#0A0A0A]">
-                    2. Institutional proof document
-                  </span>
-                  {(proofFile || uploadedDocName) && (
-                    <span className="text-xs text-[#059669] font-medium inline-flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Uploaded</span>
-                    </span>
+              {/* Task 2: Upload Proof Document (Alumni only: optional unless REQUIRE_ALUMNI_PROOF_AT_SIGNUP is true) */}
+              {role === 'alumni' && (
+                <div className={`p-4 rounded-lg border border-[#E5E7EB] bg-[#FFFFFF] flex flex-col gap-3 ${!emailVerified ? 'opacity-70' : ''}`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-medium text-[#0A0A0A]">
+                        2. Institutional proof document {isAlumniProofRequired ? '(required)' : '(optional)'}
+                      </span>
+                      {!isAlumniProofRequired && (
+                        <p className="text-xs text-[#6B7280] mt-0.5">
+                          Upload now for faster approval
+                        </p>
+                      )}
+                    </div>
+                    {hasUploadedProof && (
+                      <span className="text-xs text-[#059669] font-medium inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Uploaded</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {!emailVerified ? (
+                    <p className="text-xs text-[#6B7280]">
+                      Please confirm your email verification code above to unlock proof document upload.
+                    </p>
+                  ) : (
+                    <ProofUploader
+                      role={role}
+                      onFileSelect={handleProofSelect}
+                      onFileRemove={() => {
+                        setProofFile(null);
+                        setUploadedDocName('');
+                        setUploadedDocUrl('');
+                      }}
+                      isUploading={isUploadingDoc}
+                      uploadProgress={uploadProgress}
+                      uploadedFileName={uploadedDocName}
+                    />
                   )}
                 </div>
-
-                <ProofUploader
-                  role={role}
-                  onFileSelect={handleProofSelect}
-                  onFileRemove={() => {
-                    setProofFile(null);
-                    setUploadedDocName('');
-                  }}
-                  isUploading={isUploadingDoc}
-                  uploadProgress={uploadProgress}
-                  uploadedFileName={uploadedDocName}
-                />
-              </div>
+              )}
 
               {/* Submit for Review Action */}
               <div className="flex flex-col gap-2 pt-2">
                 <button
                   type="button"
                   onClick={handleFinalSubmit}
-                  disabled={!isStep3Ready}
+                  disabled={!isStep3Ready || isSubmitting}
                   className="w-full h-12 rounded-lg bg-[#0A0A0A] text-[#FFFFFF] text-sm font-medium hover:bg-[#262626] transition-colors inline-flex items-center justify-center gap-2 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-[#0A0A0A] focus:ring-offset-2 disabled:bg-[#FAFAFA] disabled:text-[#6B7280] disabled:border disabled:border-[#E5E7EB] disabled:cursor-not-allowed"
                 >
-                  <span>Submit for review</span>
-                  <ArrowRight className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  {isSubmitting ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin shrink-0" aria-hidden="true" />
+                      <span>Submitting registration...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Submit for review</span>
+                      <ArrowRight className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    </>
+                  )}
                 </button>
 
                 {!isStep3Ready && (
                   <p className="text-xs text-[#6B7280] text-center">
-                    Verify your recovery email and add a proof document to submit.
+                    {!emailVerified
+                      ? 'Confirm your email verification code to proceed.'
+                      : 'Upload an institutional proof document to submit.'}
                   </p>
                 )}
               </div>

@@ -8,6 +8,7 @@ export interface VerifyRecoveryModalProps {
   isOpen: boolean;
   onClose: () => void;
   emailMasked?: string;
+  email?: string;
   onVerified: () => void;
 }
 
@@ -15,6 +16,7 @@ export const VerifyRecoveryModal: React.FC<VerifyRecoveryModalProps> = ({
   isOpen,
   onClose,
   emailMasked = 'personal email',
+  email = '',
   onVerified
 }) => {
   const [code, setCode] = useState('');
@@ -26,7 +28,8 @@ export const VerifyRecoveryModal: React.FC<VerifyRecoveryModalProps> = ({
     setIsVerifying(true);
     setError(null);
     try {
-      const res = await authService.verifyRecoveryOtp(enteredCode);
+      const targetEmail = email || emailMasked || '';
+      const res = await authService.verifyRecoveryOtp(targetEmail, enteredCode);
       if (res.ok) {
         setIsSuccess(true);
         setTimeout(() => {
@@ -34,12 +37,22 @@ export const VerifyRecoveryModal: React.FC<VerifyRecoveryModalProps> = ({
           onClose();
         }, 1200);
       } else {
-        setError(res.error || 'Invalid verification code.');
+        setError(res.error || 'Invalid or expired verification code.');
       }
     } catch (err: any) {
       setError(err.message || 'Verification failed.');
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setError(null);
+    try {
+      const targetEmail = email || emailMasked || '';
+      await authService.resendRecoveryOtp(targetEmail);
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend recovery code.');
     }
   };
 
@@ -94,10 +107,12 @@ export const VerifyRecoveryModal: React.FC<VerifyRecoveryModalProps> = ({
                 value={code}
                 onChange={setCode}
                 onComplete={handleComplete}
+                onResend={handleResend}
                 isVerified={isSuccess}
                 error={error}
                 emailDestination={emailMasked}
                 disabled={isVerifying}
+                resendCooldownSeconds={60}
               />
             </div>
           </motion.div>

@@ -109,7 +109,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
   const [rejectReasonText, setRejectReasonText] = useState('Enrollment Number / Email Domain Mismatch');
 
   const [clarificationUserId, setClarificationUserId] = useState<string | null>(null);
-  const [clarificationText, setClarificationText] = useState('Please upload a scanned copy of your College Admit Card or Institutional ID.');
+  const [clarificationText, setClarificationText] = useState('Please upload a clear photo of your college ID card');
+  const [clarificationDocType, setClarificationDocType] = useState('College ID');
 
   // Bulk Graduation Tab States
   const [selectedBulkGradIds, setSelectedBulkGradIds] = useState<string[]>([]);
@@ -194,8 +195,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
 
   const handleConfirmClarification = () => {
     if (clarificationUserId) {
-      requestUserClarification(clarificationUserId, clarificationText);
-      showNotification('Clarification & proof request sent to user.');
+      requestUserClarification(clarificationUserId, clarificationText, clarificationDocType);
+      showNotification('Clarification and document request sent to user.');
       setClarificationUserId(null);
     }
   };
@@ -330,25 +331,56 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
 
   // Build Verification Queue Items for MasterDetail
   const verificationQueueItems: VerificationItem[] = [
-    ...pendingUsersList.map(u => ({
-      id: u.id,
-      type: 'registration' as const,
-      name: u.name,
-      email: u.email,
-      role: u.role,
-      department: u.department,
-      idNo: u.enrollmentNo || (u as any).prn || (u as any).employeeId || 'PRN-VIT-2024-089',
-      submittedAt: (u as any).createdAt,
-      documentUrl: (u as any).verificationDocumentUrl || u.proofDocumentName,
-      documentName: u.proofDocumentName || 'Scanned_ID_Proof.pdf',
-      bio: u.bio,
-      skills: u.skills,
-      confidence: u.email.includes('vit.edu.in') ? ('high' as const) : ('medium' as const),
-      confidenceReason: u.email.includes('vit.edu.in')
-        ? 'Active institutional email domain validated'
-        : 'Personal email domain used; document proof review advised',
-      raw: u
-    })),
+    ...pendingUsersList.map(u => {
+      let localReplyUrl = (u as any).verificationDocumentUrl || (u as any).verification_document_url || (u as any).clarification_requested?.documentUrl || (u as any).clarificationRequested?.documentUrl;
+      let localReplyName = u.proofDocumentName || (u as any).proof_document_name || (u as any).clarification_requested?.documentName || (u as any).clarificationRequested?.documentName;
+      let hasReplied = Boolean(
+        (u as any).userReplied ||
+        (u as any).user_replied ||
+        (u as any).clarification_requested?.userReplied ||
+        (u as any).clarification_requested?.user_replied ||
+        (u as any).clarificationRequested?.userReplied ||
+        (u as any).clarificationRequested?.user_replied ||
+        (Boolean((u as any).clarification_requested || (u as any).clarificationRequest) && Boolean(localReplyUrl))
+      );
+
+      try {
+        const lastReplyStr = localStorage.getItem('nexalink_last_user_reply');
+        if (lastReplyStr) {
+          const lr = JSON.parse(lastReplyStr);
+          const userEmail = (u.email || '').toLowerCase();
+          if (lr.userId === u.id || (lr.email && userEmail && lr.email.toLowerCase() === userEmail)) {
+            localReplyUrl = localReplyUrl || lr.documentUrl;
+            localReplyName = localReplyName || lr.documentName;
+            hasReplied = true;
+          }
+        }
+      } catch {}
+
+      return {
+        id: u.id,
+        type: 'registration' as const,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        department: u.department,
+        idNo: u.enrollmentNo || (u as any).prn || (u as any).employeeId || 'PRN-VIT-2024-089',
+        documentUrl: localReplyUrl || undefined,
+        documentName: localReplyName || (localReplyUrl ? 'Scanned_ID_Proof.pdf' : undefined),
+        bio: u.bio,
+        skills: u.skills,
+        confidence: u.email.includes('vit.edu.in') ? ('high' as const) : ('medium' as const),
+        confidenceReason: u.email.includes('vit.edu.in')
+          ? 'Active institutional email domain validated'
+          : 'Personal email domain used; document proof review advised',
+        raw: {
+          ...u,
+          user_replied: hasReplied,
+          verification_document_url: localReplyUrl,
+          proof_document_name: localReplyName
+        }
+      };
+    }),
     ...pendingTransitions.map(r => {
       const sUser = studentList.find(s => s.id === r.userId) || allUsersTable.find(u => u.id === r.userId);
       return {
@@ -1476,19 +1508,78 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
       <Modal
         isOpen={!!clarificationUserId}
         onClose={() => setClarificationUserId(null)}
-        title="Request Additional Proof from User"
-        maxWidth="sm"
+        title="Request Document from Applicant"
+        maxWidth="md"
       >
         <div className="space-y-4 text-xs">
+          {/* Quick Templates */}
           <div>
             <label className="block text-xs font-semibold text-[#0A0A0A] mb-1.5">
-              Instructions sent to applicant
+              Quick message templates
+            </label>
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setClarificationText('Please upload a clear photo of your college ID card');
+                  setClarificationDocType('College ID');
+                }}
+                className="text-left p-2 rounded-lg border border-[#E5E7EB] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs transition-colors"
+              >
+                "Please upload a clear photo of your college ID card"
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setClarificationText('Please upload your final-year marksheet or degree certificate');
+                  setClarificationDocType('Marksheet');
+                }}
+                className="text-left p-2 rounded-lg border border-[#E5E7EB] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs transition-colors"
+              >
+                "Please upload your final-year marksheet or degree certificate"
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setClarificationText("The name on your document doesn't match your profile, please upload a matching document");
+                  setClarificationDocType('Other');
+                }}
+                className="text-left p-2 rounded-lg border border-[#E5E7EB] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs transition-colors"
+              >
+                "The name on your document doesn't match your profile, please upload a matching document"
+              </button>
+            </div>
+          </div>
+
+          {/* Document Type Dropdown */}
+          <div>
+            <label htmlFor="clarification-doc-type" className="block text-xs font-semibold text-[#0A0A0A] mb-1.5">
+              Document type
+            </label>
+            <select
+              id="clarification-doc-type"
+              value={clarificationDocType}
+              onChange={e => setClarificationDocType(e.target.value)}
+              className="w-full border border-[#6B7280] rounded-lg bg-[#FAFAFA] p-2.5 text-xs text-[#0A0A0A] focus:outline-none focus:ring-1 focus:ring-[#0A0A0A]"
+            >
+              <option value="College ID">College ID</option>
+              <option value="Marksheet">Marksheet</option>
+              <option value="Degree certificate">Degree certificate</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          {/* Message Box */}
+          <div>
+            <label htmlFor="clarification-instructions" className="block text-xs font-semibold text-[#0A0A0A] mb-1.5">
+              Message to applicant
             </label>
             <textarea
+              id="clarification-instructions"
               rows={3}
               value={clarificationText}
               onChange={e => setClarificationText(e.target.value)}
-              className="w-full border border-[#6B7280] rounded-lg bg-[#FAFAFA] p-2.5 text-xs text-[#0A0A0A]"
+              className="w-full border border-[#6B7280] rounded-lg bg-[#FAFAFA] p-2.5 text-xs text-[#0A0A0A] focus:outline-none focus:ring-1 focus:ring-[#0A0A0A]"
             />
           </div>
 
@@ -1496,16 +1587,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
             <button
               type="button"
               onClick={() => setClarificationUserId(null)}
-              className="px-3 py-1.5 border border-[#6B7280] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-lg"
+              className="px-3.5 py-2 border border-[#6B7280] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-lg"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={handleConfirmClarification}
-              className="px-3.5 py-1.5 bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-medium rounded-lg"
+              className="px-4 py-2 bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-medium rounded-lg transition-colors cursor-pointer"
             >
-              Transmit request
+              Send
             </button>
           </div>
         </div>

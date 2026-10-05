@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { NexaMark } from '../brand/NexaMark';
+import { Avatar } from '../../utils/avatarHelper';
 import { LogOut, ChevronDown, Mail } from 'lucide-react';
+import { SUPPORT_EMAIL } from '../../config/auth';
 
 export interface GateShellProps {
   children: React.ReactNode;
@@ -46,8 +48,8 @@ export const GateShell: React.FC<GateShellProps> = ({ children, className = '' }
           {/* Right Header: Help Link & Clean Avatar Menu */}
           <div className="flex items-center gap-4">
             <a
-              href="mailto:alumni@vit.edu.in?subject=NexaLink%20Verification%20Support"
-              className="text-xs text-[#6B7280] hover:text-[#0A0A0A] inline-flex items-center gap-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-[#0A0A0A] rounded p-1"
+              href={`mailto:${SUPPORT_EMAIL}?subject=NexaLink%20Verification%20Support`}
+              className="text-xs text-[#6B7280] hover:text-[#0A0A0A] inline-flex items-center gap-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-[#0A0A0A] rounded p-1 min-h-[44px]"
             >
               <Mail className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Help</span>
@@ -63,10 +65,14 @@ export const GateShell: React.FC<GateShellProps> = ({ children, className = '' }
                 aria-label="Account menu"
                 className="flex items-center gap-2 p-1 rounded-full hover:bg-[#FAFAFA] transition-colors focus:outline-none focus:ring-2 focus:ring-[#0A0A0A] focus:ring-offset-1"
               >
-                <img
-                  src={currentUser?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'}
-                  alt={currentUser?.name || 'Account avatar'}
-                  className="w-8 h-8 rounded-full object-cover border border-[#E5E7EB]"
+                <Avatar
+                  src={
+                    currentUser?.avatar && !currentUser.avatar.includes('photo-1535713875002')
+                      ? currentUser.avatar
+                      : null
+                  }
+                  name={currentUser?.name || currentUser?.email || 'Member'}
+                  size="sm"
                 />
                 <ChevronDown className="w-3.5 h-3.5 text-[#6B7280]" aria-hidden="true" />
               </button>

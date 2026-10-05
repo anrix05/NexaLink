@@ -20,7 +20,7 @@ export const ChecklistRow: React.FC<ChecklistRowProps> = ({
 }) => {
   return (
     <div
-      className={`min-h-[56px] py-3 px-3.5 rounded-lg border border-[#E5E7EB] bg-[#FFFFFF] flex items-center justify-between gap-3 text-left transition-colors ${className}`}
+      className={`min-h-[52px] py-3.5 px-0.5 border-b border-[#E5E7EB] last:border-b-0 bg-transparent flex items-center justify-between gap-3 text-left transition-colors ${className}`}
     >
       <div className="flex items-start sm:items-center gap-3 min-w-0">
         {/* Status Icon */}

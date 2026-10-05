@@ -174,4 +174,4 @@ NexaLink is engineered as a modern, accredited institutional platform for Vidyal
     - `isPublicView` guarantees `Navbar.tsx` only renders public links on public views.
 12. **Rate Limiting & Password Security:**
     - 5 consecutive failed login attempts trigger a 15-minute temporary lockout via `auth-login-guard`.
-    - Secure OTP reset verification (`482910` demo / production gateway).
+    - Secure Supabase Auth email OTP verification and password recovery.

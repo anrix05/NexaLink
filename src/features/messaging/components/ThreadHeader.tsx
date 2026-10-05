@@ -48,6 +48,44 @@ export const ThreadHeader: React.FC<ThreadHeaderProps> = ({
   const [showPrivacyPopover, setShowPrivacyPopover] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
+  const subtitle = React.useMemo(() => {
+    const parts: string[] = [];
+    if (contact.type === 'alumni') {
+      parts.push('Alumni');
+      const grad = (contact as any).gradYear ? `Class of ${(contact as any).gradYear}` : null;
+      if (grad) parts.push(grad);
+      if (contact.company && contact.company.toLowerCase() !== 'alumni') {
+        parts.push(contact.company);
+      }
+      if (contact.designation && contact.designation.toLowerCase() !== 'alumni' && contact.designation !== contact.company) {
+        parts.push(contact.designation);
+      }
+    } else if (contact.type === 'faculty') {
+      parts.push('Faculty');
+      if (contact.department) parts.push(contact.department);
+      if (contact.designation && contact.designation.toLowerCase() !== 'faculty') {
+        parts.push(contact.designation);
+      }
+    } else {
+      parts.push('Student');
+      if (contact.department) parts.push(contact.department);
+      if (contact.designation && contact.designation !== 'Student') {
+        parts.push(contact.designation);
+      }
+    }
+
+    // Deduplicate case-insensitively
+    const seen = new Set<string>();
+    const unique = parts.filter((p) => {
+      const lower = p.trim().toLowerCase();
+      if (!lower || seen.has(lower)) return false;
+      seen.add(lower);
+      return true;
+    });
+
+    return unique.join(' · ') || (contact.type === 'alumni' ? 'Alumni' : contact.type === 'faculty' ? 'Faculty' : 'Student');
+  }, [contact]);
+
   return (
     <div className="h-[72px] min-h-[72px] max-h-[72px] border-b border-[#E5E7EB] bg-white px-5 flex items-center justify-between shrink-0 relative z-20">
       {/* Left: Avatar & Contact Meta */}
@@ -70,11 +108,6 @@ export const ThreadHeader: React.FC<ThreadHeaderProps> = ({
             size={40}
             className="border border-[#E5E7EB]"
           />
-          {contact.online && (
-            <span
-              className="w-2.5 h-2.5 rounded-full absolute bottom-0 right-0 ring-2 ring-white bg-[#0A0A0A]"
-            />
-          )}
         </div>
 
         <div className="min-w-0">
@@ -86,13 +119,13 @@ export const ThreadHeader: React.FC<ThreadHeaderProps> = ({
               {contact.name}
             </h3>
 
-            {/* Subtle Private Lock Icon Button (Replaces old pill!) */}
+            {/* Subtle Private Lock Icon Button */}
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setShowPrivacyPopover(!showPrivacyPopover)}
                 className="p-1 text-[#6B7280] hover:text-[#0A0A0A] rounded-md hover:bg-neutral-100 transition-colors cursor-pointer"
-                title="Private & Encrypted"
+                title={`Private conversation. Only you and ${contact.name} can read it. Admins can see a message only if it is reported.`}
                 aria-label="Privacy Information"
               >
                 <Lock className="w-3.5 h-3.5" />
@@ -101,24 +134,24 @@ export const ThreadHeader: React.FC<ThreadHeaderProps> = ({
               {/* Privacy Popover */}
               {showPrivacyPopover && (
                 <div
-                  className="absolute left-0 mt-1 w-64 p-3 bg-white border border-[#E5E7EB] rounded-2xl shadow-xl z-50 text-xs text-[#0A0A0A] space-y-2 animate-in fade-in zoom-in-95 duration-150"
+                  className="absolute left-0 mt-1 w-68 p-3.5 bg-white border border-[#E5E7EB] rounded-2xl shadow-xl z-50 text-xs text-[#0A0A0A] space-y-2 animate-in fade-in zoom-in-95 duration-150"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="flex items-center justify-between pb-1 border-b border-[#F3F4F6]">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-[#F3F4F6]">
                     <div className="flex items-center gap-1.5 font-semibold text-[#0A0A0A]">
                       <ShieldCheck className="w-4 h-4 text-[#0A0A0A]" />
-                      <span>Private Conversation</span>
+                      <span>Private conversation</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setShowPrivacyPopover(false)}
-                      className="text-[#9CA3AF] hover:text-[#0A0A0A]"
+                      className="text-[#9CA3AF] hover:text-[#0A0A0A] cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
                   <p className="text-[11px] text-[#6B7280] leading-relaxed">
-                    Only you and <strong className="text-[#0A0A0A]">{contact.name}</strong> can read messages and attachments sent in this thread. Messages you report are reviewed by verified administrators.
+                    Private conversation. Only you and <strong className="text-[#0A0A0A]">{contact.name}</strong> can read it. Admins can see a message only if it is reported.
                   </p>
                 </div>
               )}
@@ -126,7 +159,7 @@ export const ThreadHeader: React.FC<ThreadHeaderProps> = ({
           </div>
 
           <p className="text-[13px] leading-5 text-[#6B7280] truncate mt-0.5">
-            {contact.type === 'alumni' ? 'Alumni' : contact.type === 'faculty' ? 'Faculty' : 'Student'} · {contact.company} · {contact.designation}{contact.online ? ' · Online' : ''}
+            {subtitle}
           </p>
         </div>
       </div>

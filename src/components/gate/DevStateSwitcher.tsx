@@ -29,12 +29,10 @@ export const DevStateSwitcher: React.FC<DevStateSwitcherProps> = ({
   }, [isOpen]);
 
   const states: { id: GateDerivedState; label: string }[] = [
-    { id: 'needs_document', label: '1. Needs document' },
-    { id: 'needs_recovery_email', label: '2. Needs recovery email' },
-    { id: 'in_review', label: '3. In review' },
-    { id: 'needs_clarification', label: '4. Needs clarification' },
-    { id: 'rejected', label: '5. Rejected' },
-    { id: 'verified', label: '6. Verified' }
+    { id: 'in_review', label: '1. In review' },
+    { id: 'action_needed', label: '2. Action needed (clarification)' },
+    { id: 'rejected', label: '3. Rejected' },
+    { id: 'verified', label: '4. Verified' }
   ];
 
   return (

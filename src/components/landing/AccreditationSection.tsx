@@ -106,10 +106,10 @@ export const AccreditationSection: React.FC = () => {
                     <FileSpreadsheet className="w-4 h-4 text-white" />
                     <span className="text-xs font-sans font-medium">Activity Stream</span>
                   </div>
-                  <div className="space-y-1 font-sans tabular-nums text-[11px] text-neutral-400">
-                    <p>• 840+ Mentorship Sessions</p>
-                    <p>• 190+ Verified Jobs/Internships</p>
-                    <p>• 42 Department Guest Talks</p>
+                  <div className="space-y-1 font-sans text-[11px] text-neutral-400">
+                    <p>• Verified Mentorship Logs</p>
+                    <p>• Career Placement Referrals</p>
+                    <p>• Technical Interaction Hours</p>
                   </div>
                 </div>
 
@@ -117,20 +117,20 @@ export const AccreditationSection: React.FC = () => {
                 <div className="bg-[#1C1C1C] border border-white/10 rounded-xl p-4 space-y-2">
                   <div className="flex items-center gap-2 text-neutral-300">
                     <FileText className="w-4 h-4 text-white" />
-                    <span className="text-xs font-sans font-medium">NAAC Output</span>
+                    <span className="text-xs font-sans font-medium">Accreditation Output</span>
                   </div>
                   <div className="space-y-1 font-sans text-[11px] text-neutral-400">
-                    <p className="text-white">• Criteria 5.4.1_Summary.pdf</p>
+                    <p className="text-white">• Criteria 5.4.1_Summary.csv</p>
                     <p className="text-white">• NIRF_Alumni_Matrix.xlsx</p>
-                    <p className="text-neutral-300">• Cryptographic Sign-Off</p>
+                    <p className="text-neutral-300">• Verified Audit Export</p>
                   </div>
                 </div>
               </div>
 
               {/* Footer status bar */}
               <div className="p-3 bg-white/5 rounded-xl border border-white/10 flex items-center justify-between text-xs">
-                <span className="text-neutral-400 text-[11px]">Ready for Internal Quality Assurance Cell (IQAC)</span>
-                <span className="text-white font-sans text-[11px] font-medium">IQAC Verified</span>
+                <span className="text-neutral-400 text-[11px]">Structured for Internal Quality Assurance Cell (IQAC)</span>
+                <span className="text-white font-sans text-[11px] font-medium">Audit Ready</span>
               </div>
 
             </div>

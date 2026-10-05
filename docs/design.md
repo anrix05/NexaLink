@@ -124,6 +124,37 @@ All screens across Student, Alumni, Faculty, and Admin workspaces build upon sta
 - `CapacityMeter`: Segmented visual stepper indicating active advisory capacity (e.g., "Mentoring 2 of 5") with immediate decrement/increment controls.
 - `Switch`: Accessible toggle control for advisory availability with emerald active state.
 
+### 3.17 `GlobalErrorToaster.tsx` & `DataModeErrorBanner.tsx`
+- **Design Philosophy:** System errors and connectivity warnings must be visually unmistakable yet unobtrusive, adhering to institutional hairline styling without neon banners.
+- **`GlobalErrorToaster` Geometry & Behavior:**
+  - Pinned to bottom-right viewport (`fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-md`).
+  - Container: `#FFFFFF` background with 1px hairline border in `#FEE2E2` (Rose) or `#E5E7EB` (Neutral), soft elevation (`shadow-lg rounded-xl p-4`).
+  - Contrast: Strict ≥ 4.5:1 text contrast (`text-[#0A0A0A]` title, `text-[#6B7280]` description).
+  - Diagnostic Affordance: "Copy debug info" button that grabs structured diagnostic payload (error code, status, message, endpoint/table, timestamp) with 1-click clipboard confirmation.
+  - Action Controls: Retry action trigger styled as compact pill (`px-3 py-1 bg-[#0A0A0A] text-white text-xs rounded-md font-medium hover:bg-neutral-800`).
+- **`DataModeErrorBanner` Specs:**
+  - Positioned above content canvas or below `TopBar` when running in Degraded/Disconnected live database modes.
+  - Subdued Amber hairline strip (`bg-[#FFFBEB] border-b border-[#FDE68A] text-[#92400E] px-4 py-2 text-xs flex items-center justify-between`).
+  - Clear state messaging: Distinguishes between Mock Sandbox Mode and Live Supabase Disconnected Mode.
+
+### 3.18 Application Status Badges (`OpportunityManageConsole.tsx`)
+- Standardized micro-pills (`text-xs font-medium px-2.5 py-0.5 rounded-full`) indicating lifecycle status across job/internship applications:
+  - `submitted`: Actionable Amber (`bg-[#FEF3C7] text-[#B45309] border border-[#FDE68A]`) - "Submitted"
+  - `viewed`: Academic Indigo (`bg-[#EEF2FF] text-[#3730A3] border border-[#E0E7FF]`) - "Viewed"
+  - `shortlisted`: Verified Emerald (`bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]`) - "Shortlisted"
+  - `not_selected`: Governance Rose (`bg-[#FEE2E2] text-[#991B1B] border border-[#FECACA]`) - "Not Selected"
+- Contrast compliance: All combinations achieve ≥ 4.5:1 contrast against `#FFFFFF` canvas backgrounds.
+
+### 3.19 Verification Document Previewer (`VerificationQueueMasterDetail.tsx`)
+- **Secure Token Resolution:** Renders an active security badge confirming 60-minute signed URL validity from the private `proof-documents` storage bucket (`storage.from('proof-documents').createSignedUrl(path, 3600)`).
+- **Inline Image Canvas:**
+  - Preserves aspect ratio with `max-h-[380px] w-auto mx-auto object-contain rounded-lg border border-[#E5E7EB] bg-[#FAFAFA]`.
+  - Click-to-enlarge trigger opens a high-resolution lightbox without layout shift.
+- **PDF Document Surface:**
+  - Inline document card with file icon, byte size meta, and primary "View / Download Document" button opening the signed URL in a new window with `target="_blank" rel="noopener noreferrer"`.
+- **Empty / Broken Document Grace:**
+  - If no document URL is attached or path resolution fails, displays an institutional alert box (`bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg p-6 text-center text-sm text-[#6B7280]`) with instruction to request re-upload ("No verification document attached or path invalid").
+
 ---
 
 ## 4. Screen-by-Screen Layout Specifications
@@ -159,12 +190,13 @@ All screens across Student, Alumni, Faculty, and Admin workspaces build upon sta
 - `StatStrip`: Pending verifications, reported messages, active members, and open opportunities.
 - `MasterDetail` Verification Queue:
   - Left: Candidate list with match score, SLA age, and status badge.
-  - Right: 60-second signed document previewer, registrar record comparison table, SLA indicators, and keyboard shortcuts (`J/K`, `A`, `C`, `R`).
+  - Right: Expiring signed document previewer (`proof-documents` bucket), registrar record comparison table, SLA indicators, and keyboard shortcuts (`J/K`, `A`, `C`, `R`).
+  - Action Bar: Fixed bottom bar for `Approve (A)`, `Request Clarification (C)`, and `Reject (R)` with confirmation modals.
 
 ### 4.6 Verification Pending Gate (`VerificationPendingPage.tsx`)
 - Centered `max-w-2xl` Open Canvas column.
 - 1-business-day review ETA notice ("Usually reviewed within 1 business day").
-- "Replace document" button available while account is in Pending state.
+- "Replace document" interactive trigger: Opens authenticated file selector, uploads directly to `proof-documents/{userId}/verification_proof_{timestamp}.ext`, updates `verification_document_url` in Supabase, and re-triggers Pending verification status.
 - 3-step connected horizontal timeline (Submitted → In review → Decision).
 - Supabase Realtime auto-advance with `AnimatedCheckIcon` upon approval.
 

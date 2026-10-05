@@ -22,7 +22,7 @@ function scanDir(dir) {
     const stat = fs.statSync(fullPath);
     if (stat.isDirectory()) {
       scanDir(fullPath);
-    } else if (file.endsWith('.js') || file.endsWith('.html')) {
+    } else if (/\.(js|mjs|cjs|html|css|json|map|txt)$/i.test(file)) {
       const content = fs.readFileSync(fullPath, 'utf8');
       for (const { pattern, description } of forbiddenPatterns) {
         if (pattern.test(content)) {
