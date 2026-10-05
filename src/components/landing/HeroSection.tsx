@@ -40,13 +40,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSignIn, onCreateAcco
     >
 
       {/* Main Hero Content Grid */}
-      <div className="app-container flex-1 flex items-center py-16 sm:py-24 z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center w-full">
+      <div className="app-container flex-1 flex items-center py-8 sm:py-12 lg:py-20 xl:py-24 z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-center w-full">
           
           {/* Left Column: Typography & CTAs */}
           <motion.div
             style={{ y: yParallax, opacity: opacityParallax }}
-            className="lg:col-span-7 space-y-6 sm:space-y-8"
+            className="lg:col-span-7 space-y-4 sm:space-y-6 lg:space-y-8"
           >
             {/* Eyebrow Label */}
             <Reveal delay={0.05}>
@@ -59,7 +59,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSignIn, onCreateAcco
             <div className="space-y-3">
               <SplitText
                 as="h1"
-                className="text-[clamp(2.25rem,9vw,2.75rem)] sm:text-6xl xl:text-7xl font-display font-bold text-[#0A0A0A] tracking-[-0.02em] lg:tracking-[-0.03em] leading-[1.12] lg:leading-[0.98] text-balance break-words pb-1"
+                className="text-[clamp(2rem,8vw,2.5rem)] sm:text-4xl md:text-5xl xl:text-6xl 2xl:text-7xl font-display font-bold text-[#0A0A0A] tracking-[-0.02em] lg:tracking-[-0.03em] leading-[1.12] lg:leading-[0.98] text-balance break-words pb-1"
                 delay={0.1}
               >
                 Connecting Vidyalankar engineers with global alumni.
