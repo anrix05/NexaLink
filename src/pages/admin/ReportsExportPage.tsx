@@ -288,7 +288,8 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
       setExportProgress(100);
       triggerSuccessMsg(`Successfully generated PDF report (${filteredRecords.length} records).`);
     } catch (err) {
-      console.error(err);
+      console.error('PDF export failed:', err);
+      triggerSuccessMsg('Export encountered an issue. Please try again.');
     } finally {
       setExportingFormat(null);
       setExportProgress(null);
@@ -348,7 +349,8 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
       setExportProgress(100);
       triggerSuccessMsg(`Excel workbook exported successfully (${filteredRecords.length} records).`);
     } catch (err) {
-      console.error(err);
+      console.error('Excel export failed:', err);
+      triggerSuccessMsg('Export encountered an issue. Please try again.');
     } finally {
       setExportingFormat(null);
       setExportProgress(null);
@@ -444,7 +446,8 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
       setExportProgress(100);
       triggerSuccessMsg(`Word Document (.docx) generated successfully.`);
     } catch (err) {
-      console.error(err);
+      console.error('Word export failed:', err);
+      triggerSuccessMsg('Export encountered an issue. Please try again.');
     } finally {
       setExportingFormat(null);
       setExportProgress(null);
@@ -476,7 +479,8 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
 
       triggerSuccessMsg('CSV raw data exported.');
     } catch (err) {
-      console.error(err);
+      console.error('CSV export failed:', err);
+      triggerSuccessMsg('Export encountered an issue. Please try again.');
     } finally {
       setExportingFormat(null);
       setExportProgress(null);
@@ -578,7 +582,8 @@ export const ReportsExportPage: React.FC<ReportsExportPageProps> = ({ initialSub
       setExportProgress(100);
       triggerSuccessMsg(`NAAC 5.4.1 Alumni Engagement workbook (.xlsx) exported successfully (${naacRows.length} sessions).`);
     } catch (err) {
-      console.error(err);
+      console.error('NAAC export failed:', err);
+      triggerSuccessMsg('Export encountered an issue. Please try again.');
     } finally {
       setExportingFormat(null);
       setExportProgress(null);

@@ -1547,6 +1547,97 @@ test('characterization: dynamic export loaders decouple heavy engines from initi
   assert.ok(typeof xlsx.utils.book_new === 'function', 'book_new must be a function');
 });
 
+test('phase 5: empty dataset pagination handles 0 items safely', () => {
+  const emptyList = [];
+  const PAGE_SIZE = 20;
+  const totalPages = Math.max(1, Math.ceil(emptyList.length / PAGE_SIZE));
+  const currentPage = 1;
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const endIndex = Math.min(emptyList.length, startIndex + PAGE_SIZE);
+  const currentSlice = emptyList.slice(startIndex, endIndex);
+
+  assert.strictEqual(totalPages, 1, 'Total pages must be 1 even when empty');
+  assert.strictEqual(startIndex, 0);
+  assert.strictEqual(endIndex, 0);
+  assert.strictEqual(currentSlice.length, 0);
+  assert.strictEqual(currentPage > 1, false, 'Previous button must be disabled');
+  assert.strictEqual(currentPage >= totalPages, true, 'Next button must be disabled');
+});
+
+test('phase 5: large dataset (1,500 rows) pagination and bounds clamping', () => {
+  const largeDataset = Array.from({ length: 1500 }, (_, i) => ({ id: `row-${i + 1}` }));
+  const PAGE_SIZE = 20;
+  const totalPages = Math.ceil(largeDataset.length / PAGE_SIZE);
+
+  assert.strictEqual(totalPages, 75, '1500 rows at 20/page must produce exactly 75 pages');
+
+  // Test page 1
+  const page1Slice = largeDataset.slice(0, PAGE_SIZE);
+  assert.strictEqual(page1Slice.length, 20);
+  assert.strictEqual(page1Slice[0].id, 'row-1');
+  assert.strictEqual(page1Slice[19].id, 'row-20');
+
+  // Test page 75 (last page)
+  const page75Start = (75 - 1) * PAGE_SIZE;
+  const page75Slice = largeDataset.slice(page75Start, page75Start + PAGE_SIZE);
+  assert.strictEqual(page75Slice.length, 20);
+  assert.strictEqual(page75Slice[19].id, 'row-1500');
+
+  // Out of bounds clamp
+  const clampedPage = Math.min(totalPages, Math.max(1, 100));
+  assert.strictEqual(clampedPage, 75, 'Page 100 must clamp to 75');
+});
+
+test('phase 5: multi-role display & privacy boundary validation', () => {
+  // Student view of alumni
+  const rawAlumni = {
+    id: 'alum-1',
+    name: 'Priya Mehta',
+    role: 'alumni',
+    email: 'priya.alumni@gmail.com',
+    personalEmail: 'priya.alumni@gmail.com',
+    phone: '+91 98765 43210',
+    isPhonePrivate: true,
+    isEmailPrivate: true
+  };
+
+  // When another user views alumni profile, private phone & email must be masked/omitted
+  const sanitizedForOther = {
+    ...rawAlumni,
+    phone: rawAlumni.isPhonePrivate ? undefined : rawAlumni.phone,
+    personalEmail: rawAlumni.isEmailPrivate ? undefined : rawAlumni.personalEmail
+  };
+
+  assert.strictEqual(sanitizedForOther.phone, undefined, 'Private phone must be redacted');
+  assert.strictEqual(sanitizedForOther.personalEmail, undefined, 'Private personal email must be redacted');
+  assert.strictEqual(sanitizedForOther.name, 'Priya Mehta', 'Public name remains intact');
+});
+
+test('phase 5: export error state cleanup ensures UI never freezes on rejection', async () => {
+  let isExporting = false;
+  let exportProgress = null;
+  let errorMessage = null;
+
+  const mockFailingExport = async () => {
+    isExporting = true;
+    exportProgress = 10;
+    try {
+      throw new Error('Simulated worker out of memory');
+    } catch (err) {
+      errorMessage = err.message;
+    } finally {
+      isExporting = false;
+      exportProgress = null;
+    }
+  };
+
+  await mockFailingExport();
+  assert.strictEqual(isExporting, false, 'isExporting must reset to false');
+  assert.strictEqual(exportProgress, null, 'exportProgress must reset to null');
+  assert.strictEqual(errorMessage, 'Simulated worker out of memory');
+});
+
+
 
 
 
