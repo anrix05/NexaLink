@@ -3,7 +3,6 @@ import { UserPlus, LogIn, Quote } from 'lucide-react';
 import { SplitText } from './motion/SplitText';
 import { Reveal } from './motion/Reveal';
 import { MagneticButton } from './motion/MagneticButton';
-import { AlumniNetworkCanvas } from './AlumniNetworkCanvas';
 import { Eyebrow } from '../common/Eyebrow';
 
 interface FinalCtaSectionProps {
@@ -14,10 +13,7 @@ interface FinalCtaSectionProps {
 export const FinalCtaSection: React.FC<FinalCtaSectionProps> = ({ onSignIn, onCreateAccount }) => {
   return (
     <section className="w-full bg-[#FAFAFA] border-b border-[#E5E7EB] py-16 sm:py-24 relative overflow-hidden">
-      {/* Background network motif */}
-      <div className="absolute inset-0 opacity-15 pointer-events-none">
-        <AlumniNetworkCanvas />
-      </div>
+
 
       <div className="app-container space-y-16 relative z-10">
         
