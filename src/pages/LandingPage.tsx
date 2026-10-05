@@ -11,6 +11,7 @@ import { AccreditationSection } from '../components/landing/AccreditationSection
 import { DepartmentsAccordion } from '../components/landing/DepartmentsAccordion';
 import { FinalCtaSection } from '../components/landing/FinalCtaSection';
 import { usePageMeta } from '../hooks/usePageMeta';
+import { useAuth } from '../context/AuthContext';
 import { ArrowRight, LogIn } from 'lucide-react';
 
 interface LandingPageProps {
@@ -18,6 +19,7 @@ interface LandingPageProps {
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ setActiveTab }) => {
+  const { isAuthenticated } = useAuth();
   usePageMeta({
     title: 'NexaLink | Vidyalankar Institute of Technology, Mumbai',
     description: 'Centralized institutional platform connecting Vidyalankar engineering students, verified alumni, and academic faculty.',
@@ -80,25 +82,27 @@ export const LandingPage: React.FC<LandingPageProps> = ({ setActiveTab }) => {
           onCreateAccount={handleCreateAccount}
         />
 
-        {/* B17: Sticky Mobile CTA Bar (<640px) */}
-        <div className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E5E7EB] p-3 pb-safe flex items-center gap-2.5 shadow-xs">
-          <button
-            type="button"
-            onClick={handleCreateAccount}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-4 bg-[#0A0A0A] text-white text-xs font-semibold rounded-lg hover:bg-[#262626] transition-colors cursor-pointer min-h-[44px] touch-target-44"
-          >
-            <span>Create account</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={handleSignIn}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-4 bg-white border border-[#E5E7EB] text-[#0A0A0A] text-xs font-semibold rounded-lg hover:bg-[#FAFAFA] transition-colors cursor-pointer min-h-[44px] touch-target-44"
-          >
-            <LogIn className="w-3.5 h-3.5 text-[#6B7280]" />
-            <span>Sign in</span>
-          </button>
-        </div>
+        {/* B17: Sticky Mobile CTA Bar (<640px) — only shown to guests */}
+        {!isAuthenticated && (
+          <div className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E5E7EB] p-3 pb-safe flex items-center gap-2.5 shadow-xs">
+            <button
+              type="button"
+              onClick={handleCreateAccount}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-4 bg-[#0A0A0A] text-white text-xs font-semibold rounded-lg hover:bg-[#262626] transition-colors cursor-pointer min-h-[44px] touch-target-44"
+            >
+              <span>Create account</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleSignIn}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-4 bg-white border border-[#E5E7EB] text-[#0A0A0A] text-xs font-semibold rounded-lg hover:bg-[#FAFAFA] transition-colors cursor-pointer min-h-[44px] touch-target-44"
+            >
+              <LogIn className="w-3.5 h-3.5 text-[#6B7280]" />
+              <span>Sign in</span>
+            </button>
+          </div>
+        )}
       </div>
     </SmoothScroll>
   );

@@ -677,7 +677,7 @@ export const MessagingPage: React.FC = () => {
     pendingAttachments.some(a => a.status === 'processing' || a.status === 'uploading');
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex bg-[#FFFFFF] overflow-hidden select-text font-sans">
+    <div className="h-[calc(100dvh-4rem-3.5rem)] lg:h-[calc(100dvh-4rem)] flex bg-[#FFFFFF] overflow-hidden select-text font-sans">
       {/* ─── LEFT PANE: CONVERSATION LIST (340px) ───────────────────────── */}
       <div
         className={`w-full md:w-[340px] border-r border-[#E5E7EB] bg-white flex flex-col shrink-0 ${
