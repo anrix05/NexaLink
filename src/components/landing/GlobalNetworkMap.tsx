@@ -17,7 +17,7 @@ interface GlobalNetworkMapProps {
   onSignIn?: () => void;
 }
 
-// Single-run Count-up display for numbers
+// Single-run Count-up display for stats numbers
 const StatCountUp: React.FC<{ value: number; reduceMotion: boolean }> = ({ value, reduceMotion }) => {
   const [displayValue, setDisplayValue] = useState<number>(reduceMotion ? value : 0);
 
@@ -83,17 +83,26 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
 
   const totals = data?.totals ?? { verified_alumni: 0, countries: 0, cities: 0 };
 
+  // Pre-calculate land dots with radial tonal falloff from Mumbai
+  const landDotsWithTones = useMemo(() => {
+    return LAND_DOTS.map(([x, y]) => {
+      const dist = Math.hypot(x - MUMBAI_HUB.x, y - MUMBAI_HUB.y);
+      // Opacity 0.38 near Mumbai down to 0.14 at map edges
+      const opacity = Math.max(0.14, Math.min(0.38, 0.40 - (dist / 700) * 0.24));
+      return { x, y, opacity: Math.round(opacity * 100) / 100 };
+    });
+  }, []);
+
   // Geocode and compute layout for real alumni cities
   const plottedCities = useMemo<PlottedCity[]>(() => {
     const rawCities = data?.cities ?? [];
     const result: PlottedCity[] = [];
 
-    // Filter out Mumbai itself from spokes so it's strictly the hub
     for (const item of rawCities) {
       const geo = geocodeCity(item.city, item.country);
       if (!geo) continue;
 
-      // If it's Mumbai/Bombay, skip as spoke since it's the center hub
+      // Skip Mumbai as a spoke since it's the anchor HQ
       if (geo.name === 'MUMBAI') continue;
 
       const pos = projectLatLng(geo.lat, geo.lng);
@@ -141,51 +150,66 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
     return found ? { ...found, isHub: false } : null;
   }, [activeCityId, plottedCities, totals.verified_alumni]);
 
-  // Screen reader description
+  // Dynamic screen reader description
   const ariaDescription = `Map showing ${totals.verified_alumni} verified VIT alumni across ${totals.countries} ${
     totals.countries === 1 ? 'country' : 'countries'
-  } and ${totals.cities} ${totals.cities === 1 ? 'city' : 'cities'}. Hub centered at Vidyalankar, Mumbai.`;
+  } and ${totals.cities} ${totals.cities === 1 ? 'city' : 'cities'}. Hub anchored at Vidyalankar, Mumbai.`;
 
   return (
-    <article
+    <div
       ref={containerRef}
       role="region"
       aria-label="NexaLink Global Alumni Network"
-      className={`w-full rounded-2xl border border-[#E5E7EB] bg-gradient-to-b from-[#FFFFFF] to-[#FAFAFA] flex flex-col justify-between overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.04)] select-none transition-all ${className}`}
+      className={`relative w-full flex flex-col justify-between overflow-visible select-none ${className}`}
     >
-      {/* 1. Header Strip */}
-      <header className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-[#E5E7EB] bg-white/90 backdrop-blur-xs z-10">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#0A0A0A] shrink-0" aria-hidden="true" />
-          <span className="font-mono text-[11px] font-semibold tracking-[0.08em] uppercase text-[#6B7280] truncate">
+      {/* 1. Header Eyebrow (Borderless, Left-aligned to map) */}
+      <div className="flex items-center justify-between pb-3 sm:pb-4 w-full">
+        <div className="flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#0A0A0A]" aria-hidden="true" />
+          <span className="font-mono text-[11px] font-semibold tracking-widest uppercase text-[#6B7280]">
             Global Alumni Network
           </span>
         </div>
 
         {/* VERIFIED ONLY Badge */}
-        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#FAFAFA] border border-[#E5E7EB] shrink-0">
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/90 border border-[#E5E7EB] shadow-2xs">
           <span className="w-1.5 h-1.5 rounded-full bg-[#059669]" aria-hidden="true" />
           <span className="font-mono text-[10px] font-medium tracking-wider text-[#374151] uppercase">
             Verified Only
           </span>
         </div>
-      </header>
+      </div>
 
-      {/* 2. Map Canvas (SVG) */}
-      <div className="relative w-full flex-1 flex items-center justify-center p-2 sm:p-4 overflow-hidden min-h-[220px]">
-        {/* Soft radial fade vignette */}
+      {/* 2. Map Canvas (Full Bleed / Borderless with Soft Edge Blending) */}
+      <div
+        className="relative w-full flex items-center justify-center overflow-visible"
+        style={{
+          maskImage:
+            'radial-gradient(ellipse 92% 82% at 56% 48%, black 48%, rgba(0,0,0,0.85) 72%, rgba(0,0,0,0.2) 92%, transparent 100%)',
+          WebkitMaskImage:
+            'radial-gradient(ellipse 92% 82% at 56% 48%, black 48%, rgba(0,0,0,0.85) 72%, rgba(0,0,0,0.2) 92%, transparent 100%)',
+        }}
+      >
+        {/* Faint tonal gradient wash behind the map area */}
         <div
-          className="absolute inset-0 pointer-events-none z-1"
+          className="absolute inset-0 pointer-events-none rounded-3xl opacity-40 bg-gradient-to-b from-[#0A0A0A]/[0.03] via-[#0A0A0A]/[0.015] to-transparent"
+          aria-hidden="true"
+        />
+
+        {/* Soft Radial Glow behind Mumbai */}
+        <div
+          className="absolute pointer-events-none w-[220px] h-[220px] rounded-full bg-[#0A0A0A]/[0.07] blur-2xl"
           style={{
-            background:
-              'radial-gradient(ellipse at 50% 50%, transparent 65%, rgba(250, 250, 250, 0.6) 90%, rgba(250, 250, 250, 0.95) 100%)',
+            left: `${(MUMBAI_HUB.x / MAP_BOUNDS.svgWidth) * 100}%`,
+            top: `${(MUMBAI_HUB.y / MAP_BOUNDS.svgHeight) * 100}%`,
+            transform: 'translate(-50%, -50%)',
           }}
           aria-hidden="true"
         />
 
         {/* Loading Skeleton */}
         {isLoading && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/60 backdrop-blur-2xs animate-pulse">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/40 backdrop-blur-2xs animate-pulse pointer-events-none">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[#E5E7EB] shadow-xs">
               <span className="w-2 h-2 rounded-full bg-[#0A0A0A]/40 animate-ping" />
               <span className="font-mono text-[11px] text-[#6B7280]">Connecting alumni nodes...</span>
@@ -193,10 +217,10 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
           </div>
         )}
 
-        {/* Error Fallback */}
+        {/* Error Fallback Notice */}
         {isError && !isLoading && (
-          <div className="absolute top-3 right-3 z-20 flex items-center gap-2 px-2.5 py-1 rounded-md bg-white border border-[#E5E7EB] shadow-xs">
-            <span className="font-mono text-[10px] text-[#6B7280]">Couldn't refresh network</span>
+          <div className="absolute top-2 right-2 z-20 flex items-center gap-2 px-2.5 py-1 rounded-md bg-white border border-[#E5E7EB] shadow-xs">
+            <span className="font-mono text-[10px] text-[#6B7280]">Couldn't load network data</span>
             <button
               type="button"
               onClick={() => refetch()}
@@ -211,33 +235,33 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
         <svg
           viewBox={`0 0 ${MAP_BOUNDS.svgWidth} ${MAP_BOUNDS.svgHeight}`}
           preserveAspectRatio="xMidYMid meet"
-          className="w-full h-full object-contain"
+          className="w-full h-auto max-h-[380px] sm:max-h-[440px] lg:max-h-[480px] object-contain overflow-visible"
           role="img"
           aria-label={ariaDescription}
         >
           <defs>
-            {/* Gradient for quadratic arcs: #0A0A0A at Mumbai hub -> #9CA3AF at spokes */}
-            <linearGradient id="arcGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#0A0A0A" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#9CA3AF" stopOpacity="0.4" />
+            {/* Gradient for quadratic arcs: #0A0A0A at Mumbai hub -> #0A0A0A 25% opacity at spokes */}
+            <linearGradient id="heroArcGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#0A0A0A" stopOpacity="0.85" />
+              <stop offset="100%" stopColor="#0A0A0A" stopOpacity="0.25" />
             </linearGradient>
 
-            <linearGradient id="activeArcGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <linearGradient id="heroActiveArcGradient" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stopColor="#0A0A0A" stopOpacity="1" />
               <stop offset="100%" stopColor="#0A0A0A" stopOpacity="0.8" />
             </linearGradient>
           </defs>
 
-          {/* Base Layer: Land Dot Matrix */}
+          {/* Base Layer: Land Dot Matrix with high-contrast tonal falloff */}
           <g aria-hidden="true">
-            {LAND_DOTS.map(([x, y], idx) => (
+            {landDotsWithTones.map((dot, idx) => (
               <circle
                 key={idx}
-                cx={x}
-                cy={y}
-                r={1.3}
-                fill="#D1D5DB"
-                opacity={0.8}
+                cx={dot.x}
+                cy={dot.y}
+                r={1.4}
+                fill="#0A0A0A"
+                opacity={dot.opacity}
               />
             ))}
           </g>
@@ -258,7 +282,7 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
                       fill="none"
                       stroke="#0A0A0A"
                       strokeWidth={3}
-                      strokeOpacity={0.15}
+                      strokeOpacity={0.2}
                       strokeLinecap="round"
                     />
                   )}
@@ -267,10 +291,10 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
                   <motion.path
                     d={pathD}
                     fill="none"
-                    stroke={isTargeted ? 'url(#activeArcGradient)' : 'url(#arcGradient)'}
-                    strokeWidth={isTargeted ? 1.75 : 1}
+                    stroke={isTargeted ? 'url(#heroActiveArcGradient)' : 'url(#heroArcGradient)'}
+                    strokeWidth={isTargeted ? 1.75 : 1.25}
                     strokeDasharray={isTargeted ? undefined : '3 3'}
-                    strokeOpacity={hasOtherActive ? 0.2 : isTargeted ? 1 : 0.65}
+                    strokeOpacity={hasOtherActive ? 0.2 : isTargeted ? 1 : 0.75}
                     initial={reduceMotion ? { pathLength: 1 } : { pathLength: 0 }}
                     animate={{ pathLength: 1 }}
                     transition={{
@@ -283,9 +307,9 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
                   {/* Traveling Dot on Loop */}
                   {!reduceMotion && isInView && (
                     <circle
-                      r={isTargeted ? 2.5 : 1.75}
-                      fill={isTargeted ? '#0A0A0A' : '#6B7280'}
-                      opacity={hasOtherActive ? 0.3 : 0.9}
+                      r={isTargeted ? 2.5 : 2}
+                      fill={isTargeted ? '#0A0A0A' : '#0A0A0A'}
+                      opacity={hasOtherActive ? 0.25 : 0.9}
                     >
                       <animateMotion
                         dur={`${3.4 + (idx % 3) * 0.5}s`}
@@ -356,21 +380,21 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
               </>
             )}
 
-            {/* Solid Anchor Core */}
+            {/* Solid Anchor Core Node */}
             <circle
               cx={MUMBAI_HUB.x}
               cy={MUMBAI_HUB.y}
               r={5.5}
               fill="#0A0A0A"
+              stroke="#FFFFFF"
+              strokeWidth={2}
               className="transition-transform duration-200 group-hover:scale-125"
             />
-            <circle cx={MUMBAI_HUB.x} cy={MUMBAI_HUB.y} r={2} fill="#FFFFFF" />
           </g>
 
           {/* Spoke City Nodes */}
           {plottedCities.map((city, idx) => {
             const isTargeted = activeCityId === city.id;
-            // Scale node radius gently with alumni count (clamped 3.5 to 6)
             const nodeRadius = Math.min(Math.max(3.5 + Math.log2(city.count) * 0.75, 3.5), 6.5);
 
             return (
@@ -397,7 +421,7 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
                   cy={city.y}
                   r={isTargeted ? nodeRadius + 5 : nodeRadius + 2}
                   fill={isTargeted ? '#0A0A0A' : 'transparent'}
-                  fillOpacity={0.1}
+                  fillOpacity={0.12}
                   className="transition-all duration-200"
                 />
 
@@ -406,9 +430,9 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
                   cx={city.x}
                   cy={city.y}
                   r={isTargeted ? nodeRadius + 0.5 : nodeRadius}
-                  fill={isTargeted ? '#0A0A0A' : '#4B5563'}
+                  fill="#0A0A0A"
                   stroke="#FFFFFF"
-                  strokeWidth={1.5}
+                  strokeWidth={2}
                   initial={reduceMotion ? { scale: 1 } : { scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{
@@ -423,38 +447,37 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
           })}
         </svg>
 
-        {/* HTML Overlay for Crisp Mono Labels & Tooltips */}
+        {/* HTML Overlay for Crisp Mono Chips & Tooltips */}
         <div className="absolute inset-0 pointer-events-none p-2 sm:p-4" aria-hidden="true">
-          {/* Mumbai HQ Chip */}
+          {/* Mumbai HQ Chip (Dark background, 24px clearance from right) */}
           <div
-            className="absolute transition-all duration-200"
+            className="absolute transition-all duration-200 pointer-events-auto"
             style={{
-              left: `${(MUMBAI_HUB.x / MAP_BOUNDS.svgWidth) * 100}%`,
+              left: `${Math.min((MUMBAI_HUB.x / MAP_BOUNDS.svgWidth) * 100, 82)}%`,
               top: `${(MUMBAI_HUB.y / MAP_BOUNDS.svgHeight) * 100}%`,
               transform: 'translate(10px, -50%)',
             }}
           >
-            <div
-              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[4px] border font-mono text-[10px] sm:text-[11px] font-semibold tracking-wider transition-all duration-200 shadow-2xs whitespace-nowrap ${
+            <button
+              type="button"
+              onClick={() => setActiveCityId((prev) => (prev === MUMBAI_HUB.id ? null : MUMBAI_HUB.id))}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[4px] font-mono text-[10px] sm:text-[11px] font-bold tracking-wider uppercase transition-all duration-200 shadow-[0_4px_16px_rgba(0,0,0,0.18)] whitespace-nowrap cursor-pointer ${
                 activeCityId === MUMBAI_HUB.id
-                  ? 'bg-[#0A0A0A] text-white border-[#0A0A0A] scale-105'
-                  : 'bg-white text-[#0A0A0A] border-[#0A0A0A]/30'
+                  ? 'bg-[#0A0A0A] text-white scale-105 ring-2 ring-[#0A0A0A]/20'
+                  : 'bg-[#0A0A0A] text-white hover:bg-[#262626]'
               }`}
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-[#0A0A0A] inline-block" />
+              <span className="w-1.5 h-1.5 rounded-full bg-white inline-block" />
               <span>MUMBAI</span>
-              <span className="text-[#6B7280] font-normal text-[9px] sm:text-[10px]">· HQ</span>
-            </div>
+              <span className="text-white/70 font-normal text-[9px] sm:text-[10px]">· HQ</span>
+            </button>
           </div>
 
-          {/* Spoke City Chips (Single Line, Clamped Inside) */}
+          {/* Spoke City Chips */}
           {plottedCities.map((city, idx) => {
             const isTargeted = activeCityId === city.id;
-
-            // Visibility limit per viewport breakpoint
-            // Desktop (all plotted up to 8), Tablet up to 6, Mobile up to 4
             const isTabletHidden = idx >= 6;
-            const isMobileHidden = idx >= 4;
+            const isMobileHidden = idx >= 3; // Limit to 3 on mobile for zero congestion
 
             let transform = 'translate(-50%, -100%) translateY(-8px)';
             if (city.labelPosition === 'bottom') transform = 'translate(-50%, 8px)';
@@ -464,7 +487,7 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
             return (
               <div
                 key={city.id}
-                className={`absolute transition-all duration-200 ${
+                className={`absolute transition-all duration-200 pointer-events-auto ${
                   isMobileHidden ? 'hidden sm:block' : ''
                 } ${isTabletHidden ? 'sm:hidden lg:block' : ''}`}
                 style={{
@@ -473,23 +496,25 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
                   transform,
                 }}
               >
-                <div
-                  className={`inline-flex items-center px-1.5 py-0.5 rounded-[4px] border font-mono text-[9px] sm:text-[10px] tracking-wider uppercase whitespace-nowrap transition-all duration-200 shadow-2xs ${
+                <button
+                  type="button"
+                  onClick={() => setActiveCityId((prev) => (prev === city.id ? null : city.id))}
+                  className={`inline-flex items-center px-1.5 py-0.5 rounded-[4px] border font-mono text-[9px] sm:text-[10px] tracking-wide uppercase whitespace-nowrap transition-all duration-200 shadow-2xs backdrop-blur-xs cursor-pointer ${
                     isTargeted
                       ? 'bg-[#0A0A0A] text-white border-[#0A0A0A] scale-105 z-30'
-                      : 'bg-white/95 text-[#1F2937] border-[#E5E7EB]'
+                      : 'bg-white/95 text-[#0A0A0A] border-[#E5E7EB] hover:border-[#0A0A0A]'
                   }`}
                 >
                   <span className="font-semibold">{city.name}</span>
-                </div>
+                </button>
               </div>
             );
           })}
 
-          {/* Zero/Low Data Invitation (if 0 or only Mumbai) */}
+          {/* Empty/Low Data Invitation (if 0 or only Mumbai) */}
           {plottedCities.length === 0 && !isLoading && (
-            <div className="absolute inset-x-0 bottom-4 flex items-center justify-center pointer-events-auto">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/90 backdrop-blur-xs border border-[#E5E7EB] text-center shadow-xs">
+            <div className="absolute inset-x-0 bottom-2 flex items-center justify-center pointer-events-auto">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/80 backdrop-blur-xs border border-[#E5E7EB] text-center shadow-xs">
                 <span className="text-[11px] text-[#6B7280] font-sans">
                   Be among the first alumni on the map.
                 </span>
@@ -506,7 +531,7 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
             </div>
           )}
 
-          {/* Interactive Tooltip on Hover / Focus / Tap */}
+          {/* Interactive Floating Tooltip on Hover / Focus / Tap */}
           {activeCity && (
             <div
               className="absolute pointer-events-auto z-40 transition-all duration-150 animate-in fade-in zoom-in-95"
@@ -542,33 +567,39 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
         </div>
       </div>
 
-      {/* 3. Footer Strip (Real DB Stats) */}
-      <footer className="grid grid-cols-3 border-t border-[#E5E7EB] bg-white/80 divide-x divide-[#E5E7EB] py-2 sm:py-2.5 px-2 sm:px-3 text-center z-10">
-        <div className="flex flex-col items-center">
-          <span className="font-mono text-[12px] sm:text-[13px] font-bold text-[#0A0A0A] tabular-nums">
+      {/* 3. Hairline Divider Fading to Transparent at Ends */}
+      <div
+        className="w-full h-[1px] bg-gradient-to-r from-transparent via-[#E5E7EB] to-transparent my-3 sm:my-4"
+        aria-hidden="true"
+      />
+
+      {/* 4. Stats Row (Clean 3-column layout without box container) */}
+      <div className="grid grid-cols-3 divide-x divide-[#E5E7EB] text-center w-full">
+        <div className="flex flex-col items-center px-1">
+          <span className="font-mono text-[18px] sm:text-[20px] font-bold text-[#0A0A0A] tabular-nums leading-none">
             <StatCountUp value={totals.verified_alumni} reduceMotion={reduceMotion} />
           </span>
-          <span className="font-mono text-[9px] sm:text-[10px] uppercase tracking-wider text-[#6B7280]">
+          <span className="font-mono text-[9px] sm:text-[10px] uppercase tracking-wider text-[#6B7280] mt-1">
             Verified Alumni
           </span>
         </div>
-        <div className="flex flex-col items-center">
-          <span className="font-mono text-[12px] sm:text-[13px] font-bold text-[#0A0A0A] tabular-nums">
+        <div className="flex flex-col items-center px-1">
+          <span className="font-mono text-[18px] sm:text-[20px] font-bold text-[#0A0A0A] tabular-nums leading-none">
             <StatCountUp value={totals.countries} reduceMotion={reduceMotion} />
           </span>
-          <span className="font-mono text-[9px] sm:text-[10px] uppercase tracking-wider text-[#6B7280]">
+          <span className="font-mono text-[9px] sm:text-[10px] uppercase tracking-wider text-[#6B7280] mt-1">
             Countries
           </span>
         </div>
-        <div className="flex flex-col items-center">
-          <span className="font-mono text-[12px] sm:text-[13px] font-bold text-[#0A0A0A] tabular-nums">
+        <div className="flex flex-col items-center px-1">
+          <span className="font-mono text-[18px] sm:text-[20px] font-bold text-[#0A0A0A] tabular-nums leading-none">
             <StatCountUp value={totals.cities} reduceMotion={reduceMotion} />
           </span>
-          <span className="font-mono text-[9px] sm:text-[10px] uppercase tracking-wider text-[#6B7280]">
+          <span className="font-mono text-[9px] sm:text-[10px] uppercase tracking-wider text-[#6B7280] mt-1">
             Global Cities
           </span>
         </div>
-      </footer>
-    </article>
+      </div>
+    </div>
   );
 };
