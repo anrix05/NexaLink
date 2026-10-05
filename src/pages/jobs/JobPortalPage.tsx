@@ -41,7 +41,7 @@ interface JobPortalPageProps {
 }
 
 export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) => {
-  const { jobsList, addJob, applyForJob, opportunityApplications, isDataLoading, setPendingChatUserId } = useData();
+  const { jobsList, addJob, applyForJob, opportunityApplications, isDataLoading, setPendingChatUserId, savedOpportunityIds, toggleSaveOpportunity } = useData();
   const { currentUser, currentRole } = useAuth();
 
   const isHostRole = currentRole === 'alumni' || currentRole === 'faculty' || currentRole === 'admin';
@@ -73,7 +73,7 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
 
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [showPostJobModal, setShowPostJobModal] = useState(false);
-  const [savedJobIds, setSavedJobIds] = useState<string[]>(['job-1']);
+  const savedJobIds = savedOpportunityIds;
 
   // Apply modal & feedback states
   const [applyingJob, setApplyingJob] = useState<JobListing | null>(null);
@@ -350,12 +350,7 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
 
   const handleToggleSaveJob = (e: React.MouseEvent, jobId: string) => {
     e.stopPropagation();
-    const isSaved = savedJobIds.includes(jobId);
-    if (isSaved) {
-      setSavedJobIds(prev => prev.filter(id => id !== jobId));
-    } else {
-      setSavedJobIds(prev => [...prev, jobId]);
-    }
+    toggleSaveOpportunity(jobId);
   };
 
   const handleMessagePoster = (posterId?: string) => {

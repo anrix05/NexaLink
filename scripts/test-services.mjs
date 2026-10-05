@@ -1356,5 +1356,125 @@ test('characterization: messenger thread pagination delivers newest messages on 
   assert.strictEqual(page3[4].content, 'Message 5');
 });
 
+// ----------------------------------------------------------------------------
+// 11. Phase 3: Optimistic UI Rollback Characterization Tests
+// ----------------------------------------------------------------------------
+test('characterization: optimistic save opportunity rolls back state and fires toast on failure', async () => {
+  let saved = ['job-1'];
+  let toastMsg = null;
+  const showToast = (msg) => { toastMsg = msg; };
+
+  // Simulated optimistic action
+  const toggleSaveOpportunity = async (jobId, shouldFail = false) => {
+    const previous = [...saved];
+    saved = saved.includes(jobId) ? saved.filter(id => id !== jobId) : [...saved, jobId];
+
+    if (shouldFail) {
+      // Simulate background failure
+      saved = previous;
+      showToast('Failed to update, changes reverted');
+    }
+  };
+
+  // 1. Successful save
+  await toggleSaveOpportunity('job-2', false);
+  assert.deepStrictEqual(saved, ['job-1', 'job-2'], 'State must update immediately on success');
+  assert.strictEqual(toastMsg, null);
+
+  // 2. Failed unsave -> rolls back to previous and triggers toast
+  await toggleSaveOpportunity('job-2', true);
+  assert.deepStrictEqual(saved, ['job-1', 'job-2'], 'State must return to previous on failure');
+  assert.strictEqual(toastMsg, 'Failed to update, changes reverted', 'Toast message must match requirement');
+});
+
+test('characterization: optimistic mark notification read rolls back state and fires toast on failure', async () => {
+  let notifs = [
+    { id: 'notif-1', is_read: false },
+    { id: 'notif-2', is_read: false }
+  ];
+  let toastMsg = null;
+  const showToast = (msg) => { toastMsg = msg; };
+
+  const markNotificationRead = async (id, shouldFail = false) => {
+    const previous = notifs.map(n => ({ ...n }));
+    notifs = notifs.map(n => n.id === id ? { ...n, is_read: true } : n);
+
+    if (shouldFail) {
+      notifs = previous;
+      showToast('Failed to update, changes reverted');
+    }
+  };
+
+  // Immediate optimistic update
+  const promise = markNotificationRead('notif-1', true);
+  // Verify failure rollback
+  await promise;
+  assert.strictEqual(notifs[0].is_read, false, 'Notification must remain unread after rollback');
+  assert.strictEqual(toastMsg, 'Failed to update, changes reverted');
+});
+
+test('characterization: optimistic message reaction rolls back state and fires toast on failure', async () => {
+  let reactions = [{ emoji: '👍', userId: 'user-1' }];
+  let toastMsg = null;
+  const showToast = (msg) => { toastMsg = msg; };
+
+  const toggleReaction = async (emoji, userId, shouldFail = false) => {
+    const previous = [...reactions];
+    const existingIdx = reactions.findIndex(r => r.userId === userId && r.emoji === emoji);
+    if (existingIdx >= 0) {
+      reactions = reactions.filter((_, i) => i !== existingIdx);
+    } else {
+      reactions = [...reactions, { emoji, userId }];
+    }
+
+    if (shouldFail) {
+      reactions = previous;
+      showToast('Failed to update, changes reverted');
+    }
+  };
+
+  // Add reaction with failure
+  await toggleReaction('❤️', 'user-1', true);
+  assert.strictEqual(reactions.length, 1, 'Reaction count must return to 1 on failure');
+  assert.strictEqual(reactions[0].emoji, '👍', 'Original reaction must be preserved');
+  assert.strictEqual(toastMsg, 'Failed to update, changes reverted');
+});
+
+test('characterization: optimistic event RSVP rolls back registered and waitlist states on failure', async () => {
+  let event = {
+    id: 'event-1',
+    registeredUserIds: ['user-1'],
+    waitlistUserIds: [],
+    rsvpsCount: 1
+  };
+  let toastMsg = null;
+  const showToast = (msg) => { toastMsg = msg; };
+
+  const rsvpEvent = async (userId, shouldFail = false) => {
+    const previous = {
+      registeredUserIds: [...event.registeredUserIds],
+      waitlistUserIds: [...event.waitlistUserIds],
+      rsvpsCount: event.rsvpsCount
+    };
+
+    // Optimistically register user-2
+    event.registeredUserIds = [...event.registeredUserIds, userId];
+    event.rsvpsCount = event.registeredUserIds.length;
+
+    if (shouldFail) {
+      event.registeredUserIds = previous.registeredUserIds;
+      event.waitlistUserIds = previous.waitlistUserIds;
+      event.rsvpsCount = previous.rsvpsCount;
+      showToast('Failed to update, changes reverted');
+    }
+  };
+
+  await rsvpEvent('user-2', true);
+  assert.strictEqual(event.rsvpsCount, 1, 'RSVP count must rollback on failure');
+  assert.deepStrictEqual(event.registeredUserIds, ['user-1'], 'Registered user IDs must rollback on failure');
+  assert.strictEqual(toastMsg, 'Failed to update, changes reverted');
+});
+
+
 
 

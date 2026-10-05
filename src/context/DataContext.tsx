@@ -92,6 +92,9 @@ interface DataContextType {
   updateNotificationPreferences: (prefs: Partial<Omit<NotificationPreferences, 'user_id'>>) => Promise<void>;
   messages: ChatMessage[];
   auditLogs: AuditLogEntry[];
+  savedOpportunityIds: string[];
+  toggleSaveOpportunity: (opportunityId: string) => Promise<void>;
+  showToast: (msg: string) => void;
   loadThreadMessages?: (contactId: string, options?: { limit?: number; beforeTimestamp?: string }) => Promise<void>;
   loadAuditLogs?: () => Promise<void>;
   roleTransitionRequests: RoleTransitionRequest[];
@@ -266,6 +269,67 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       details: 'Audit logging & security governance active.'
     }
   ]);
+
+  // Phase 3: Optimistic Saved Opportunities State
+  const [savedOpportunityIds, setSavedOpportunityIds] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem(`nexalink_saved_opportunities_${currentUser?.id || 'guest'}`);
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return ['job-1'];
+  });
+
+  const showToast = useCallback((msg: string) => {
+    setLatestIncomingNotification({
+      id: `toast-${Date.now()}`,
+      user_id: currentUser?.id || 'system',
+      title: 'Action Notice',
+      body: msg,
+      type: 'System Alert',
+      category: 'system',
+      is_read: false,
+      created_at: new Date().toISOString()
+    });
+  }, [currentUser?.id]);
+
+  const toggleSaveOpportunity = useCallback(async (opportunityId: string) => {
+    const previous = [...savedOpportunityIds];
+    const isCurrentlySaved = previous.includes(opportunityId);
+    const next = isCurrentlySaved
+      ? previous.filter(id => id !== opportunityId)
+      : [...previous, opportunityId];
+
+    // 1. Apply to React state IMMEDIATELY (optimistic)
+    setSavedOpportunityIds(next);
+
+    try {
+      const storageKey = `nexalink_saved_opportunities_${currentUser?.id || 'guest'}`;
+      localStorage.setItem(storageKey, JSON.stringify(next));
+
+      // 2. Fire background Supabase write if configured
+      if (isSupabaseConfigured() && currentUser?.id) {
+        const { error } = await supabase
+          .from('users')
+          .update({
+            privacy_settings: {
+              ...((currentUser as any).privacySettings || {}),
+              saved_opportunities: next
+            }
+          })
+          .eq('id', currentUser.id);
+
+        if (error) {
+          throw error;
+        }
+      }
+    } catch (err) {
+      console.error('[Supabase toggleSaveOpportunity error, rolling back]', err);
+      // 3. Rollback local state
+      setSavedOpportunityIds(previous);
+      // 4. Show toast notification
+      showToast('Failed to update, changes reverted');
+    }
+  }, [savedOpportunityIds, currentUser, showToast]);
 
   // Core Supabase Data Loader
   const loadSupabaseData = useCallback(async () => {
@@ -1748,6 +1812,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const rsvpEvent = (eventId: string, userId: string) => {
     let updatedEvent: EventItem | undefined;
+    const previousEvents = [...eventsList];
+    const previousRsvps = [...eventRsvps];
 
     setEventsList(prev =>
       prev.map(evt => {
@@ -1855,7 +1921,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isSupabaseConfigured() && updatedEvent) {
       eventsService
         .updateEventRsvp(eventId, updatedEvent.registeredUserIds, updatedEvent.waitlistUserIds || [])
-        .catch(err => console.error('[Supabase rsvpEvent error]', err));
+        .catch(err => {
+          console.error('[Supabase rsvpEvent error, rolling back]', err);
+          setEventsList(previousEvents);
+          setEventRsvps(previousRsvps);
+          showToast('Failed to update, changes reverted');
+        });
     }
   };
 
@@ -2619,9 +2690,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const toggleReaction = (messageId: string, emoji: string) => {
     if (!currentUser) return;
     const userId = currentUser.id;
+    let rollbackReactions: any[] | undefined;
+    let updatedReactions: any[] | undefined;
+
     setMessages(prev => prev.map(msg => {
       if (msg.id === messageId) {
         const existingReactions = msg.reactions || [];
+        rollbackReactions = [...existingReactions];
         const existingReactionIndex = existingReactions.findIndex(r => r.userId === userId && r.emoji === emoji);
         let newReactions;
         if (existingReactionIndex >= 0) {
@@ -2630,16 +2705,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           newReactions = [...existingReactions, { emoji, userId }];
         }
-        
-        if (isSupabaseConfigured()) {
-          supabase.from('chat_messages').update({ reactions: newReactions }).eq('id', messageId).then(({ error }) => {
-            if (error) console.error('[Supabase toggleReaction error]', error);
-          });
-        }
+        updatedReactions = newReactions;
         return { ...msg, reactions: newReactions };
       }
       return msg;
     }));
+
+    if (isSupabaseConfigured() && updatedReactions) {
+      supabase
+        .from('chat_messages')
+        .update({ reactions: updatedReactions })
+        .eq('id', messageId)
+        .then(
+          ({ error }) => {
+            if (error) {
+              console.error('[Supabase toggleReaction error, rolling back]', error);
+              if (rollbackReactions) {
+                setMessages(prev => prev.map(m => m.id === messageId ? { ...m, reactions: rollbackReactions } : m));
+              }
+              showToast('Failed to update, changes reverted');
+            }
+          },
+          (err: any) => {
+            console.error('[Supabase toggleReaction exception, rolling back]', err);
+            if (rollbackReactions) {
+              setMessages(prev => prev.map(m => m.id === messageId ? { ...m, reactions: rollbackReactions } : m));
+            }
+            showToast('Failed to update, changes reverted');
+          }
+        );
+    }
   };
 
   const editMessage = (messageId: string, newContent: string) => {
@@ -3392,6 +3487,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (err) {
         console.error('[Supabase markNotificationRead error, rolling back]', err);
         setNotifications(previous);
+        showToast('Failed to update, changes reverted');
       }
     }
   };
@@ -3406,6 +3502,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (err) {
         console.error('[Supabase markAllNotificationsRead error, rolling back]', err);
         setNotifications(previous);
+        showToast('Failed to update, changes reverted');
       }
     }
   };
@@ -3959,6 +4056,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         auditLogs,
         loadThreadMessages,
         loadAuditLogs,
+        savedOpportunityIds,
+        toggleSaveOpportunity,
+        showToast,
         approveUserVerification,
         rejectUserVerification,
         requestUserClarification,
