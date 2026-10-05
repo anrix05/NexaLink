@@ -913,12 +913,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setNotifications(prev => [newNotif, ...prev]);
 
     if (isSupabaseConfigured()) {
-      supabase.from('users').update({
-        is_verified: true,
-        verification_status: 'Verified'
-      }).eq('id', userId).then(({ error }) => {
-        if (error) console.error('[Supabase approveUserVerification error]', error);
-      });
+      (supabase.rpc as any)('approve_user_verification', { target_user_id: userId })
+        .then(({ error }: any) => {
+          if (error) {
+            console.warn('[RPC approve_user_verification fallback to direct update]', error.message);
+            supabase.from('users').update({
+              is_verified: true,
+              verification_status: 'Verified'
+            }).eq('id', userId).then(({ error: uErr }) => {
+              if (uErr) console.error('[Supabase approveUserVerification error]', uErr);
+            });
+          }
+        });
       supabase.from('alumni_profiles').update({
         verified_at: verifiedDate
       }).eq('user_id', userId).then(({ error }) => {
@@ -946,12 +952,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setNotifications(prev => [newNotif, ...prev]);
 
     if (isSupabaseConfigured()) {
-      supabase.from('users').update({
-        verification_status: 'Rejected',
-        rejection_reason: reason
-      }).eq('id', userId).then(({ error }) => {
-        if (error) console.error('[Supabase rejectUserVerification error]', error);
-      });
+      (supabase.rpc as any)('reject_user_verification', { target_user_id: userId, rejection_reason: reason })
+        .then(({ error }: any) => {
+          if (error) {
+            console.warn('[RPC reject_user_verification fallback to direct update]', error.message);
+            supabase.from('users').update({
+              verification_status: 'Rejected',
+              rejection_reason: reason
+            }).eq('id', userId).then(({ error: uErr }) => {
+              if (uErr) console.error('[Supabase rejectUserVerification error]', uErr);
+            });
+          }
+        });
     }
   };
 
@@ -964,12 +976,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('CLARIFICATION_REQUESTED', 'Administrator', `Requested proof document from user ID ${userId}: "${promptText}"`, userId);
 
     if (isSupabaseConfigured()) {
-      supabase.from('users').update({
-        verification_status: 'Needs Clarification',
-        clarification_requested: clarObj
-      }).eq('id', userId).then(({ error }) => {
-        if (error) console.error('[Supabase requestUserClarification error]', error);
-      });
+      (supabase.rpc as any)('request_user_clarification', { target_user_id: userId, clarification_instructions: promptText })
+        .then(({ error }: any) => {
+          if (error) {
+            console.warn('[RPC request_user_clarification fallback to direct update]', error.message);
+            supabase.from('users').update({
+              verification_status: 'Needs Clarification',
+              clarification_requested: clarObj
+            }).eq('id', userId).then(({ error: uErr }) => {
+              if (uErr) console.error('[Supabase requestUserClarification error]', uErr);
+            });
+          }
+        });
     }
   };
 

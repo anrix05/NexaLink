@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { LogoMark } from './LogoMark';
 import { replayIntro } from '../../lib/intro';
 import { useReducedMotionPreference, toggleReducedMotionPreference } from '../../lib/motionPreference';
-import { getBuildInfo } from '../../utils/buildInfo';
 
 interface FooterProps {
   setActiveTab: (tab: string) => void;
@@ -13,12 +12,10 @@ interface FooterProps {
 const CompactPortalFooter: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveTab }) => {
   const reduceMotion = useReducedMotionPreference();
 
-  const buildInfo = React.useMemo(() => getBuildInfo(), []);
-
   return (
     <footer className="bg-white border-t border-[#E5E7EB] text-[#0A0A0A] font-sans text-xs mt-12 py-5">
       <div className="app-container flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-medium text-[#6B7280]">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-3">
           <div className="w-6 h-6 rounded-md bg-[#0A0A0A] text-white flex items-center justify-center">
             <LogoMark className="w-3.5 h-3.5 text-white" />
           </div>
@@ -27,10 +24,6 @@ const CompactPortalFooter: React.FC<{ setActiveTab: (tab: string) => void }> = (
           </span>
           <span className="text-[#E5E7EB]">•</span>
           <span>© 2026 NexaLink</span>
-          <span className="text-[#E5E7EB]">•</span>
-          <span className="font-mono text-[11px] text-[#9CA3AF] bg-[#F9FAFB] px-2 py-0.5 rounded border border-[#E5E7EB]" title={`Built at: ${buildInfo.buildTime}`}>
-            {buildInfo.gitBranch}@{buildInfo.commitSha} • {buildInfo.dataMode.toUpperCase()} ({buildInfo.supabaseProjectRef})
-          </span>
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-6">
