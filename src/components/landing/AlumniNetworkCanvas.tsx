@@ -423,23 +423,28 @@ export const AlumniNetworkCanvas: React.FC<{ className?: string }> = ({ classNam
         }
       }
 
-      // 5. Draw city labels with white pill background and collision prevention
+      // 5. Draw city labels — JetBrains Mono mono chips, right-edge aware
       // Sorted by priority (Mumbai highest = 1)
       const cityNodes = nodes
         .filter((n): n is Node & { city: CityNode } => Boolean(n.city))
         .sort((a, b) => a.city.priority - b.city.priority);
 
-      ctx.font = '500 11px Inter, -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.font = '500 11px \'JetBrains Mono\', ui-monospace, Menlo, monospace';
+      ctx.letterSpacing = '0.08em';
       const renderedBoxes: LabelBox[] = [];
 
       for (const cn of cityNodes) {
-        const text = cn.city.name;
+        const text = cn.city.name.toUpperCase();
         const textMetrics = ctx.measureText(text);
         const textWidth = textMetrics.width;
-        const pillWidth = textWidth + 12;
-        const pillHeight = 18;
-        const pillX = cn.x + 8;
-        const pillY = cn.y - 9;
+        const pillWidth = textWidth + 14; // slightly wider padding for mono
+        const pillHeight = 20;
+
+        // Flip label to the left side for right-edge nodes (xRatio > 0.6)
+        // so chips at Bengaluru / Singapore never clip past the card edge
+        const flipLeft = cn.city.xRatio > 0.6;
+        const pillX = flipLeft ? cn.x - pillWidth - 10 : cn.x + 10;
+        const pillY = cn.y - pillHeight / 2;
 
         const candidateBox: LabelBox = {
           x: pillX,
@@ -448,15 +453,14 @@ export const AlumniNetworkCanvas: React.FC<{ className?: string }> = ({ classNam
           h: pillHeight,
         };
 
-        // Check if candidate overlaps any higher-priority label already drawn
+        // Skip if overlapping a higher-priority label already drawn
         const hasOverlap = renderedBoxes.some((box) => doBoxesOverlap(box, candidateBox));
         if (!hasOverlap) {
-          // Draw small white pill background with hairline border
+          // White pill with hairline border
           ctx.fillStyle = '#FFFFFF';
           ctx.strokeStyle = '#E5E7EB';
           ctx.lineWidth = 1;
 
-          // Rounded rectangle pill
           const r = 4;
           ctx.beginPath();
           ctx.moveTo(pillX + r, pillY);
@@ -472,13 +476,16 @@ export const AlumniNetworkCanvas: React.FC<{ className?: string }> = ({ classNam
           ctx.fill();
           ctx.stroke();
 
-          // Draw label text
+          // Label text (uppercase)
           ctx.fillStyle = '#0A0A0A';
-          ctx.fillText(text, pillX + 6, pillY + 13);
+          ctx.fillText(text, pillX + 7, pillY + 14);
 
           renderedBoxes.push(candidateBox);
         }
       }
+
+      // Reset letterSpacing to default so it doesn't bleed into other canvas text
+      ctx.letterSpacing = '0px';
 
       ctx.restore();
       animationFrameId = requestAnimationFrame(render);

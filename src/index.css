@@ -314,3 +314,63 @@ textarea:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* ============================================================
+   HERO TYPOGRAPHY SYSTEM
+   Switch pairings by setting data-hero-type on the hero wrapper.
+   Pairing A (default): Inter Tight 600 — recommended
+   Pairing B: Instrument Serif italic accent — editorial
+   Pairing C: Outfit 600 — brand-consistent
+   ============================================================ */
+.hero-type {
+  --hero-display: 'Inter Tight', 'Inter', system-ui, sans-serif;
+  --hero-weight: 600;
+  --hero-track: -0.028em;
+  --hero-lh: 1.04;
+  --hero-size: clamp(2.35rem, 1.1rem + 4.7vw, 4.6rem);
+  --hero-soft-color: #6B7280;
+  --hero-soft-style: normal;
+}
+
+.hero-type[data-hero-type="editorial"] {
+  --hero-display: 'Instrument Serif', Georgia, serif;
+  --hero-weight: 400;
+  --hero-track: -0.015em;
+  --hero-lh: 1.02;
+  --hero-size: clamp(2.6rem, 1.2rem + 5.4vw, 5.4rem);
+  --hero-soft-color: #0A0A0A;
+  --hero-soft-style: italic;
+}
+
+.hero-type[data-hero-type="outfit"] {
+  --hero-display: 'Outfit', 'Inter', system-ui, sans-serif;
+  --hero-weight: 600;
+  --hero-track: -0.02em;
+  --hero-lh: 1.06;
+  --hero-size: clamp(2.3rem, 1rem + 4.6vw, 4.4rem);
+  --hero-soft-color: #6B7280;
+  --hero-soft-style: normal;
+}
+
+.hero-h1 {
+  max-width: 13em;
+  font-family: var(--hero-display);
+  font-weight: var(--hero-weight);
+  font-size: var(--hero-size);
+  line-height: var(--hero-lh);
+  letter-spacing: var(--hero-track);
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+.hero-h1 .soft {
+  color: var(--hero-soft-color);
+  font-style: var(--hero-soft-style);
+}
+
+/* City chip labels on the alumni network canvas */
+.hero-city {
+  font: 500 0.6875rem/1 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
