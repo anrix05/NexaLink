@@ -35,12 +35,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
       {/* Main Hero Grid */}
       <div className="app-container flex items-start pt-4 sm:pt-6 lg:pt-10 xl:pt-16 pb-4 z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-center w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-stretch w-full">
 
           {/* Left column: typography + CTAs */}
           <motion.div
             style={{ y: yParallax, opacity: opacityParallax }}
-            className="lg:col-span-7 min-w-0"
+            className="lg:col-span-7 min-w-0 flex flex-col justify-between"
           >
             <HeroCopy
               isAuthenticated={isAuthenticated && Boolean(currentUser)}
@@ -53,13 +53,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
             {/* Mobile/Tablet network map — below copy */}
             <div className="lg:hidden pt-8 w-full">
-              <GlobalNetworkMap onSignIn={onSignIn} className="w-full" />
+              <GlobalNetworkMap onSignIn={onSignIn} className="w-full aspect-[4/3] min-h-[260px] sm:aspect-[16/10]" />
             </div>
           </motion.div>
 
-          {/* Right column: desktop network map (vertically centered with hero copy) */}
-          <div className="hidden lg:flex lg:col-span-5 w-full items-center justify-center relative">
-            <GlobalNetworkMap onSignIn={onSignIn} className="w-full" />
+          {/* Right column: desktop network map (matches height of text column) */}
+          <div className="hidden lg:flex lg:col-span-5 w-full h-full relative">
+            <GlobalNetworkMap onSignIn={onSignIn} className="w-full h-full" />
           </div>
 
         </div>

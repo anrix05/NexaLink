@@ -34,7 +34,6 @@ const StatCountUp: React.FC<{ value: number; reduceMotion: boolean }> = ({ value
     const frame = (now: number) => {
       const elapsed = now - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      // Ease out cubic
       const ease = 1 - Math.pow(1 - progress, 3);
       const current = Math.round(start + (value - start) * ease);
       setDisplayValue(current);
@@ -53,11 +52,71 @@ const StatCountUp: React.FC<{ value: number; reduceMotion: boolean }> = ({ value
 
 export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = '', onSignIn }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const mapAreaRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(containerRef, { margin: '80px 0px', once: false });
   const reduceMotion = useReducedMotionPreference();
   const { data, isLoading, isError, refetch } = useGlobalNetworkStats();
 
   const [activeCityId, setActiveCityId] = useState<string | null>(null);
+
+  // Dynamic SVG ViewBox to cover and crop dynamically without letterboxing
+  const [viewBox, setViewBox] = useState<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    dotRadius: number;
+  }>({
+    x: 0,
+    y: 0,
+    w: MAP_BOUNDS.svgWidth,
+    h: MAP_BOUNDS.svgHeight,
+    dotRadius: 1.5,
+  });
+
+  useEffect(() => {
+    if (!mapAreaRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          const aspect = width / height;
+          let vbW: number = MAP_BOUNDS.svgWidth;
+          let vbH: number = MAP_BOUNDS.svgHeight;
+          let vbX: number = 0;
+          let vbY: number = 0;
+
+          if (aspect < 2.0) {
+            // Container is taller than 2:1 -> crop horizontally while keeping Mumbai comfortably center-right
+            vbW = Math.max(540, MAP_BOUNDS.svgHeight * aspect);
+            vbH = MAP_BOUNDS.svgHeight;
+            // Bias crop window toward Mumbai (x: 692.9)
+            vbX = Math.max(0, Math.min(MAP_BOUNDS.svgWidth - vbW, MUMBAI_HUB.x - vbW * 0.62));
+            vbY = 0;
+          } else {
+            // Container is wider than 2:1 -> crop vertically
+            vbW = MAP_BOUNDS.svgWidth;
+            vbH = Math.max(340, MAP_BOUNDS.svgWidth / aspect);
+            vbX = 0;
+            vbY = Math.max(0, Math.min(MAP_BOUNDS.svgHeight - vbH, MUMBAI_HUB.y - vbH * 0.5));
+          }
+
+          const dotRadius = Math.min(Math.max(1.4, (width / 500) * 1.55), 2.0);
+
+          setViewBox({
+            x: Math.round(vbX * 10) / 10,
+            y: Math.round(vbY * 10) / 10,
+            w: Math.round(vbW * 10) / 10,
+            h: Math.round(vbH * 10) / 10,
+            dotRadius: Math.round(dotRadius * 10) / 10,
+          });
+        }
+      }
+    });
+
+    ro.observe(mapAreaRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   // Close tooltip on Esc key or click outside
   useEffect(() => {
@@ -83,12 +142,12 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
 
   const totals = data?.totals ?? { verified_alumni: 0, countries: 0, cities: 0 };
 
-  // Pre-calculate land dots with radial tonal falloff from Mumbai
+  // Pre-calculate land dots with radial tonal falloff using the soft gray color
   const landDotsWithTones = useMemo(() => {
     return LAND_DOTS.map(([x, y]) => {
       const dist = Math.hypot(x - MUMBAI_HUB.x, y - MUMBAI_HUB.y);
-      // Opacity 0.38 near Mumbai down to 0.14 at map edges
-      const opacity = Math.max(0.14, Math.min(0.38, 0.40 - (dist / 700) * 0.24));
+      // Full strength (1.0) near Mumbai, falling off radially to 0.35 at outer edges
+      const opacity = Math.max(0.35, Math.min(1.0, 1.0 - (dist / 650) * 0.65));
       return { x, y, opacity: Math.round(opacity * 100) / 100 };
     });
   }, []);
@@ -150,7 +209,7 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
     return found ? { ...found, isHub: false } : null;
   }, [activeCityId, plottedCities, totals.verified_alumni]);
 
-  // Dynamic screen reader description
+  // Screen reader description
   const ariaDescription = `Map showing ${totals.verified_alumni} verified VIT alumni across ${totals.countries} ${
     totals.countries === 1 ? 'country' : 'countries'
   } and ${totals.cities} ${totals.cities === 1 ? 'city' : 'cities'}. Hub anchored at Vidyalankar, Mumbai.`;
@@ -160,10 +219,10 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
       ref={containerRef}
       role="region"
       aria-label="NexaLink Global Alumni Network"
-      className={`relative w-full flex flex-col justify-between overflow-visible select-none ${className}`}
+      className={`relative w-full h-full flex flex-col justify-between overflow-visible select-none ${className}`}
     >
-      {/* 1. Header Eyebrow (Borderless, Left-aligned to map) */}
-      <div className="flex items-center justify-between pb-3 sm:pb-4 w-full">
+      {/* 1. Header Eyebrow (Pinned at Top) */}
+      <div className="flex items-center justify-between pb-2 sm:pb-3 w-full shrink-0">
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-[#0A0A0A]" aria-hidden="true" />
           <span className="font-mono text-[11px] font-semibold tracking-widest uppercase text-[#6B7280]">
@@ -180,28 +239,23 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
         </div>
       </div>
 
-      {/* 2. Map Canvas (Full Bleed / Borderless with Soft Edge Blending) */}
+      {/* 2. Map Canvas (Flex-1 Area Filling between Eyebrow and Stats) */}
       <div
-        className="relative w-full flex items-center justify-center overflow-visible"
+        ref={mapAreaRef}
+        className="relative w-full flex-1 min-h-[260px] flex items-center justify-center overflow-hidden"
         style={{
           maskImage:
-            'radial-gradient(ellipse 92% 82% at 56% 48%, black 48%, rgba(0,0,0,0.85) 72%, rgba(0,0,0,0.2) 92%, transparent 100%)',
+            'linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%), radial-gradient(ellipse 95% 85% at 58% 50%, black 50%, rgba(0,0,0,0.85) 75%, rgba(0,0,0,0.15) 94%, transparent 100%)',
           WebkitMaskImage:
-            'radial-gradient(ellipse 92% 82% at 56% 48%, black 48%, rgba(0,0,0,0.85) 72%, rgba(0,0,0,0.2) 92%, transparent 100%)',
+            'linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%), radial-gradient(ellipse 95% 85% at 58% 50%, black 50%, rgba(0,0,0,0.85) 75%, rgba(0,0,0,0.15) 94%, transparent 100%)',
         }}
       >
-        {/* Faint tonal gradient wash behind the map area */}
+        {/* Soft Radial Depth Glow behind Mumbai */}
         <div
-          className="absolute inset-0 pointer-events-none rounded-3xl opacity-40 bg-gradient-to-b from-[#0A0A0A]/[0.03] via-[#0A0A0A]/[0.015] to-transparent"
-          aria-hidden="true"
-        />
-
-        {/* Soft Radial Glow behind Mumbai */}
-        <div
-          className="absolute pointer-events-none w-[220px] h-[220px] rounded-full bg-[#0A0A0A]/[0.07] blur-2xl"
+          className="absolute pointer-events-none w-[240px] h-[240px] rounded-full bg-[#6B7280]/[0.08] blur-2xl"
           style={{
-            left: `${(MUMBAI_HUB.x / MAP_BOUNDS.svgWidth) * 100}%`,
-            top: `${(MUMBAI_HUB.y / MAP_BOUNDS.svgHeight) * 100}%`,
+            left: `${Math.max(0, Math.min(100, ((MUMBAI_HUB.x - viewBox.x) / viewBox.w) * 100))}%`,
+            top: `${Math.max(0, Math.min(100, ((MUMBAI_HUB.y - viewBox.y) / viewBox.h) * 100))}%`,
             transform: 'translate(-50%, -50%)',
           }}
           aria-hidden="true"
@@ -231,19 +285,20 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
           </div>
         )}
 
-        {/* Map SVG */}
+        {/* Map SVG: Scales to COVER container without letterboxing */}
         <svg
-          viewBox={`0 0 ${MAP_BOUNDS.svgWidth} ${MAP_BOUNDS.svgHeight}`}
-          preserveAspectRatio="xMidYMid meet"
-          className="w-full h-auto max-h-[380px] sm:max-h-[440px] lg:max-h-[480px] object-contain overflow-visible"
+          viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
+          preserveAspectRatio="xMidYMid slice"
+          className="w-full h-full object-cover overflow-visible"
           role="img"
           aria-label={ariaDescription}
+          style={{ color: 'var(--hero-soft-color, #6B7280)' }}
         >
           <defs>
-            {/* Gradient for quadratic arcs: #0A0A0A at Mumbai hub -> #0A0A0A 25% opacity at spokes */}
+            {/* Gradient for quadratic arcs: #0A0A0A at Mumbai hub -> var(--hero-soft-color) at spokes */}
             <linearGradient id="heroArcGradient" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stopColor="#0A0A0A" stopOpacity="0.85" />
-              <stop offset="100%" stopColor="#0A0A0A" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="#6B7280" stopOpacity="0.35" />
             </linearGradient>
 
             <linearGradient id="heroActiveArcGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -252,15 +307,14 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
             </linearGradient>
           </defs>
 
-          {/* Base Layer: Land Dot Matrix with high-contrast tonal falloff */}
-          <g aria-hidden="true">
+          {/* Base Layer: Land Dot Matrix in exact headline soft gray token */}
+          <g aria-hidden="true" fill="currentColor">
             {landDotsWithTones.map((dot, idx) => (
               <circle
                 key={idx}
                 cx={dot.x}
                 cy={dot.y}
-                r={1.4}
-                fill="#0A0A0A"
+                r={viewBox.dotRadius}
                 opacity={dot.opacity}
               />
             ))}
@@ -308,7 +362,7 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
                   {!reduceMotion && isInView && (
                     <circle
                       r={isTargeted ? 2.5 : 2}
-                      fill={isTargeted ? '#0A0A0A' : '#0A0A0A'}
+                      fill="#0A0A0A"
                       opacity={hasOtherActive ? 0.25 : 0.9}
                     >
                       <animateMotion
@@ -448,13 +502,13 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
         </svg>
 
         {/* HTML Overlay for Crisp Mono Chips & Tooltips */}
-        <div className="absolute inset-0 pointer-events-none p-2 sm:p-4" aria-hidden="true">
-          {/* Mumbai HQ Chip (Dark background, 24px clearance from right) */}
+        <div className="absolute inset-0 pointer-events-none p-2 sm:p-3" aria-hidden="true">
+          {/* Mumbai HQ Chip (Dark background, guaranteed >= 24px clearance) */}
           <div
             className="absolute transition-all duration-200 pointer-events-auto"
             style={{
-              left: `${Math.min((MUMBAI_HUB.x / MAP_BOUNDS.svgWidth) * 100, 82)}%`,
-              top: `${(MUMBAI_HUB.y / MAP_BOUNDS.svgHeight) * 100}%`,
+              left: `${Math.max(10, Math.min(80, ((MUMBAI_HUB.x - viewBox.x) / viewBox.w) * 100))}%`,
+              top: `${Math.max(10, Math.min(90, ((MUMBAI_HUB.y - viewBox.y) / viewBox.h) * 100))}%`,
               transform: 'translate(10px, -50%)',
             }}
           >
@@ -477,12 +531,20 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
           {plottedCities.map((city, idx) => {
             const isTargeted = activeCityId === city.id;
             const isTabletHidden = idx >= 6;
-            const isMobileHidden = idx >= 3; // Limit to 3 on mobile for zero congestion
+            const isMobileHidden = idx >= 3;
 
             let transform = 'translate(-50%, -100%) translateY(-8px)';
             if (city.labelPosition === 'bottom') transform = 'translate(-50%, 8px)';
             if (city.labelPosition === 'left') transform = 'translate(-100%, -50%) translateX(-8px)';
             if (city.labelPosition === 'right') transform = 'translate(8px, -50%)';
+
+            const leftPct = ((city.x - viewBox.x) / viewBox.w) * 100;
+            const topPct = ((city.y - viewBox.y) / viewBox.h) * 100;
+
+            // Only render chip if inside visible viewBox
+            if (leftPct < 2 || leftPct > 98 || topPct < 2 || topPct > 98) {
+              return null;
+            }
 
             return (
               <div
@@ -491,8 +553,8 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
                   isMobileHidden ? 'hidden sm:block' : ''
                 } ${isTabletHidden ? 'sm:hidden lg:block' : ''}`}
                 style={{
-                  left: `${(city.x / MAP_BOUNDS.svgWidth) * 100}%`,
-                  top: `${(city.y / MAP_BOUNDS.svgHeight) * 100}%`,
+                  left: `${leftPct}%`,
+                  top: `${topPct}%`,
                   transform,
                 }}
               >
@@ -536,8 +598,14 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
             <div
               className="absolute pointer-events-auto z-40 transition-all duration-150 animate-in fade-in zoom-in-95"
               style={{
-                left: `${Math.min(Math.max((activeCity.x / MAP_BOUNDS.svgWidth) * 100, 18), 82)}%`,
-                top: `${Math.min(Math.max((activeCity.y / MAP_BOUNDS.svgHeight) * 100, 22), 78)}%`,
+                left: `${Math.min(
+                  Math.max(((activeCity.x - viewBox.x) / viewBox.w) * 100, 18),
+                  82
+                )}%`,
+                top: `${Math.min(
+                  Math.max(((activeCity.y - viewBox.y) / viewBox.h) * 100, 22),
+                  78
+                )}%`,
                 transform: 'translate(-50%, -125%)',
               }}
             >
@@ -569,12 +637,12 @@ export const GlobalNetworkMap: React.FC<GlobalNetworkMapProps> = ({ className = 
 
       {/* 3. Hairline Divider Fading to Transparent at Ends */}
       <div
-        className="w-full h-[1px] bg-gradient-to-r from-transparent via-[#E5E7EB] to-transparent my-3 sm:my-4"
+        className="w-full h-[1px] bg-gradient-to-r from-transparent via-[#E5E7EB] to-transparent my-2.5 sm:my-3 shrink-0"
         aria-hidden="true"
       />
 
-      {/* 4. Stats Row (Clean 3-column layout without box container) */}
-      <div className="grid grid-cols-3 divide-x divide-[#E5E7EB] text-center w-full">
+      {/* 4. Stats Row (Pinned at Bottom, Aligned with Paragraph/CTA line) */}
+      <div className="grid grid-cols-3 divide-x divide-[#E5E7EB] text-center w-full shrink-0 pt-0.5">
         <div className="flex flex-col items-center px-1">
           <span className="font-mono text-[18px] sm:text-[20px] font-bold text-[#0A0A0A] tabular-nums leading-none">
             <StatCountUp value={totals.verified_alumni} reduceMotion={reduceMotion} />
