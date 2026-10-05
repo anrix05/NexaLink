@@ -153,7 +153,7 @@ export const ScrollytellingSection: React.FC = () => {
       }`}
     >
       {/* 100svh Sticky Stage with vertically centered content */}
-      <div className="sticky top-0 h-[100svh] w-full flex items-center justify-center overflow-hidden">
+      <div className="sticky top-16 h-[calc(100svh-4rem)] w-full flex items-center justify-center overflow-hidden">
         <div className="app-container w-full py-2 sm:py-6">
           
           {/* Top Step Progress Row: Position fixed within stage header */}
