@@ -6,15 +6,11 @@ import { Badge } from './UIComponents';
 import { CommandPalette } from './CommandPalette';
 import { formatDisplayName } from '../../utils/validators';
 import {
-  Bell,
-  Menu,
-  X,
   LogIn,
   LogOut,
   Search,
   CheckCircle2,
   ChevronDown,
-  ArrowRight
 } from 'lucide-react';
 import { NotificationBell } from '../notifications/NotificationBell';
 
@@ -38,7 +34,6 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [scrolledPastHero, setScrolledPastHero] = useState(false);
@@ -110,16 +105,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
     };
   }, [activeTab]);
 
-  // Close mobile menu on Esc
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && mobileMenuOpen) {
-        setMobileMenuOpen(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mobileMenuOpen]);
+
 
   const getSearchPlaceholder = () => {
     if (currentRole === 'student') return 'Search alumni, companies, skills...';
@@ -356,17 +342,6 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                     </span>
                   </button>
                 )}
-
-                {/* Mobile Public Navigation Menu Button */}
-                <button
-                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                  className="lg:hidden inline-flex items-center justify-center p-1.5 sm:p-2 text-[#6B7280] hover:text-[#0A0A0A] border border-[#E5E7EB] rounded-lg touch-target-44 shrink-0"
-                  title="Menu"
-                  aria-expanded={mobileMenuOpen}
-                  aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
-                >
-                  {mobileMenuOpen ? <X className="w-4 h-4 sm:w-5 sm:h-5" /> : <Menu className="w-4 h-4 sm:w-5 sm:h-5" />}
-                </button>
               </>
             ) : (
               <>
@@ -564,81 +539,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
         </div>
       </div>
 
-      {/* Mobile Drawer / Full-Screen Overlay */}
-      {mobileMenuOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Navigation menu"
-          className="lg:hidden fixed inset-x-0 top-16 bottom-0 z-50 bg-white/98 backdrop-blur-xl px-6 py-6 flex flex-col justify-between overflow-y-auto animate-in fade-in slide-in-from-top-4 duration-200"
-          style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
-        >
-          <div className="space-y-4">
-            <span className="text-[11px] font-medium text-[#6B7280] block border-b border-[#E5E7EB] pb-2">
-              Public navigation
-            </span>
 
-            <div className="space-y-1">
-              {[
-                { id: 'overview', label: 'Overview' },
-                { id: 'features', label: 'Features' },
-                { id: 'how-it-works', label: 'How it works' },
-                { id: 'academic', label: 'Accreditation' },
-                { id: 'departments', label: 'Departments' },
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    scrollToSection(item.id);
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full min-h-[48px] text-left py-3 px-3 text-base font-display font-medium text-[#0A0A0A] hover:bg-[#FAFAFA] rounded-xl transition-all flex items-center justify-between touch-target-44"
-                >
-                  <span>{item.label}</span>
-                  <ArrowRight className="w-4 h-4 text-[#6B7280]" />
-                </button>
-              ))}
-            </div>
-
-            {/* Pinned Primary Action */}
-            <div className="pt-4 border-t border-[#E5E7EB] space-y-3">
-              {isAuthenticated && currentUser ? (
-                <button
-                  onClick={() => {
-                    setActiveTab('dashboard');
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full min-h-[48px] py-3 bg-[#0A0A0A] text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2 cursor-pointer touch-target-44 hover:bg-[#222222] transition-colors"
-                >
-                  <LogIn className="w-4 h-4" />
-                  <span>Go to dashboard</span>
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    setActiveTab('auth');
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full min-h-[48px] py-3 bg-[#0A0A0A] text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2 cursor-pointer touch-target-44 hover:bg-[#222222] transition-colors"
-                >
-                  <LogIn className="w-4 h-4" />
-                  <span>Sign in</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="pt-6 border-t border-[#E5E7EB] flex items-center justify-between text-xs text-[#6B7280]">
-            <span>Press Esc to close</span>
-            <button
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-[#0A0A0A] font-medium p-2 touch-target-44"
-            >
-              Close menu
-            </button>
-          </div>
-        </div>
-      )}
 
       </header>
 
