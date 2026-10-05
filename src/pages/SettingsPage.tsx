@@ -1037,8 +1037,8 @@ export const SettingsPage: React.FC = () => {
         </div>
       )}
 
-      {/* System & Build Information Block — admin-only (+ DEV mode preview) */}
-      {(currentRole === 'admin' || import.meta.env.DEV) && (
+      {/* System & Build Information Block — admin-only */}
+      {currentRole === 'admin' && (
         <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 sm:p-8 space-y-4 font-sans text-xs">
           <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-4">
             <div>
