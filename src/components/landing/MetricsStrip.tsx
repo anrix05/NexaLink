@@ -11,9 +11,10 @@ export const MetricsStrip: React.FC = () => {
   const membersCount = stats?.verified_members ?? 0;
   const jobsCount = stats?.approved_jobs ?? 0;
 
-  const showAlumniNumber = !isLoading && !isError && alumniCount >= 5;
-  const showMembersNumber = !isLoading && !isError && membersCount >= 5;
-  const showJobsNumber = !isLoading && !isError && jobsCount >= 5;
+  // Show actual count whenever > 0; invitation copy only when genuinely zero or on error
+  const showAlumniNumber = !isLoading && !isError && alumniCount > 0;
+  const showMembersNumber = !isLoading && !isError && membersCount > 0;
+  const showJobsNumber = !isLoading && !isError && jobsCount > 0;
 
   const animatedAlumni = useCountUp(showAlumniNumber ? alumniCount : 0, 800, 0, true);
   const animatedMembers = useCountUp(showMembersNumber ? membersCount : 0, 800, 0, true);
