@@ -155,6 +155,7 @@ export const MessagingPage: React.FC = () => {
   // Muted contacts state
   const [mutedContactIds, setMutedContactIds] = useState<Set<string>>(new Set());
   const [benchmarkThreadMessages, setBenchmarkThreadMessages] = useState<ChatMessage[] | null>(null);
+  const [optimisticLastMessages, setOptimisticLastMessages] = useState<Record<string, ChatMessage>>({});
 
   // New conversation modal
   const [showNewConversationModal, setShowNewConversationModal] = useState(false);
@@ -590,6 +591,24 @@ export const MessagingPage: React.FC = () => {
 
     const firstAttName = messageAttachments.length > 0 ? messageAttachments[0].fileName : undefined;
 
+    // Record optimistic preview immediately so sidebar never shows 'No messages yet'
+    const optimisticMsg: ChatMessage = {
+      id: clientMsgId,
+      clientMessageId: clientMsgId,
+      senderId: currentUserId,
+      senderName: currentUser.name,
+      senderRole: currentUser.role,
+      senderAvatar: currentUser.avatar || '',
+      receiverId: activeContactId,
+      content: trimmed,
+      timestamp: new Date().toISOString(),
+      isRead: false,
+      attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
+      attachmentName: firstAttName,
+      status: 'sending'
+    };
+    setOptimisticLastMessages(prev => ({ ...prev, [activeContactId]: optimisticMsg }));
+
     // Send through DataContext with attachments and reply snippet
     globalSendMessage(
       activeContactId,
@@ -677,11 +696,15 @@ export const MessagingPage: React.FC = () => {
     }).sort((a, b) => {
       const aMsgs = messages.filter(m => (m.senderId === a.id && m.receiverId === currentUserId) || (m.senderId === currentUserId && m.receiverId === a.id));
       const bMsgs = messages.filter(m => (m.senderId === b.id && m.receiverId === currentUserId) || (m.senderId === currentUserId && m.receiverId === b.id));
-      const aTime = aMsgs.length > 0 ? new Date(aMsgs[aMsgs.length - 1].timestamp).getTime() : 0;
-      const bTime = bMsgs.length > 0 ? new Date(bMsgs[bMsgs.length - 1].timestamp).getTime() : 0;
+      const aOpt = optimisticLastMessages[a.id];
+      const bOpt = optimisticLastMessages[b.id];
+      const aDbTime = aMsgs.length > 0 ? Math.max(...aMsgs.map(m => new Date(m.timestamp).getTime())) : 0;
+      const bDbTime = bMsgs.length > 0 ? Math.max(...bMsgs.map(m => new Date(m.timestamp).getTime())) : 0;
+      const aTime = Math.max(aDbTime, aOpt ? new Date(aOpt.timestamp).getTime() : 0);
+      const bTime = Math.max(bDbTime, bOpt ? new Date(bOpt.timestamp).getTime() : 0);
       return bTime - aTime;
     });
-  }, [contactList, tabFilter, starredConversations, messages, currentUserId, searchQuery]);
+  }, [contactList, tabFilter, starredConversations, messages, currentUserId, searchQuery, optimisticLastMessages]);
 
   // Is an emoji-only message (1-3 emojis render large 28px without bubble)
   const isEmojiOnly = (text: string): boolean => {
@@ -784,12 +807,23 @@ export const MessagingPage: React.FC = () => {
                 m => (m.senderId === contact.id && m.receiverId === currentUserId) ||
                      (m.senderId === currentUserId && m.receiverId === contact.id)
               );
-              const lastMsg = contactMsgs[contactMsgs.length - 1];
+              const dbLatest = contactMsgs.length > 0
+                ? contactMsgs.reduce((latest, current) => {
+                    return new Date(current.timestamp).getTime() > new Date(latest.timestamp).getTime() ? current : latest;
+                  }, contactMsgs[0])
+                : null;
+              const optLatest = optimisticLastMessages[contact.id];
+              const lastMsg = optLatest && (!dbLatest || new Date(optLatest.timestamp).getTime() >= new Date(dbLatest.timestamp).getTime())
+                ? optLatest
+                : dbLatest;
               const isLastFromMe = lastMsg?.senderId === currentUserId;
+              const effectiveAttachments = (lastMsg?.attachments && lastMsg.attachments.length > 0)
+                ? lastMsg.attachments
+                : (lastMsg?.attachmentName ? [{ fileName: lastMsg.attachmentName }] : undefined);
               const preview = lastMsg
                 ? formatConversationPreview(
                     lastMsg.content,
-                    lastMsg.attachments,
+                    effectiveAttachments,
                     isLastFromMe,
                     !!lastMsg.deletedAt
                   )

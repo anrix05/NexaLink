@@ -64,7 +64,57 @@ export function mapRowToChatMessage(m: any, existingAttachments?: MessageAttachm
   };
 }
 
+export interface ConversationSummary {
+  counterpartId: string;
+  counterpartName: string;
+  counterpartAvatar: string;
+  counterpartRole: UserRole;
+  counterpartDepartment: string;
+  lastMessageId?: string;
+  lastMessageContent?: string;
+  lastMessageTimestamp?: string;
+  lastMessageSenderId?: string;
+  lastMessageAttachments?: any[];
+  unreadCount: number;
+  isStarred?: boolean;
+  isMuted?: boolean;
+}
+
 export const messagingService = {
+  /**
+   * Fetch conversation list with counterpart info, last message, and unread count in ONE call (Phase 1 RPC)
+   */
+  async getConversations(userId: string): Promise<ConversationSummary[]> {
+    if (!isSupabaseConfigured() || !isValidUuid(userId)) {
+      return [];
+    }
+
+    try {
+      const rows = await runRpc<any[]>('get_conversations', async () => {
+        return (supabase.rpc as any)('get_conversations', { p_user_id: userId });
+      });
+
+      return (rows || []).map(r => ({
+        counterpartId: r.counterpart_id,
+        counterpartName: r.counterpart_name,
+        counterpartAvatar: r.counterpart_avatar,
+        counterpartRole: r.counterpart_role as UserRole,
+        counterpartDepartment: r.counterpart_department,
+        lastMessageId: r.last_message_id,
+        lastMessageContent: r.last_message_content,
+        lastMessageTimestamp: r.last_message_timestamp,
+        lastMessageSenderId: r.last_message_sender_id,
+        lastMessageAttachments: r.last_message_attachments,
+        unreadCount: Number(r.unread_count || 0),
+        isStarred: Boolean(r.is_starred),
+        isMuted: Boolean(r.is_muted)
+      }));
+    } catch {
+      // Graceful fallback if RPC is not yet registered
+      return [];
+    }
+  },
+
   /**
    * Fetch all messages for current user
    */

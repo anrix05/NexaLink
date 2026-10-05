@@ -303,30 +303,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const loadedAdmins: User[] = [];
 
           usersData.forEach((u: any) => {
-            // Self-heal corrupted emails in database if leading '+' is detected
+            // Sanitize in-memory if leading '+' is detected
             if (u.email && typeof u.email === 'string' && u.email.startsWith('+')) {
-              const cleaned = u.email.replace(/^\+/, '').trim();
-              u.email = cleaned;
-              supabase
-                .from('users')
-                .update({ email: cleaned })
-                .eq('id', u.id)
-                .then(({ error }: { error: any }) => {
-                  if (error) {
-                    console.warn('[DataContext] Could not auto-heal email in Supabase:', error.message);
-                  } else {
-                    console.log(`[DataContext] Auto-healed corrupted email for user ${u.id}: ${cleaned}`);
-                  }
-                });
+              u.email = u.email.replace(/^\+/, '').trim();
             }
             if (u.personal_email && typeof u.personal_email === 'string' && u.personal_email.startsWith('+')) {
-              const cleanedPersonal = u.personal_email.replace(/^\+/, '').trim();
-              u.personal_email = cleanedPersonal;
-              supabase
-                .from('users')
-                .update({ personal_email: cleanedPersonal })
-                .eq('id', u.id)
-                .then();
+              u.personal_email = u.personal_email.replace(/^\+/, '').trim();
             }
 
             let mergedDocUrl = u.verification_document_url || u.clarification_requested?.documentUrl || undefined;

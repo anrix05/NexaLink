@@ -89,6 +89,8 @@ export function formatConversationPreview(
       const name = first.fileName || 'document.pdf';
       return isMe ? `You: PDF · ${name}` : `PDF · ${name}`;
     }
+    const name = first.fileName || 'Attachment';
+    return isMe ? `You: ${name}` : name;
   }
 
   if (content && content.trim().length > 0) {

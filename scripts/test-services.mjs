@@ -79,6 +79,7 @@ const SAMPLE_AUDIT_LOGS = [
 ];
 
 import { mapRowToChatMessage } from '../src/services/messagingService.ts';
+import { formatConversationPreview } from '../src/features/messaging/utils/timeFormatters.ts';
 import { mapRowToNotification } from '../src/services/notificationsService.ts';
 
 // Import notification helpers
@@ -1194,6 +1195,30 @@ test('characterization: events sorting, RSVP, and capacity limits', () => {
   // Capacity limit check
   assert.ok(event.capacityLimit > 0);
   assert.ok(event.rsvpsCount <= event.capacityLimit);
+});
+
+test('characterization: formatConversationPreview prevents No messages yet glitch', () => {
+  // Plain text
+  assert.strictEqual(formatConversationPreview('Hello there', undefined, true), 'You: Hello there');
+  assert.strictEqual(formatConversationPreview('Hello there', undefined, false), 'Hello there');
+
+  // Image attachment
+  assert.strictEqual(formatConversationPreview('', [{ mimeType: 'image/png' }], true), 'You: Photo');
+  assert.strictEqual(formatConversationPreview('', [{ mimeType: 'image/jpeg' }, { mimeType: 'image/jpeg' }], false), 'Photo (+1)');
+
+  // PDF attachment
+  assert.strictEqual(formatConversationPreview('', [{ mimeType: 'application/pdf', fileName: 'resume.pdf' }], true), 'You: PDF · resume.pdf');
+
+  // Generic/arbitrary attachment (previously fell through to 'No messages yet')
+  assert.strictEqual(formatConversationPreview('', [{ fileName: 'archive.zip' }], true), 'You: archive.zip');
+  assert.strictEqual(formatConversationPreview('', [{ fileName: 'data.xlsx' }], false), 'data.xlsx');
+
+  // Deleted message
+  assert.strictEqual(formatConversationPreview('Old content', undefined, true, true), 'Message deleted');
+
+  // Truly empty message with no attachments
+  assert.strictEqual(formatConversationPreview('', undefined, false), 'No messages yet');
+  assert.strictEqual(formatConversationPreview('   ', [], false), 'No messages yet');
 });
 
 
