@@ -6,6 +6,20 @@
 --   3. Subquery-wrapped auth.uid() and is_admin() RLS policies to prevent per-row evaluation
 -- ============================================================================
 
+-- ─── 0. PREREQUISITE TABLE: CONVERSATION_PARTICIPANTS ────────────────────────
+CREATE TABLE IF NOT EXISTS public.conversation_participants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  contact_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  is_starred BOOLEAN NOT NULL DEFAULT FALSE,
+  is_muted BOOLEAN NOT NULL DEFAULT FALSE,
+  last_read_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, contact_id)
+);
+ALTER TABLE public.conversation_participants ENABLE ROW LEVEL SECURITY;
+
 -- ─── 1. RPC: GET_CONVERSATIONS ──────────────────────────────────────────────
 -- Returns conversation list with counterpart metadata, last message, and unread count in ONE call
 CREATE OR REPLACE FUNCTION public.get_conversations(p_user_id uuid)
