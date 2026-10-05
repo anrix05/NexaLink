@@ -1,0 +1,23 @@
+# Page Persistence & Hydration Triage Matrix
+
+> **Document:** `docs/PERSISTENCE_TRIAGE.md`  
+> **Status:** Phase 0 Diagnostic Triage (Pre-Fix Baseline)
+
+---
+
+## 1. Feature-by-Feature Persistence Matrix
+
+| Page / Feature | Loads from DB on Mount? | Write Action | Request Method + Path | Expected Status | Root Cause & Failure Hypothesis | Required Fix |
+| :--- | :---: | :--- | :--- | :---: | :--- | :--- |
+| **Admin Verification Queue** | **YES** | Approve / Reject user verification | `PATCH /rest/v1/users` | `200 OK` | **WORKING REFERENCE PATTERN.** Admin RLS permits read/write on `users`. | None (Maintain reference pattern). |
+| **Peer Messaging (NexaChats)** | **NO** | Send text message, reactions, attachments | `POST /rest/v1/rpc/send_message` or `POST /rest/v1/chat_messages` | `401 / 403 / 42501` or `200` with `conversation_id = NULL` | **Hypothesis A & B & C:** Client calls legacy `send_message` (v1) without `conversation_id`. RLS on `chat_messages` requires `private.is_conversation_member(conversation_id)`. PostgREST SELECT returns 0 rows. State drops on F5. | Migrate client to `MessagingService.sendMessageV2`, initialize conversations, hydrate inbox via `get_inbox` / RPC on mount. |
+| **Campus Events** | **PARTIAL** | Create event in `EventComposerPage` | `POST /rest/v1/events` | `400 / 42703` | **Hypothesis D & A:** `date` column is `DATE NOT NULL` in Postgres, but client sends unformatted date strings; errors logged to console and swallowed; optimistic UI shows it until F5. | Validate ISO date format, call checked service, hydrate live events on mount. |
+| **Event RSVPs** | **PARTIAL** | RSVP / Cancel RSVP | `PATCH /rest/v1/events` updating `registered_user_ids` | `403 Forbidden` | **Hypothesis B:** Non-admin users cannot PATCH other columns on `events`. RLS blocks update; React local array reverts on refresh. | Replace client array patch with atomic `rsvp_event(event_id)` RPC. |
+| **Opportunities Hub** | **PARTIAL** | Post job/internship referral | `POST /rest/v1/jobs` | `400 / 403` | **Hypothesis D:** Table is named `jobs` in Postgres, but code or docs reference `opportunities` or `job_listings`; deadline string parsing mismatch. | Use verified table name via `OpportunityService`, enforce status = 'Pending Approval'. |
+| **Job Applications** | **NO** | Submit application | `POST /rest/v1/job_applications` | `42501` | **Hypothesis B & C:** Migration `20261002000001_v3_flows_and_moderation.sql` may not be applied to live DB; client state is in-memory only. | Verify `job_applications` table exists, submit via checked service. |
+| **Mentorship Requests** | **PARTIAL** | Student requests guidance | `POST /rest/v1/mentorship_requests` | `400 / 42501` | **Hypothesis A & B:** In `DataContext`, requests write optimistically; capacity and status transitions don't sync. | Wire up atomic `request_mentorship` and `respond_mentorship_request` RPCs. |
+| **Profile & Settings** | **PARTIAL** | Edit bio, department, phone | `PATCH /rest/v1/users` | `403 Forbidden` if privileged columns included | **Hypothesis B:** Patching `users` row directly may trigger `guard_user_privileged_columns` if `role` or `is_verified` are sent in payload. | Use dedicated `update_my_profile(patch)` RPC with non-privileged field allowlist. |
+| **Proof Document Upload** | **NO** | Upload student ID / degree during registration | `POST /storage/v1/object/proof-documents` | `403 / 400` | **Hypothesis F:** Storage policy on `proof-documents` requires `auth.uid()`, but unauthenticated signups cannot upload directly without token; stored URL is not signed. | Upload post-session or via authenticated signed upload URL; generate 60-second signed URL for admin preview. |
+| **Resume Upload** | **PARTIAL** | Upload resume PDF in Settings | `POST /storage/v1/object/resumes` | `403` | **Hypothesis F:** Storage policy references missing `recruiter` role or non-matching path structure. | Store storage path in `student_profiles.resume_url`, create signed URL on demand. |
+| **Notifications Bell** | **NO** | Read notification, mark as read | `PATCH /rest/v1/notifications` | `200` or `42501` | **Hypothesis A:** Notifications array initialized from mock or empty; live subscriptions don't persist read status across refresh. | Query `notifications` table where `user_id = auth.uid()` on mount. |
+| **Dashboard Stat Counts** | **NO** | View stats (mentees, applications, RSVPs) | Calculated from local context arrays | N/A | **Hypothesis A:** All stat cards derive from `studentList.length`, `eventsList.length`, `jobsList.length` which are empty on page load. | Derive counts from server queries or role summary RPCs. |

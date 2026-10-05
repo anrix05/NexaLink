@@ -33,10 +33,12 @@ import {
 } from 'lucide-react';
 import { Badge, Button, SegmentedTabs, Modal, ToastNotice, TextField, PasswordField, Toggle, SelectField, TextArea } from '../components/common/UIComponents';
 import { validateEmailByRole, getEmailHintByRole, type UserRole } from '../utils/validators';
+import { getBuildInfo } from '../utils/buildInfo';
 
 export const SettingsPage: React.FC = () => {
   const { currentUser, currentRole, updateCurrentUserState } = useAuth();
   const { updateUserProfile, addAuditLog, adminInvites, inviteNewAdmin, revokeAdminInvite, getActiveAdminCount, stepDownAsAdmin } = useData();
+  const buildInfo = React.useMemo(() => getBuildInfo(), []);
 
   const [activeTab, setActiveTab] = useState<'profile' | 'privacy' | 'capacity' | 'notifications' | 'security'>('profile');
   
@@ -1015,6 +1017,40 @@ export const SettingsPage: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* System & Build Information Block */}
+      <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 sm:p-8 space-y-4 font-sans text-xs">
+        <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-4">
+          <div>
+            <h2 className="text-xs sm:text-sm font-semibold text-[#0A0A0A]">About NexaLink & System Info</h2>
+            <p className="text-xs text-[#6B7280]">Build metadata and connected database environment</p>
+          </div>
+          <span className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold ${buildInfo.dataMode === 'live' ? 'bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]' : 'bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]'}`}>
+            {buildInfo.dataMode.toUpperCase()} DATA
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs font-mono">
+          <div className="bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl p-3">
+            <span className="text-[10px] text-[#6B7280] uppercase tracking-wider block font-sans">Commit SHA</span>
+            <span className="text-[#0A0A0A] font-semibold">{buildInfo.commitSha}</span>
+          </div>
+          <div className="bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl p-3">
+            <span className="text-[10px] text-[#6B7280] uppercase tracking-wider block font-sans">Git Branch</span>
+            <span className="text-[#0A0A0A] font-semibold">{buildInfo.gitBranch}</span>
+          </div>
+          <div className="bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl p-3">
+            <span className="text-[10px] text-[#6B7280] uppercase tracking-wider block font-sans">Supabase Ref</span>
+            <span className="text-[#0A0A0A] font-semibold">{buildInfo.supabaseProjectRef}</span>
+          </div>
+          <div className="bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl p-3">
+            <span className="text-[10px] text-[#6B7280] uppercase tracking-wider block font-sans">Build Time</span>
+            <span className="text-[#0A0A0A] font-semibold text-[11px] truncate block" title={buildInfo.buildTime}>
+              {buildInfo.buildTime.slice(0, 19).replace('T', ' ')}
+            </span>
+          </div>
+        </div>
+      </div>
 
       {/* Confirmation Modal for Admin Step Down */}
       <Modal
