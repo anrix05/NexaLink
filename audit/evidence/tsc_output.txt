@@ -1,1 +1,0 @@
-PASS: tsc -b --noEmit exited cleanly with 0 errors.

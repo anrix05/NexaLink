@@ -38,9 +38,24 @@ skills-lock.json
 test-artifacts/
 public/screenshots-landing/
 public/screenshots-responsive/
+docs/responsive/
 
 # Supabase CLI temp/cache
 supabase/.temp
 
 # Loose test/scratch files in root
 vit_student_id_card.png
+
+# Session scratch notes at root level (canonical versions live in docs/)
+memory.md
+phase.md
+rules.md
+landing-audit.md
+landing-fix-notes.md
+TODO_NEXT_SESSION.md
+
+# AI-generated audit evidence & run artefacts (machine output, not source)
+audit/evidence/
+audit/claims.csv
+audit/findings.csv
+audit/run.sh
