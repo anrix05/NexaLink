@@ -88,8 +88,8 @@ const FullPublicFooter: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
   };
 
   return (
-    <footer className="bg-white border-t border-[#E5E7EB] text-[#0A0A0A] font-sans text-xs relative overflow-hidden pt-16 pb-12">
-      <div className="app-container space-y-16 relative z-10">
+    <footer className="bg-white border-t border-[#E5E7EB] text-[#0A0A0A] font-sans text-xs relative overflow-hidden pt-12 md:pt-16">
+      <div className="app-container space-y-10 md:space-y-16 relative z-10">
         
         {/* Top Brand Grid: Left Logo/Mission + 4 Columns */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
@@ -245,22 +245,26 @@ const FullPublicFooter: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
 
         </div>
 
-        {/* Large Faint NexaLink Wordmark */}
-        <div className="pt-8 flex justify-center pointer-events-none select-none overflow-hidden" aria-hidden="true">
+        {/* Large Faint NexaLink Wordmark — compact on mobile, large on desktop */}
+        <div className="pt-2 md:pt-6 flex justify-center pointer-events-none select-none overflow-hidden" aria-hidden="true">
           <motion.span
             initial={reduceMotion ? {} : { y: 20, opacity: 0 }}
             whileInView={{ y: 0, opacity: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-            className="text-6xl sm:text-8xl lg:text-9xl font-display font-black tracking-tighter text-[#0A0A0A]/[0.04] leading-none"
+            className="text-5xl sm:text-7xl lg:text-9xl font-display font-black tracking-tighter text-[#0A0A0A]/[0.04] leading-none"
           >
             NexaLink
           </motion.span>
         </div>
 
-        {/* Bottom Bar: Legal Links + Controls */}
-        <div className="pt-8 border-t border-[#E5E7EB] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-medium text-[#6B7280]">
-          <p>© 2026 NexaLink · Vidyalankar Institute of Technology</p>
+        {/* Bottom Bar: Legal Links + Controls
+            On mobile, extra bottom padding so the sticky CTA bar doesn't overlap the links. */}
+        <div
+          className="pt-5 border-t border-[#E5E7EB] flex flex-col sm:flex-row items-center justify-between gap-2 text-xs font-medium text-[#6B7280]"
+          style={{ paddingBottom: 'max(5.5rem, calc(4.5rem + env(safe-area-inset-bottom)))' }}
+        >
+          <p className="text-center sm:text-left shrink-0">© 2026 NexaLink · Vidyalankar Institute of Technology</p>
 
           <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-4">
             <button
@@ -307,10 +311,10 @@ const FullPublicFooter: React.FC<{ setActiveTab: (tab: string) => void }> = ({ s
 
             <button
               type="button"
-              onClick={() => setActiveTab('privacy')}
+              onClick={() => setActiveTab('data-governance')}
               className="hover:text-[#0A0A0A] cursor-pointer transition-colors bg-transparent border-none py-2.5 px-2 text-xs font-medium text-[#6B7280] min-h-[44px] inline-flex items-center touch-target-44"
             >
-              Cookies & storage
+              Cookies &amp; storage
             </button>
           </div>
         </div>
