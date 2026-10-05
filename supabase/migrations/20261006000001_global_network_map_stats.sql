@@ -19,12 +19,12 @@ DECLARE
     v_total_cities INT;
     v_cities JSONB;
 BEGIN
-    -- 1. Calculate verified alumni total (matching public stats count: role = 'alumni' and status = 'Verified')
+    -- 1. Calculate verified alumni total (matching public stats count: role = 'alumni' and verified)
     SELECT COUNT(*)
     INTO v_total_alumni
     FROM public.users u
     WHERE u.role = 'alumni'
-      AND u.status = 'Verified';
+      AND (u.is_verified = TRUE OR u.verification_status = 'Verified');
 
     -- 2. Aggregate cities and countries for verified alumni with non-null location/city
     WITH parsed_locations AS (
@@ -34,7 +34,7 @@ BEGIN
         FROM public.alumni_profiles ap
         JOIN public.users u ON u.id = ap.user_id
         WHERE u.role = 'alumni'
-          AND u.status = 'Verified'
+          AND (u.is_verified = TRUE OR u.verification_status = 'Verified')
           AND ap.location IS NOT NULL
           AND TRIM(ap.location) <> ''
     ),

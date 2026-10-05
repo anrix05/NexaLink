@@ -53,7 +53,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
             {/* Mobile/Tablet network map — below copy */}
             <div className="lg:hidden pt-8 w-full">
-              <GlobalNetworkMap onSignIn={onSignIn} className="w-full aspect-[4/3] min-h-[260px] sm:aspect-[16/10]" />
+              <GlobalNetworkMap onSignIn={onSignIn} onCreateAccount={onCreateAccount} className="w-full min-h-[360px] sm:min-h-[420px]" />
             </div>
           </motion.div>
 

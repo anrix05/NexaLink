@@ -58,6 +58,10 @@ import {
   normalizeApplicationStatus,
   validateApplicationPreflights
 } from '../src/utils/applicationHelpers.ts';
+import {
+  computeNetworkMetrics,
+  getNetworkCopy
+} from '../src/components/landing/networkMapData.ts';
 
 // ----------------------------------------------------------------------------
 // 1. enumMappers Unit Tests
@@ -598,3 +602,123 @@ test('validateApplicationPreflights: correctly enforces preflight business rules
   assert.strictEqual(validRes.canApply, true);
   assert.strictEqual(validRes.reason, undefined);
 });
+
+// ----------------------------------------------------------------------------
+// 7. Global Alumni Network Metrics & Copy Unit Tests
+// ----------------------------------------------------------------------------
+test('networkMapData: Scenario 1 - 0 alumni', () => {
+  const data = {
+    totals: { verified_alumni: 0, countries: 0, cities: 0 },
+    cities: []
+  };
+  const metrics = computeNetworkMetrics(data);
+  assert.strictEqual(metrics.verifiedAlumni, 0);
+  assert.strictEqual(metrics.locatedAlumni, 0);
+  assert.strictEqual(metrics.unlocatedAlumni, 0);
+  assert.strictEqual(metrics.cities, 0);
+  assert.strictEqual(metrics.countries, 0);
+
+  const copy = getNetworkCopy(metrics);
+  assert.strictEqual(copy.caption, 'No alumni on the map yet. Be the first.');
+  assert.strictEqual(copy.ctaLabel, 'Create account →');
+  assert.strictEqual(copy.ctaAction, 'createAccount');
+  assert.strictEqual(copy.showCaption, true);
+});
+
+test('networkMapData: Scenario 2 - 2 alumni all in Mumbai (Today DB case)', () => {
+  const data = {
+    totals: { verified_alumni: 2, countries: 1, cities: 1 },
+    cities: [{ city: 'Mumbai', country: 'India', alumni_count: 2 }]
+  };
+  const metrics = computeNetworkMetrics(data);
+  assert.strictEqual(metrics.verifiedAlumni, 2);
+  assert.strictEqual(metrics.locatedAlumni, 2);
+  assert.strictEqual(metrics.unlocatedAlumni, 0);
+  assert.strictEqual(metrics.cities, 1);
+  assert.strictEqual(metrics.countries, 1);
+  assert.strictEqual(metrics.mumbaiAlumniCount, 2);
+  assert.strictEqual(metrics.primaryCityName, 'Mumbai');
+
+  const copy = getNetworkCopy(metrics);
+  assert.strictEqual(copy.caption, 'All 2 verified alumni are in Mumbai so far. Join from anywhere.');
+  assert.strictEqual(copy.ctaLabel, 'Sign in →');
+  assert.strictEqual(copy.ctaAction, 'signIn');
+  assert.strictEqual(copy.showCaption, true);
+  assert.strictEqual(copy.tooltipSuffix, undefined);
+});
+
+test('networkMapData: Scenario 3 - 2 alumni with no city (all unlocated)', () => {
+  const data = {
+    totals: { verified_alumni: 2, countries: 0, cities: 0 },
+    cities: []
+  };
+  const metrics = computeNetworkMetrics(data);
+  assert.strictEqual(metrics.verifiedAlumni, 2);
+  assert.strictEqual(metrics.locatedAlumni, 0);
+  assert.strictEqual(metrics.unlocatedAlumni, 2);
+  assert.strictEqual(metrics.cities, 0);
+  assert.strictEqual(metrics.countries, 0);
+
+  const copy = getNetworkCopy(metrics);
+  assert.strictEqual(copy.caption, '2 verified alumni, locations coming soon.');
+  assert.strictEqual(copy.ctaLabel, undefined);
+  assert.strictEqual(copy.showCaption, true);
+});
+
+test('networkMapData: Scenario 4 - 5 alumni across 3 cities (cities >= 2)', () => {
+  const data = {
+    totals: { verified_alumni: 5, countries: 2, cities: 3 },
+    cities: [
+      { city: 'Mumbai', country: 'India', alumni_count: 2 },
+      { city: 'London', country: 'United Kingdom', alumni_count: 2 },
+      { city: 'San Francisco', country: 'United States', alumni_count: 1 }
+    ]
+  };
+  const metrics = computeNetworkMetrics(data);
+  assert.strictEqual(metrics.verifiedAlumni, 5);
+  assert.strictEqual(metrics.locatedAlumni, 5);
+  assert.strictEqual(metrics.unlocatedAlumni, 0);
+  assert.strictEqual(metrics.cities, 3);
+  assert.strictEqual(metrics.countries, 3); // Mumbai(India), London(UK), SF(US)
+
+  const copy = getNetworkCopy(metrics);
+  assert.strictEqual(copy.showCaption, false, 'Caption should be hidden when cities >= 2 to give space to globe');
+  assert.strictEqual(copy.tooltipSuffix, undefined);
+});
+
+test('networkMapData: Scenario 5 - 1 alumnus in Mumbai', () => {
+  const data = {
+    totals: { verified_alumni: 1, countries: 1, cities: 1 },
+    cities: [{ city: 'Mumbai', country: 'India', alumni_count: 1 }]
+  };
+  const metrics = computeNetworkMetrics(data);
+  assert.strictEqual(metrics.verifiedAlumni, 1);
+  assert.strictEqual(metrics.locatedAlumni, 1);
+  assert.strictEqual(metrics.unlocatedAlumni, 0);
+  assert.strictEqual(metrics.cities, 1);
+  assert.strictEqual(metrics.countries, 1);
+  assert.strictEqual(metrics.mumbaiAlumniCount, 1);
+
+  const copy = getNetworkCopy(metrics);
+  assert.strictEqual(copy.caption, 'The 1 verified alumnus is in Mumbai so far. Join from anywhere.');
+  assert.strictEqual(copy.ctaLabel, 'Sign in →');
+  assert.strictEqual(copy.ctaAction, 'signIn');
+  assert.strictEqual(copy.showCaption, true);
+});
+
+test('networkMapData: Scenario with unlocated alumni alongside located cities', () => {
+  const data = {
+    totals: { verified_alumni: 5, countries: 1, cities: 1 },
+    cities: [{ city: 'Mumbai', country: 'India', alumni_count: 3 }]
+  };
+  const metrics = computeNetworkMetrics(data);
+  assert.strictEqual(metrics.verifiedAlumni, 5);
+  assert.strictEqual(metrics.locatedAlumni, 3);
+  assert.strictEqual(metrics.unlocatedAlumni, 2);
+  assert.strictEqual(metrics.cities, 1);
+
+  const copy = getNetworkCopy(metrics);
+  assert.strictEqual(copy.caption, 'All 3 verified alumni are in Mumbai so far. Join from anywhere.');
+  assert.strictEqual(copy.tooltipSuffix, "2 haven't added a city yet");
+});
+

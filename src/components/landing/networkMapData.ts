@@ -29,6 +29,155 @@ export interface PlottedCity {
   labelPosition: 'top' | 'right' | 'bottom' | 'left';
 }
 
+export interface NetworkMetrics {
+  verifiedAlumni: number;
+  locatedAlumni: number;
+  unlocatedAlumni: number;
+  cities: number;
+  countries: number;
+  mumbaiAlumniCount: number;
+  primaryCityName?: string;
+}
+
+export interface NetworkCopyResult {
+  caption: string;
+  ctaLabel?: string;
+  ctaAction?: 'signIn' | 'createAccount';
+  showCaption: boolean;
+  tooltipSuffix?: string;
+}
+
+/**
+ * Single source of truth calculation for global network metrics
+ */
+export function computeNetworkMetrics(data: GlobalNetworkStatsResponse | null): NetworkMetrics {
+  if (!data) {
+    return {
+      verifiedAlumni: 0,
+      locatedAlumni: 0,
+      unlocatedAlumni: 0,
+      cities: 0,
+      countries: 0,
+      mumbaiAlumniCount: 0,
+      primaryCityName: undefined,
+    };
+  }
+
+  const rawCities = data.cities ?? [];
+  let totalLocated = 0;
+  const uniqueCities = new Set<string>();
+  const uniqueCountries = new Set<string>();
+  let mumbaiCount = 0;
+  let firstCityName = '';
+
+  for (const item of rawCities) {
+    const rawCityName = (item.city ?? '').trim();
+    const rawCountryName = (item.country ?? '').trim();
+    if (!rawCityName) continue;
+
+    const count = typeof item.alumni_count === 'number'
+      ? item.alumni_count
+      : (parseInt(String(item.alumni_count ?? '1'), 10) || 1);
+
+    totalLocated += count;
+
+    const normCity = rawCityName.toLowerCase();
+    const normCountry = rawCountryName.toLowerCase() || 'india';
+    uniqueCities.add(`${normCity}::${normCountry}`);
+    uniqueCountries.add(normCountry);
+
+    if (normCity === 'mumbai' || normCity === 'bombay') {
+      mumbaiCount += count;
+    }
+
+    if (!firstCityName) {
+      firstCityName = rawCityName;
+    }
+  }
+
+  const serverVerified = data.totals?.verified_alumni ?? totalLocated;
+  const verifiedAlumni = Math.max(serverVerified, totalLocated);
+  const locatedAlumni = totalLocated;
+  const unlocatedAlumni = Math.max(0, verifiedAlumni - locatedAlumni);
+
+  const citiesCount = uniqueCities.size > 0 ? uniqueCities.size : (data.totals?.cities ?? 0);
+  const countriesCount = uniqueCountries.size > 0 ? uniqueCountries.size : (data.totals?.countries ?? 0);
+
+  return {
+    verifiedAlumni,
+    locatedAlumni,
+    unlocatedAlumni,
+    cities: citiesCount,
+    countries: countriesCount,
+    mumbaiAlumniCount: mumbaiCount,
+    primaryCityName: uniqueCities.size === 1 ? (firstCityName || (mumbaiCount > 0 ? 'Mumbai' : undefined)) : undefined,
+  };
+}
+
+/**
+ * Pure function computing copy, CTA, and visibility based on verified/located/unlocated breakdown
+ */
+export function getNetworkCopy(metrics: NetworkMetrics): NetworkCopyResult {
+  const { verifiedAlumni, locatedAlumni, unlocatedAlumni, cities, primaryCityName, mumbaiAlumniCount } = metrics;
+
+  // Case 1: 0 verified alumni
+  if (verifiedAlumni === 0) {
+    return {
+      caption: 'No alumni on the map yet. Be the first.',
+      ctaLabel: 'Create account →',
+      ctaAction: 'createAccount',
+      showCaption: true,
+    };
+  }
+
+  // Case 2: cities <= 1 and locatedAlumni > 0 (e.g. 2 alumni all in Mumbai)
+  if (cities <= 1 && locatedAlumni > 0) {
+    const cityName = primaryCityName || (mumbaiAlumniCount > 0 ? 'Mumbai' : 'Mumbai');
+    const caption = locatedAlumni === 1
+      ? `The 1 verified alumnus is in ${cityName} so far. Join from anywhere.`
+      : `All ${locatedAlumni} verified alumni are in ${cityName} so far. Join from anywhere.`;
+
+    const tooltipSuffix = unlocatedAlumni > 0
+      ? `${unlocatedAlumni} ${unlocatedAlumni === 1 ? "hasn't" : "haven't"} added a city yet`
+      : undefined;
+
+    return {
+      caption,
+      ctaLabel: 'Sign in →',
+      ctaAction: 'signIn',
+      showCaption: true,
+      tooltipSuffix,
+    };
+  }
+
+  // Case 3: unlocatedAlumni > 0 AND locatedAlumni === 0
+  if (unlocatedAlumni > 0 && locatedAlumni === 0) {
+    const caption = verifiedAlumni === 1
+      ? '1 verified alumnus, location coming soon.'
+      : `${verifiedAlumni} verified alumni, locations coming soon.`;
+
+    return {
+      caption,
+      ctaLabel: undefined,
+      ctaAction: undefined,
+      showCaption: true,
+    };
+  }
+
+  // Case 4: cities >= 2 (hide caption row to maximize globe space)
+  const tooltipSuffix = unlocatedAlumni > 0
+    ? `${unlocatedAlumni} ${unlocatedAlumni === 1 ? "hasn't" : "haven't"} added a city yet`
+    : undefined;
+
+  return {
+    caption: '',
+    ctaLabel: undefined,
+    ctaAction: undefined,
+    showCaption: false,
+    tooltipSuffix,
+  };
+}
+
 export const MAP_BOUNDS = {
   minLng: -135,
   maxLng: 165,
