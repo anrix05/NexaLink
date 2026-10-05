@@ -29,11 +29,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSignIn, onCreateAcco
   const opacityParallax = useTransform(scrollY, [0, 450], [1, reduceMotion ? 1 : 0.2]);
 
   // Verified alumni stats for status badge (from get_public_stats aggregates only)
+  // Only show the globe pill when we have a real number worth displaying
   const alumniCount = stats?.verified_alumni ?? 0;
-  const badgeLabel =
-    alumniCount >= 5
-      ? `${alumniCount.toLocaleString()} verified alumni`
-      : 'Be among the first verified alumni';
+  const showGlobePill = alumniCount >= 5;
 
   return (
     <section
@@ -134,10 +132,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSignIn, onCreateAcco
               <div className="lg:hidden pt-4 w-full">
                 <div className="w-full aspect-[4/5] max-h-[56svh] relative rounded-2xl border border-[#E5E7EB] bg-[#FAFAFA] overflow-hidden">
                   <AlumniNetworkCanvas />
-                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-md bg-white/90 backdrop-blur-xs border border-[#E5E7EB] text-[10px] font-sans font-medium text-[#0A0A0A] flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#0A0A0A]/40" />
-                    <span className="tabular-nums">{badgeLabel}</span>
-                  </div>
+                  {showGlobePill && (
+                    <div className="absolute top-3 left-3 px-2.5 py-1 rounded-md bg-white/90 backdrop-blur-xs border border-[#E5E7EB] text-[10px] font-sans font-medium text-[#0A0A0A] flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#0A0A0A]/40" />
+                      <span className="tabular-nums">{alumniCount.toLocaleString()} verified alumni</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </Reveal>
@@ -149,11 +149,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSignIn, onCreateAcco
             <div className="w-full h-full relative rounded-2xl border border-[#E5E7EB] bg-[#FAFAFA] overflow-hidden">
               <AlumniNetworkCanvas />
 
-              {/* Floating Status Pill: Neutral monochrome badge */}
-              <div className="absolute top-4 left-4 px-3 py-1.5 rounded-lg bg-white/90 backdrop-blur-sm border border-[#E5E7EB] text-[11px] font-sans font-medium text-[#0A0A0A] flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#0A0A0A]/40" />
-                <span className="tabular-nums">{badgeLabel}</span>
-              </div>
+              {showGlobePill && (
+                <div className="absolute top-4 left-4 px-3 py-1.5 rounded-lg bg-white/90 backdrop-blur-sm border border-[#E5E7EB] text-[11px] font-sans font-medium text-[#0A0A0A] flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#0A0A0A]/40" />
+                  <span className="tabular-nums">{alumniCount.toLocaleString()} verified alumni</span>
+                </div>
+              )}
             </div>
           </div>
 
