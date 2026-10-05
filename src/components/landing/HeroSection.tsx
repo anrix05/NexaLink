@@ -36,11 +36,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSignIn, onCreateAcco
   return (
     <section
       id="overview"
-      className="relative w-full min-h-[100svh] flex flex-col justify-between overflow-hidden border-b border-[#E5E7EB] bg-white"
+      className="relative w-full flex flex-col overflow-hidden border-b border-[#E5E7EB] bg-white"
     >
 
       {/* Main Hero Content Grid */}
-      <div className="app-container flex-1 flex items-center py-8 sm:py-12 lg:py-20 xl:py-24 z-10">
+      <div className="app-container flex items-start pt-8 sm:pt-12 lg:pt-20 xl:pt-24 pb-4 z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-center w-full">
           
           {/* Left Column: Typography & CTAs */}
