@@ -193,7 +193,8 @@ export function resetDevRequestMetrics(): void {
  */
 export async function runQuery<T>(
   target: string,
-  queryFn: () => Promise<{ data: T | null; error: any }>
+  queryFn: () => Promise<{ data: T | null; error: any }>,
+  options?: { suppressErrorReport?: boolean }
 ): Promise<T> {
   const start = performance.now();
   const op = 'SELECT';
@@ -205,7 +206,9 @@ export async function runQuery<T>(
     if (error) {
       const mapped = mapSupabaseError(error, op, target);
       console.warn(`[SupabaseRunner] ${op} ${target} failed after ${duration}ms:`, mapped);
-      errorReporter.reportError(mapped, { operation: op, target });
+      if (!options?.suppressErrorReport) {
+        errorReporter.reportError(mapped, { operation: op, target });
+      }
       throw mapped;
     }
 
@@ -221,7 +224,9 @@ export async function runQuery<T>(
     const duration = Math.round(performance.now() - start);
     const mapped = new SupabaseOperationError(op, target, 'UNKNOWN', err?.message || String(err), err);
     console.error(`[SupabaseRunner] ${op} ${target} threw after ${duration}ms:`, mapped);
-    errorReporter.reportError(mapped, { operation: op, target });
+    if (!options?.suppressErrorReport) {
+      errorReporter.reportError(mapped, { operation: op, target });
+    }
     throw mapped;
   }
 }
@@ -279,7 +284,8 @@ export async function runMutation<T>(
 export async function runRpc<T>(
   rpcName: string,
   rpcFn: () => Promise<{ data: T | null; error: any }>,
-  args?: any
+  args?: any,
+  options?: { suppressErrorReport?: boolean }
 ): Promise<T> {
   const start = performance.now();
   const op = 'RPC';
@@ -291,7 +297,9 @@ export async function runRpc<T>(
     if (error) {
       const mapped = mapSupabaseError(error, op, rpcName);
       console.error(`[SupabaseRunner] ${op} ${rpcName} failed after ${duration}ms:`, mapped);
-      errorReporter.reportError(mapped, { operation: op, target: rpcName, payload: args });
+      if (!options?.suppressErrorReport) {
+        errorReporter.reportError(mapped, { operation: op, target: rpcName, payload: args });
+      }
       throw mapped;
     }
 
@@ -303,7 +311,9 @@ export async function runRpc<T>(
     const duration = Math.round(performance.now() - start);
     const mapped = new SupabaseOperationError(op, rpcName, 'UNKNOWN', err?.message || String(err), err);
     console.error(`[SupabaseRunner] ${op} ${rpcName} threw after ${duration}ms:`, mapped);
-    errorReporter.reportError(mapped, { operation: op, target: rpcName, payload: args });
+    if (!options?.suppressErrorReport) {
+      errorReporter.reportError(mapped, { operation: op, target: rpcName, payload: args });
+    }
     throw mapped;
   }
 }

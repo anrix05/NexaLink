@@ -99,7 +99,8 @@ export const MessagingPage: React.FC = () => {
     setActiveChatContactId,
     pendingChatUserId,
     setPendingChatUserId,
-    loadThreadMessages
+    loadThreadMessages,
+    refreshMessages
   } = useData();
 
   const { currentUser } = useAuth();
@@ -239,6 +240,13 @@ export const MessagingPage: React.FC = () => {
     return () => setActiveChatContactId(null);
   }, [activeContactId, setActiveChatContactId]);
 
+  // Ensure messages are loaded on mount if currently empty
+  useEffect(() => {
+    if (messages.length === 0 && currentUserId && refreshMessages) {
+      refreshMessages();
+    }
+  }, [messages.length, currentUserId, refreshMessages]);
+
   // 2. Contact List Calculation
   const contactList: ContactItem[] = useMemo(() => {
     const acceptedConnections = mentorshipRequests.filter(req => {
@@ -253,11 +261,48 @@ export const MessagingPage: React.FC = () => {
     });
 
     messages.forEach(msg => {
-      if (msg.senderId === currentUserId) connectedUserIds.add(msg.receiverId);
-      if (msg.receiverId === currentUserId) connectedUserIds.add(msg.senderId);
+      if (msg.senderId === currentUserId && msg.receiverId) connectedUserIds.add(msg.receiverId);
+      if (msg.receiverId === currentUserId && msg.senderId) connectedUserIds.add(msg.senderId);
     });
 
-    return allDirectoryProfiles.filter(p => connectedUserIds.has(p.id) || p.id === activeContactId);
+    const profileMap = new Map(allDirectoryProfiles.map(p => [p.id, p]));
+    const matched: ContactItem[] = [];
+
+    connectedUserIds.forEach(id => {
+      if (!id || id === currentUserId) return;
+      if (profileMap.has(id)) {
+        matched.push(profileMap.get(id)!);
+      } else {
+        // Fallback contact synthesized from message sender/receiver data
+        const relevantMsg = [...messages].reverse().find(
+          m => (m.senderId === id && m.receiverId === currentUserId) ||
+               (m.senderId === currentUserId && m.receiverId === id)
+        );
+        if (relevantMsg) {
+          const isSender = relevantMsg.senderId === id;
+          matched.push({
+            id,
+            name: isSender ? relevantMsg.senderName : 'Contact',
+            avatarUrl: isSender ? (relevantMsg.senderAvatar || '') : '',
+            company: 'NexaLink Member',
+            department: 'Member',
+            designation: isSender ? relevantMsg.senderRole : 'Member',
+            skills: [],
+            online: false,
+            lastSeen: 'Active recently',
+            lastMessageTopic: relevantMsg.category || ('General Mentorship' as MentorshipGuidancePurpose)
+          });
+        }
+      }
+    });
+
+    // Also include activeContactId if selected and not yet matched
+    if (activeContactId && !matched.some(c => c.id === activeContactId)) {
+      const activeProf = profileMap.get(activeContactId);
+      if (activeProf) matched.unshift(activeProf);
+    }
+
+    return matched;
   }, [allDirectoryProfiles, mentorshipRequests, messages, currentUserId, manuallyAddedContactIds, activeContactId]);
 
   // Active contact

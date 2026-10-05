@@ -90,9 +90,14 @@ export const messagingService = {
     }
 
     try {
-      const rows = await runRpc<any[]>('get_conversations', async () => {
-        return (supabase.rpc as any)('get_conversations', { p_user_id: userId });
-      });
+      const rows = await runRpc<any[]>(
+        'get_conversations',
+        async () => {
+          return (supabase.rpc as any)('get_conversations', { p_user_id: userId });
+        },
+        undefined,
+        { suppressErrorReport: true }
+      );
 
       return (rows || []).map(r => ({
         counterpartId: r.counterpart_id,
@@ -143,7 +148,11 @@ export const messagingService = {
 
       query = query.order('timestamp', { ascending: false }).limit(limit);
 
-      const rows = await runQuery<any[]>('chat_messages', async () => query);
+      const rows = await runQuery<any[]>(
+        'chat_messages',
+        async () => query,
+        { suppressErrorReport: true }
+      );
       const mapped = (rows || []).map(r => mapRowToChatMessage(r));
       const hasMore = mapped.length === limit;
       const nextCursor = hasMore && mapped.length > 0 ? mapped[mapped.length - 1].timestamp : undefined;
@@ -167,15 +176,23 @@ export const messagingService = {
       return [];
     }
 
-    const rows = await runQuery<any[]>('chat_messages', async () => {
-      return supabase
-        .from('chat_messages')
-        .select('*')
-        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-        .order('timestamp', { ascending: true });
-    });
+    try {
+      const rows = await runQuery<any[]>(
+        'chat_messages',
+        async () => {
+          return supabase
+            .from('chat_messages')
+            .select('*')
+            .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+            .order('timestamp', { ascending: true });
+        },
+        { suppressErrorReport: true }
+      );
 
-    return (rows || []).map(r => mapRowToChatMessage(r));
+      return (rows || []).map(r => mapRowToChatMessage(r));
+    } catch {
+      return [];
+    }
   },
 
   /**

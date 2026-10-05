@@ -96,6 +96,7 @@ interface DataContextType {
   toggleSaveOpportunity: (opportunityId: string) => Promise<void>;
   showToast: (msg: string) => void;
   loadThreadMessages?: (contactId: string, options?: { limit?: number; beforeTimestamp?: string }) => Promise<void>;
+  refreshMessages?: () => Promise<void>;
   loadAuditLogs?: () => Promise<void>;
   roleTransitionRequests: RoleTransitionRequest[];
   isDataLoading: boolean;
@@ -641,11 +642,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
         }
 
-        // 6. Chat Messages (Phase 2: Decoupled startup fetch)
-        // Chat messages are fetched on-demand per thread by MessagingPage via getThreadMessages.
+        // 6. Chat Messages
         if (!isLiveMode()) {
           const mockData = await import('../data/mockData');
           setMessages(mockData.INITIAL_MESSAGES);
+        } else if (currentUser?.id) {
+          try {
+            const userMessages = await messagingService.getMessages(currentUser.id);
+            if (currentUser.role === 'admin') {
+              const reportedData = await messagingService.getReportedMessages();
+              const existingIds = new Set(userMessages.map(m => m.id));
+              reportedData.forEach(r => {
+                if (!existingIds.has(r.id)) {
+                  userMessages.push(r);
+                  existingIds.add(r.id);
+                }
+              });
+            }
+            setMessages(userMessages || []);
+          } catch (e) {
+            console.error('Failed to load chat messages:', e);
+            setMessages([]);
+          }
         } else {
           setMessages([]);
         }
@@ -3211,7 +3229,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
     } catch (err) {
-      console.error('[DataContext] Error loading thread messages:', err);
+      console.warn('[DataContext] Error loading thread messages:', err);
+    }
+  }, [currentUser?.id]);
+
+  const refreshMessages = useCallback(async () => {
+    if (!currentUser?.id || !isSupabaseConfigured()) return;
+    try {
+      const userMessages = await messagingService.getMessages(currentUser.id);
+      if (userMessages && userMessages.length > 0) {
+        setMessages(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          const newOnes = userMessages.filter(m => !existingIds.has(m.id));
+          return [...prev, ...newOnes];
+        });
+      }
+    } catch (e) {
+      console.warn('[DataContext] refreshMessages warning:', e);
     }
   }, [currentUser?.id]);
 
@@ -4055,6 +4089,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         messages,
         auditLogs,
         loadThreadMessages,
+        refreshMessages,
         loadAuditLogs,
         savedOpportunityIds,
         toggleSaveOpportunity,
