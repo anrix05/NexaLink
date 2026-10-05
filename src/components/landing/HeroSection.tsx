@@ -40,7 +40,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSignIn, onCreateAcco
     >
 
       {/* Main Hero Content Grid */}
-      <div className="app-container flex items-start pt-8 sm:pt-12 lg:pt-20 xl:pt-24 pb-4 z-10">
+      <div className="app-container flex items-start pt-4 sm:pt-6 lg:pt-10 xl:pt-16 pb-4 z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-center w-full">
           
           {/* Left Column: Typography & CTAs */}
