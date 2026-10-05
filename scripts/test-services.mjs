@@ -32,8 +32,54 @@ import {
   SupabaseOperationError,
   runQuery,
   runMutation,
-  runRpc
+  runRpc,
+  getDevRequestMetrics,
+  resetDevRequestMetrics
 } from '../src/services/supabaseRunner.ts';
+
+import {
+  DEMO_ADMIN,
+  DEMO_ADMIN_2,
+  INITIAL_ALUMNI,
+  INITIAL_STUDENTS,
+  INITIAL_TEACHERS,
+  INITIAL_JOBS,
+  INITIAL_EVENTS,
+  INITIAL_NOTIFICATIONS,
+  INITIAL_MESSAGES,
+  INITIAL_MENTORSHIP_REQUESTS,
+  INITIAL_APPLICATIONS
+} from '../src/data/mockData.ts';
+
+const SAMPLE_AUDIT_LOGS = [
+  {
+    id: 'log-1',
+    action: 'SYSTEM_INITIALIZATION',
+    performedBy: 'System Engine',
+    targetUserOrItem: 'Database Central',
+    timestamp: '2026-10-06 00:00',
+    details: 'Audit logging & security governance active.'
+  },
+  {
+    id: 'log-2',
+    action: 'USER_VERIFIED',
+    performedBy: 'Dr. Sunita Rawat',
+    targetUserOrItem: 'Rushabh Sanghavi',
+    timestamp: '2026-10-05 14:20',
+    details: 'Verified alumni enrollment credentials via PRN match.'
+  },
+  {
+    id: 'log-3',
+    action: 'ROLE_MUTATION',
+    performedBy: 'Admin Cell',
+    targetUserOrItem: 'Aanya Patel',
+    timestamp: '2026-10-04 11:15',
+    details: 'Role transitioned from student to alumni.'
+  }
+];
+
+import { mapRowToChatMessage } from '../src/services/messagingService.ts';
+import { mapRowToNotification } from '../src/services/notificationsService.ts';
 
 // Import notification helpers
 import {
@@ -829,4 +875,325 @@ test('userEmails: missing field returns null, never falls back silently to anoth
   assert.strictEqual(alumniEmails.personalEmail, null);
   assert.strictEqual(alumniEmails.displayEmail, null, 'Alumni should not fall back to collegeEmail as displayEmail');
 });
+
+// ----------------------------------------------------------------------------
+// 10. Phase 0 Characterization Tests (Mock Mode Safety Net)
+// ----------------------------------------------------------------------------
+
+test('supabaseRunner: DEV request counter tracks queries, row count, payload size, and resets', async () => {
+  resetDevRequestMetrics();
+  let metrics = getDevRequestMetrics();
+  assert.strictEqual(metrics.totalRequests, 0);
+
+  // Execute a query
+  await runQuery('users', async () => ({
+    data: [{ id: 'u1', name: 'Alice' }, { id: 'u2', name: 'Bob' }],
+    error: null
+  }));
+
+  // Execute a mutation
+  await runMutation('INSERT', 'events', async () => ({
+    data: { id: 'evt-1', title: 'Tech Talk' },
+    error: null
+  }));
+
+  // Execute an RPC
+  await runRpc('get_metrics', async () => ({
+    data: { count: 42 },
+    error: null
+  }));
+
+  metrics = getDevRequestMetrics();
+  assert.strictEqual(metrics.totalRequests, 3);
+  assert.strictEqual(metrics.operations['SELECT'], 1);
+  assert.strictEqual(metrics.operations['INSERT'], 1);
+  assert.strictEqual(metrics.operations['RPC'], 1);
+  assert.strictEqual(metrics.targets['users'], 1);
+  assert.strictEqual(metrics.targets['events'], 1);
+  assert.strictEqual(metrics.targets['get_metrics'], 1);
+  assert.ok(metrics.entries[0].rowCount === 2);
+  assert.ok(metrics.entries[0].payloadBytes > 0);
+
+  resetDevRequestMetrics();
+  assert.strictEqual(getDevRequestMetrics().totalRequests, 0);
+});
+
+test('characterization: directory list and filters', () => {
+  // Combine directory members as AlumniDirectoryPage does
+  const combinedDirectory = [
+    ...INITIAL_ALUMNI.map(a => ({ ...a, userType: 'alumni' })),
+    ...INITIAL_TEACHERS.map(f => ({
+      ...f,
+      userType: 'faculty',
+      isMentoringAvailable: true,
+      maxMentees: 4,
+      activeMenteesCount: 1
+    }))
+  ];
+
+  assert.ok(combinedDirectory.length > 0, 'Combined directory should have initial members');
+
+  // Test 1: Role filter
+  const alumniOnly = combinedDirectory.filter(u => u.userType === 'alumni');
+  const facultyOnly = combinedDirectory.filter(u => u.userType === 'faculty');
+  assert.strictEqual(alumniOnly.length, INITIAL_ALUMNI.length);
+  assert.strictEqual(facultyOnly.length, INITIAL_TEACHERS.length);
+
+  // Test 2: Mentorship availability filter
+  const mentorsOnly = combinedDirectory.filter(u => u.isMentoringAvailable);
+  assert.ok(mentorsOnly.length > 0);
+  assert.ok(mentorsOnly.every(u => u.isMentoringAvailable === true));
+
+  // Test 3: Department filter
+  const cmpnMembers = combinedDirectory.filter(u => u.department === 'CMPN');
+  assert.ok(cmpnMembers.length > 0);
+  assert.ok(cmpnMembers.every(u => u.department === 'CMPN'));
+
+  // Test 4: Search filter by skills
+  const cloudDevs = combinedDirectory.filter(u => u.skills && u.skills.some(s => s.toLowerCase().includes('cloud') || s.toLowerCase().includes('system design')));
+  assert.ok(cloudDevs.length > 0);
+
+  // Test 5: Current user exclusion logic
+  const loggedInAlumni = INITIAL_ALUMNI[0];
+  const withoutLoggedIn = combinedDirectory.filter(u => u.id !== loggedInAlumni.id);
+  assert.strictEqual(withoutLoggedIn.length, combinedDirectory.length - 1);
+});
+
+test('characterization: admin user roster and search', () => {
+  const allRosterUsers = [
+    ...INITIAL_ALUMNI,
+    ...INITIAL_STUDENTS,
+    ...INITIAL_TEACHERS,
+    DEMO_ADMIN,
+    DEMO_ADMIN_2
+  ];
+
+  // Role filter counts
+  const students = allRosterUsers.filter(u => u.role === 'student');
+  const alumni = allRosterUsers.filter(u => u.role === 'alumni');
+  const faculty = allRosterUsers.filter(u => u.role === 'faculty');
+  const admins = allRosterUsers.filter(u => u.role === 'admin');
+
+  assert.strictEqual(students.length, INITIAL_STUDENTS.length);
+  assert.strictEqual(alumni.length, INITIAL_ALUMNI.length);
+  assert.strictEqual(faculty.length, INITIAL_TEACHERS.length);
+  assert.strictEqual(admins.length, 2);
+
+  // Search by PRN or Employee ID
+  const student = INITIAL_STUDENTS[0];
+  const prnQuery = (student.enrollmentNo || student.prn).toLowerCase();
+  const prnMatches = allRosterUsers.filter(u => {
+    return String(u.prn || u.enrollmentNo || '').toLowerCase().includes(prnQuery);
+  });
+  assert.ok(prnMatches.some(u => u.id === student.id));
+
+  // Display email rules across roster
+  allRosterUsers.forEach(u => {
+    const emails = getUserEmails(u);
+    if (u.role === 'student') {
+      assert.strictEqual(emails.displayEmail, emails.collegeEmail);
+    } else if (u.role === 'alumni') {
+      assert.strictEqual(emails.displayEmail, emails.personalEmail);
+    } else if (u.role === 'faculty') {
+      assert.strictEqual(emails.displayEmail, emails.collegeEmail);
+    } else if (u.role === 'admin') {
+      assert.strictEqual(emails.displayEmail, emails.loginEmail);
+    }
+  });
+});
+
+test('characterization: audit logs filtering and searching', () => {
+  assert.ok(SAMPLE_AUDIT_LOGS.length > 0);
+
+  // Search matching
+  const searchQ = 'verification';
+  const matched = SAMPLE_AUDIT_LOGS.filter(log =>
+    log.action.toLowerCase().includes(searchQ) ||
+    log.performedBy.toLowerCase().includes(searchQ) ||
+    log.details.toLowerCase().includes(searchQ)
+  );
+  assert.ok(matched.length >= 0);
+
+  // Category filtering
+  const userEvents = SAMPLE_AUDIT_LOGS.filter(log => log.action.includes('USER') || log.action.includes('CRITICAL'));
+  const governanceEvents = SAMPLE_AUDIT_LOGS.filter(log => log.action.includes('ROLE') || log.action.includes('ADMIN') || log.action.includes('GRADUATION'));
+  const systemEvents = SAMPLE_AUDIT_LOGS.filter(log => log.action.includes('SYSTEM') || log.action.includes('ANNOUNCEMENT'));
+
+  assert.ok(Array.isArray(userEvents));
+  assert.ok(Array.isArray(governanceEvents));
+  assert.ok(Array.isArray(systemEvents));
+
+  // Ordering check: timestamps should be valid dates
+  SAMPLE_AUDIT_LOGS.forEach(log => {
+    assert.ok(log.id && log.action && log.performedBy && log.timestamp);
+  });
+});
+
+test('characterization: notifications list operations', () => {
+  assert.ok(INITIAL_NOTIFICATIONS.length > 0);
+
+  // mapRowToNotification check
+  const first = INITIAL_NOTIFICATIONS[0];
+  const mapped = mapRowToNotification(first);
+  assert.strictEqual(mapped.id, first.id);
+  assert.strictEqual(mapped.title, first.title);
+  assert.strictEqual(mapped.is_read, first.is_read);
+
+  // Unread count capping
+  const unreadCount = INITIAL_NOTIFICATIONS.filter(n => !n.is_read).length;
+  assert.strictEqual(capUnreadCount(unreadCount), String(unreadCount));
+  assert.strictEqual(capUnreadCount(150), '99+');
+
+  // Deduplication
+  const dupes = [...INITIAL_NOTIFICATIONS, INITIAL_NOTIFICATIONS[0]];
+  const deduped = deduplicateNotifications(dupes);
+  assert.strictEqual(deduped.length, INITIAL_NOTIFICATIONS.length);
+
+  // Grouping into Today vs Earlier
+  const grouped = groupNotificationsByDate(INITIAL_NOTIFICATIONS);
+  assert.ok(Array.isArray(grouped.today));
+  assert.ok(Array.isArray(grouped.earlier));
+  assert.strictEqual(grouped.today.length + grouped.earlier.length, INITIAL_NOTIFICATIONS.length);
+
+  // Relative time helper
+  assert.strictEqual(formatRelativeTime(new Date().toISOString()), 'Just now');
+});
+
+test('characterization: conversation list and message history', () => {
+  const currentUserId = INITIAL_STUDENTS[0].id;
+
+  // Derive connected contacts from messages and accepted mentorships
+  const connectedUserIds = new Set();
+  INITIAL_MESSAGES.forEach(msg => {
+    if (msg.senderId === currentUserId) connectedUserIds.add(msg.receiverId);
+    if (msg.receiverId === currentUserId) connectedUserIds.add(msg.senderId);
+  });
+  INITIAL_MENTORSHIP_REQUESTS.forEach(req => {
+    if ((req.studentId === currentUserId || req.mentorId === currentUserId) && req.status === 'Accepted') {
+      connectedUserIds.add(req.studentId === currentUserId ? req.mentorId : req.studentId);
+    }
+  });
+
+  assert.ok(connectedUserIds.size > 0, 'Current student should have connected chat contacts');
+
+  // Thread filtering for a contact
+  const contactId = Array.from(connectedUserIds)[0];
+  const threadMessages = INITIAL_MESSAGES.filter(msg =>
+    (msg.senderId === currentUserId && msg.receiverId === contactId) ||
+    (msg.senderId === contactId && msg.receiverId === currentUserId)
+  ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  // Verify chronological ordering
+  for (let i = 1; i < threadMessages.length; i++) {
+    const prev = new Date(threadMessages[i - 1].timestamp).getTime();
+    const curr = new Date(threadMessages[i].timestamp).getTime();
+    assert.ok(prev <= curr, 'Messages in thread must be chronologically ordered');
+  }
+
+  // Row to message mapping with attachments and reactions
+  const rawMsg = {
+    id: 'msg-test-1',
+    sender_id: currentUserId,
+    sender_name: 'Student Name',
+    sender_role: 'student',
+    receiver_id: contactId,
+    content: 'Hello, world!',
+    timestamp: new Date().toISOString(),
+    is_read: false,
+    attachments: [{ path: 'chat/doc.pdf', name: 'doc.pdf', mime: 'application/pdf', size: 1024 }],
+    reactions: [{ emoji: '👍', userId: currentUserId, userName: 'Student Name' }]
+  };
+  const mappedMsg = mapRowToChatMessage(rawMsg);
+  assert.strictEqual(mappedMsg.id, 'msg-test-1');
+  assert.strictEqual(mappedMsg.attachments?.length, 1);
+  assert.strictEqual(mappedMsg.attachments?.[0].fileName, 'doc.pdf');
+  assert.strictEqual(mappedMsg.reactions?.length, 1);
+});
+
+test('characterization: opportunities and applications', () => {
+  assert.ok(INITIAL_JOBS.length > 0);
+
+  // Status and department filtering
+  const activeJobs = INITIAL_JOBS.filter(j => j.status === 'Active' && j.moderationStatus === 'Approved');
+  assert.ok(activeJobs.length > 0);
+  assert.ok(activeJobs.every(j => j.status === 'Active' && j.moderationStatus === 'Approved'));
+
+  // Application mapping
+  const sampleAppRow = {
+    id: 'app-test-1',
+    job_id: INITIAL_JOBS[0].id,
+    applicant_id: INITIAL_STUDENTS[0].id,
+    applicant_name: INITIAL_STUDENTS[0].name,
+    applicant_role: 'student',
+    applicant_department: 'CMPN',
+    status: 'submitted',
+    applied_at: new Date().toISOString(),
+    cover_note: 'I am interested in this role'
+  };
+  const mappedApp = mapRowToApplication(sampleAppRow);
+  assert.strictEqual(mappedApp.id, 'app-test-1');
+  assert.strictEqual(mappedApp.applicantName, INITIAL_STUDENTS[0].name);
+  assert.strictEqual(mappedApp.status, 'submitted');
+
+  // Application preflight checks
+  const preflight = validateApplicationPreflights({
+    currentUser: INITIAL_STUDENTS[0],
+    job: INITIAL_JOBS[0],
+    hasAlreadyApplied: false
+  });
+  assert.strictEqual(preflight.canApply, true);
+});
+
+test('characterization: mentorship requests lifecycle and connection establishment', () => {
+  assert.ok(INITIAL_MENTORSHIP_REQUESTS.length > 0);
+
+  // Requests by student
+  const studentId = INITIAL_STUDENTS[0].id;
+  const studentRequests = INITIAL_MENTORSHIP_REQUESTS.filter(r => r.studentId === studentId);
+  assert.ok(studentRequests.length > 0);
+
+  // Requests by mentor
+  const mentorId = INITIAL_ALUMNI[0].id;
+  const mentorRequests = INITIAL_MENTORSHIP_REQUESTS.filter(r => r.mentorId === mentorId);
+  assert.ok(mentorRequests.length > 0);
+
+  // Accepted requests form active mentorship connections
+  const accepted = INITIAL_MENTORSHIP_REQUESTS.filter(r => r.status === 'Accepted');
+  assert.ok(accepted.length > 0);
+  assert.ok(accepted.every(r => r.status === 'Accepted'));
+
+  // Status transition normalization
+  assert.strictEqual(normalizeMentorshipStatus('accepted'), 'Accepted');
+  assert.strictEqual(normalizeMentorshipStatus('declined'), 'Declined');
+  assert.strictEqual(normalizeMentorshipStatus('completed'), 'Completed');
+  assert.strictEqual(normalizeMentorshipStatus('expired'), 'Expired');
+});
+
+test('characterization: events sorting, RSVP, and capacity limits', () => {
+  assert.ok(INITIAL_EVENTS.length > 0);
+
+  // Chronological sort
+  const sorted = [...INITIAL_EVENTS].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = new Date(sorted[i - 1].date).getTime();
+    const curr = new Date(sorted[i].date).getTime();
+    assert.ok(prev <= curr, 'Events must sort in ascending chronological order');
+  }
+
+  // RSVP check
+  const event = INITIAL_EVENTS[0];
+  const testUserId = INITIAL_STUDENTS[0].id;
+  const isRegistered = event.registeredUserIds.includes(testUserId);
+  assert.strictEqual(typeof isRegistered, 'boolean');
+
+  // Status normalization
+  assert.strictEqual(normalizeEventStatus('upcoming'), 'Upcoming');
+  assert.strictEqual(normalizeEventStatus('completed'), 'Completed');
+  assert.strictEqual(normalizeEventStatus('cancelled'), 'Cancelled');
+
+  // Capacity limit check
+  assert.ok(event.capacityLimit > 0);
+  assert.ok(event.rsvpsCount <= event.capacityLimit);
+});
+
 

@@ -117,6 +117,77 @@ function mapSupabaseError(error: any, operation: string, target: string): BaseSu
   return new SupabaseOperationError(operation, target, code, message, error);
 }
 
+export interface RequestMetricEntry {
+  op: string;
+  target: string;
+  durationMs: number;
+  rowCount: number;
+  payloadBytes: number;
+  timestamp: string;
+}
+
+export interface RequestCounterMetrics {
+  totalRequests: number;
+  totalDurationMs: number;
+  operations: Record<string, number>;
+  targets: Record<string, number>;
+  entries: RequestMetricEntry[];
+}
+
+let devRequestMetrics: RequestCounterMetrics = {
+  totalRequests: 0,
+  totalDurationMs: 0,
+  operations: {},
+  targets: {},
+  entries: []
+};
+
+function recordDevMetric(op: string, target: string, durationMs: number, data: any): void {
+  const isDevOrTest = Boolean(
+    (typeof import.meta !== 'undefined' && import.meta?.env?.DEV) ||
+    (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production')
+  );
+  if (!isDevOrTest) return;
+
+  const rowCount = Array.isArray(data) ? data.length : data ? 1 : 0;
+  let payloadBytes = 0;
+  try {
+    payloadBytes = data ? JSON.stringify(data).length : 0;
+  } catch {}
+
+  devRequestMetrics.totalRequests++;
+  devRequestMetrics.totalDurationMs += durationMs;
+  devRequestMetrics.operations[op] = (devRequestMetrics.operations[op] || 0) + 1;
+  devRequestMetrics.targets[target] = (devRequestMetrics.targets[target] || 0) + 1;
+  devRequestMetrics.entries.push({
+    op,
+    target,
+    durationMs,
+    rowCount,
+    payloadBytes,
+    timestamp: new Date().toISOString()
+  });
+}
+
+export function getDevRequestMetrics(): RequestCounterMetrics {
+  return {
+    ...devRequestMetrics,
+    operations: { ...devRequestMetrics.operations },
+    targets: { ...devRequestMetrics.targets },
+    entries: [...devRequestMetrics.entries]
+  };
+}
+
+export function resetDevRequestMetrics(): void {
+  devRequestMetrics = {
+    totalRequests: 0,
+    totalDurationMs: 0,
+    operations: {},
+    targets: {},
+    entries: []
+  };
+}
+
 /**
  * Execute a read query with logging and error mapping
  */
@@ -137,6 +208,8 @@ export async function runQuery<T>(
       errorReporter.reportError(mapped, { operation: op, target });
       throw mapped;
     }
+
+    recordDevMetric(op, target, duration, data);
 
     if (import.meta?.env?.DEV) {
       console.debug(`[SupabaseRunner] ${op} ${target} completed in ${duration}ms`);
@@ -187,6 +260,7 @@ export async function runMutation<T>(
       }
     }
 
+    recordDevMetric(operation, target, duration, data);
     console.info(`[SupabaseRunner] ${operation} ${target} successfully persisted in ${duration}ms`);
     return data as T;
   } catch (err: any) {
@@ -221,6 +295,7 @@ export async function runRpc<T>(
       throw mapped;
     }
 
+    recordDevMetric(op, rpcName, duration, data);
     console.info(`[SupabaseRunner] ${op} ${rpcName} succeeded in ${duration}ms`);
     return data as T;
   } catch (err: any) {

@@ -1,5 +1,5 @@
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { runQuery, runMutation } from './supabaseRunner';
+import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
+import { runQuery, runMutation } from './supabaseRunner.ts';
 import type { NotificationItem, NotificationPreferences } from '../types';
 
 function isValidUuid(id?: string): boolean {

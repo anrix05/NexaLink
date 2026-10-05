@@ -1,5 +1,5 @@
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { runQuery, runMutation, runRpc, RpcNotFoundError } from './supabaseRunner';
+import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
+import { runQuery, runMutation, runRpc, RpcNotFoundError } from './supabaseRunner.ts';
 import type { ChatMessage, UserRole, MentorshipGuidancePurpose, MessageAttachment, ReplySnippet } from '../types';
 
 function isValidUuid(id?: string): boolean {
