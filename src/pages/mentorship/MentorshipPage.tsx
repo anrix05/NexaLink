@@ -16,7 +16,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import type { AlumniProfile, FacultyProfile, MentorshipRequest, MentorshipGuidancePurpose } from '../../types';
+import type { AlumniProfile, FacultyProfile, StudentProfile, MentorshipRequest, MentorshipGuidancePurpose } from '../../types';
+import { motion, AnimatePresence } from 'framer-motion';
+import { MemberProfilePanel } from '../../components/directory/MemberProfilePanel';
 import {
   MessageSquare,
   Check,
@@ -137,6 +139,7 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
   const {
     alumniList,
     facultyList,
+    studentList,
     mentorshipRequests,
     updateMentorshipStatus,
     withdrawMentorshipRequest,
@@ -179,6 +182,46 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
   const [completeModalReq, setCompleteModalReq] = useState<MentorshipRequest | null>(null);
   const [rating, setRating] = useState(5);
   const [feedbackNotes, setFeedbackNotes] = useState('');
+
+  // Selected student profile drawer
+  const [selectedStudentProfile, setSelectedStudentProfile] = useState<StudentProfile | null>(null);
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+
+  const handleOpenStudentProfile = (req: MentorshipRequest | any) => {
+    const studentId = req.studentId || req.id;
+    const studentEmail = req.studentEmail || req.email;
+    const matched = studentList.find(s => s.id === studentId || s.email === studentEmail);
+    if (matched) {
+      setSelectedStudentProfile(matched);
+      return;
+    }
+    const fallback: StudentProfile = {
+      id: studentId,
+      name: req.studentName || req.name || 'Student',
+      email: studentEmail || 'student@vit.edu.in',
+      avatar: '',
+      role: 'student',
+      department: req.studentDepartment || 'CMPN',
+      enrollmentNo: req.studentEnrollmentNo || 'N/A',
+      prn: req.studentEnrollmentNo || 'N/A',
+      currentYear: (req.studentYear as any) || 'BE',
+      semester: 'BE',
+      cgpa: 8.5,
+      skills: ['Distributed Systems', 'Software Engineering', 'System Architecture'],
+      areasOfInterest: [req.topic || req.purposeOfRequest || 'Software Engineering'],
+      careerGoal: req.purposeOfRequest || 'Engineering Guidance & Career Preparation',
+      preferredIndustry: 'Technology',
+      preferredHigherStudies: 'None',
+      certifications: [],
+      projects: [],
+      targetCompanies: [],
+      isVerified: true,
+      verificationStatus: 'Verified',
+      bio: `Student at Vidyalankar Institute of Technology, ${req.studentDepartment || 'CMPN'} Department. Seeking mentorship on ${req.topic || req.purposeOfRequest || 'Career guidance'}.`,
+      createdAt: new Date().toISOString()
+    };
+    setSelectedStudentProfile(fallback);
+  };
 
   // Auto-open sheet if selectedMentorForBooking passed
   useEffect(() => {
@@ -918,7 +961,20 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
                               </span>
                             </div>
                             <p className="text-xs font-medium text-[#0A0A0A]">{req.topic || req.purposeOfRequest}</p>
-                            <p className="text-[11px] text-[#6B7280] line-clamp-2 leading-relaxed">{req.message}</p>
+                            <div>
+                              <p className={`text-[11px] text-[#6B7280] leading-relaxed whitespace-pre-line break-words ${expandedNotes[req.id] || req.message.length <= 140 ? '' : 'line-clamp-2'}`}>
+                                {req.message}
+                              </p>
+                              {req.message.length > 140 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedNotes(prev => ({ ...prev, [req.id]: !prev[req.id] }))}
+                                  className="text-[10px] text-[#2563EB] hover:underline font-medium mt-0.5 cursor-pointer"
+                                >
+                                  {expandedNotes[req.id] ? 'Show less' : 'Show full note'}
+                                </button>
+                              )}
+                            </div>
                             <p className="text-[10px] text-[#9CA3AF] pt-1">
                               Requested {new Date(req.requestedDate || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                             </p>
@@ -1156,19 +1212,31 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
                       </div>
                     </div>
 
-                    <p className="text-xs text-[#4B5563] leading-relaxed bg-[#F9FAFB] p-3 rounded-xl border border-[#E5E7EB] whitespace-pre-line">
-                      {req.message}
-                    </p>
+                    <div className="bg-[#F9FAFB] p-3 rounded-xl border border-[#E5E7EB]">
+                      <p className={`text-xs text-[#4B5563] leading-relaxed whitespace-pre-line break-words ${expandedNotes[req.id] || req.message.length <= 180 ? '' : 'line-clamp-2'}`}>
+                        {req.message}
+                      </p>
+                      {req.message.length > 180 && (
+                        <button
+                          type="button"
+                          onClick={() => setExpandedNotes(prev => ({ ...prev, [req.id]: !prev[req.id] }))}
+                          className="text-[11px] text-[#2563EB] hover:underline font-medium mt-1 cursor-pointer"
+                        >
+                          {expandedNotes[req.id] ? 'Show less' : 'Show full note'}
+                        </button>
+                      )}
+                    </div>
 
                     <div className="flex items-center justify-between text-[11px] text-[#6B7280] pt-1">
                       <span>Submitted on {new Date(req.requestedDate || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
-                      <a
-                        href={`/?tab=directory&profile=${req.studentId}`}
-                        className="underline hover:text-[#0A0A0A] flex items-center gap-1"
+                      <button
+                        type="button"
+                        onClick={() => handleOpenStudentProfile(req)}
+                        className="underline hover:text-[#0A0A0A] flex items-center gap-1 cursor-pointer bg-transparent border-0 p-0 text-[11px] text-[#6B7280]"
                       >
                         <span>View student profile</span>
                         <ExternalLink className="w-3 h-3" />
-                      </a>
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -1215,12 +1283,13 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
                     </div>
 
                     <div className="pt-2 border-t border-[#E5E7EB] flex items-center justify-between">
-                      <a
-                        href={`/?tab=directory&profile=${mentee.studentId}`}
-                        className="text-xs text-[#6B7280] hover:text-[#0A0A0A] underline"
+                      <button
+                        type="button"
+                        onClick={() => handleOpenStudentProfile(mentee)}
+                        className="text-xs text-[#6B7280] hover:text-[#0A0A0A] underline cursor-pointer bg-transparent border-0 p-0"
                       >
                         Profile
-                      </a>
+                      </button>
                       <Button
                         variant="primary"
                         size="sm"
@@ -1380,6 +1449,32 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
           setStudentTab('requests');
         }}
       />
+
+      {/* Student Profile Drawer */}
+      <AnimatePresence>
+        {selectedStudentProfile && (
+          <div className="fixed inset-0 z-50 flex items-center justify-end bg-[#0A0A0A]/40 backdrop-blur-xs p-0 sm:p-4">
+            <div className="fixed inset-0" onClick={() => setSelectedStudentProfile(null)} />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative z-10 w-full max-w-lg h-full sm:h-[90vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+            >
+              <MemberProfilePanel
+                user={selectedStudentProfile}
+                onClose={() => setSelectedStudentProfile(null)}
+                onRequestMentorship={() => {}}
+                onMessage={(u) => {
+                  setSelectedStudentProfile(null);
+                  handleMessageUser(u.id);
+                }}
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

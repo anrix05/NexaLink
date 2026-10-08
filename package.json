@@ -15,6 +15,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && node scripts/verify-prod-bundle.mjs",
+    "postbuild": "node scripts/assert-no-mock.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "node --experimental-strip-types scripts/test-services.mjs",

@@ -222,6 +222,9 @@ interface DataContextType {
   setPendingChatUserId: (id: string | null) => void;
 }
 
+const isValidUUID = (id?: string | null): boolean =>
+  Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id));
+
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -278,7 +281,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const stored = localStorage.getItem(`nexalink_saved_opportunities_${currentUser?.id || 'guest'}`);
       if (stored) return JSON.parse(stored);
     } catch {}
-    return ['job-1'];
+    return [];
   });
 
   const showToast = useCallback((msg: string) => {
@@ -529,6 +532,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const jobs = await jobsService.getJobs();
             if (jobs && jobs.length > 0) {
               setJobsList(jobs);
+            } else if (import.meta.env.DEV) {
+              const mockData = await import('../data/mockData');
+              setJobsList(mockData.INITIAL_JOBS);
             } else if (!isLiveMode()) {
               const mockData = await import('../data/mockData');
               setJobsList(mockData.INITIAL_JOBS);
@@ -537,7 +543,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           } catch (e) {
             console.error('Failed to load jobs from jobsService:', e);
-            if (!isLiveMode()) {
+            if (import.meta.env.DEV || !isLiveMode()) {
               const mockData = await import('../data/mockData');
               setJobsList(mockData.INITIAL_JOBS);
             }
@@ -553,6 +559,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const apps = await jobsService.getApplications();
             if (apps && apps.length > 0) {
               setOpportunityApplications(apps);
+            } else if (import.meta.env.DEV) {
+              const mockData = await import('../data/mockData');
+              setOpportunityApplications(mockData.INITIAL_APPLICATIONS || []);
             } else if (!isLiveMode()) {
               const mockData = await import('../data/mockData');
               setOpportunityApplications(mockData.INITIAL_APPLICATIONS || []);
@@ -561,7 +570,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           } catch (e) {
             console.error('Failed to load applications from jobsService:', e);
-            if (!isLiveMode()) {
+            if (import.meta.env.DEV || !isLiveMode()) {
               const mockData = await import('../data/mockData');
               setOpportunityApplications(mockData.INITIAL_APPLICATIONS || []);
             }
@@ -574,6 +583,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const evts = await eventsService.getEvents();
             if (evts && evts.length > 0) {
               setEventsList(evts);
+            } else if (import.meta.env.DEV) {
+              const mockData = await import('../data/mockData');
+              setEventsList(mockData.INITIAL_EVENTS);
+              setEventRsvps(mockData.INITIAL_RSVPS || []);
             } else if (!isLiveMode()) {
               const mockData = await import('../data/mockData');
               setEventsList(mockData.INITIAL_EVENTS);
@@ -582,14 +595,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           } catch (e) {
             console.error('Failed to load events from eventsService:', e);
-            if (!isLiveMode()) {
+            if (import.meta.env.DEV || !isLiveMode()) {
               const mockData = await import('../data/mockData');
               setEventsList(mockData.INITIAL_EVENTS);
+              setEventRsvps(mockData.INITIAL_RSVPS || []);
             }
           }
         } else {
           const mockData = await import('../data/mockData');
           setEventsList(mockData.INITIAL_EVENTS);
+          setEventRsvps(mockData.INITIAL_RSVPS || []);
         }
 
         // 4. Fetch Mentorship Requests
@@ -598,6 +613,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const mRequests = await mentorshipService.getMentorshipRequests();
             if (mRequests && mRequests.length > 0) {
               setMentorshipRequests(mRequests);
+            } else if (import.meta.env.DEV) {
+              const mockData = await import('../data/mockData');
+              setMentorshipRequests(mockData.INITIAL_MENTORSHIP_REQUESTS);
             } else if (!isLiveMode()) {
               const mockData = await import('../data/mockData');
               setMentorshipRequests(mockData.INITIAL_MENTORSHIP_REQUESTS);
@@ -606,7 +624,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           } catch (e) {
             console.error('Failed to load mentorship requests from mentorshipService:', e);
-            if (!isLiveMode()) {
+            if (import.meta.env.DEV || !isLiveMode()) {
               const mockData = await import('../data/mockData');
               setMentorshipRequests(mockData.INITIAL_MENTORSHIP_REQUESTS);
             }
@@ -625,6 +643,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (filtered.length > 0) {
               setAnnouncements(filtered);
               try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(filtered)); } catch {}
+            } else if (import.meta.env.DEV) {
+              const mockData = await import('../data/mockData');
+              setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
+              try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(mockData.INITIAL_ANNOUNCEMENTS)); } catch {}
+              const { invalidateNoticesCache } = await import('../hooks/useNotices');
+              invalidateNoticesCache();
             } else if (!isLiveMode()) {
               const mockData = await import('../data/mockData');
               setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
@@ -633,14 +657,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           } catch (e) {
             console.error('Failed to load announcements from announcementsService:', e);
-            if (!isLiveMode()) {
+            if (import.meta.env.DEV || !isLiveMode()) {
               const mockData = await import('../data/mockData');
               setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
+              try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(mockData.INITIAL_ANNOUNCEMENTS)); } catch {}
+              const { invalidateNoticesCache } = await import('../hooks/useNotices');
+              invalidateNoticesCache();
             }
           }
         } else {
           const mockData = await import('../data/mockData');
           setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
+          try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(mockData.INITIAL_ANNOUNCEMENTS)); } catch {}
         }
 
         // 6. Chat Messages
@@ -650,21 +678,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else if (currentUser?.id) {
           try {
             const userMessages = await messagingService.getMessages(currentUser.id);
-            if (currentUser.role === 'admin') {
-              const reportedData = await messagingService.getReportedMessages();
-              const existingIds = new Set(userMessages.map(m => m.id));
-              reportedData.forEach(r => {
-                if (!existingIds.has(r.id)) {
-                  userMessages.push(r);
-                  existingIds.add(r.id);
-                }
-              });
+            if (userMessages && userMessages.length > 0) {
+              if (currentUser.role === 'admin') {
+                const reportedData = await messagingService.getReportedMessages();
+                const existingIds = new Set(userMessages.map(m => m.id));
+                reportedData.forEach(r => {
+                  if (!existingIds.has(r.id)) {
+                    userMessages.push(r);
+                    existingIds.add(r.id);
+                  }
+                });
+              }
+              setMessages(userMessages);
+            } else if (import.meta.env.DEV) {
+              const mockData = await import('../data/mockData');
+              setMessages(mockData.INITIAL_MESSAGES);
+            } else {
+              setMessages([]);
             }
-            setMessages(userMessages || []);
           } catch (e) {
             console.error('Failed to load chat messages:', e);
-            setMessages([]);
+            if (import.meta.env.DEV) {
+              const mockData = await import('../data/mockData');
+              setMessages(mockData.INITIAL_MESSAGES);
+            } else {
+              setMessages([]);
+            }
           }
+        } else if (import.meta.env.DEV) {
+          const mockData = await import('../data/mockData');
+          setMessages(mockData.INITIAL_MESSAGES);
         } else {
           setMessages([]);
         }
@@ -674,13 +717,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           try {
             const { fetchStarredConversations } = await import('../lib/supabase-chat');
             const starredData = await fetchStarredConversations(currentUser.id);
-            setStarredConversations(starredData);
-          } catch (e) { console.error('Failed to load starred conversations', e); }
+            if (starredData && starredData.length > 0) {
+              setStarredConversations(starredData);
+            } else if (import.meta.env.DEV) {
+              if (currentUser.id === 'user-student-1') {
+                setStarredConversations(['user-alumni-1', 'user-faculty-1', 'user-alumni-vikram']);
+              } else if (currentUser.id === 'user-alumni-1') {
+                setStarredConversations(['user-student-1', 'user-faculty-1']);
+              }
+            }
+          } catch (e) {
+            console.error('Failed to load starred conversations', e);
+            if (import.meta.env.DEV && currentUser.id === 'user-student-1') {
+              setStarredConversations(['user-alumni-1', 'user-faculty-1', 'user-alumni-vikram']);
+            }
+          }
         }
 
         // 7. Audit Logs (Phase 2: Decoupled startup fetch)
-        // Audit logs are fetched on-demand by AdminDashboard via auditService.getAuditLogs.
-        if (!isLiveMode()) {
+        if (import.meta.env.DEV) {
+          const mockData = await import('../data/mockData');
+          setAuditLogs(mockData.INITIAL_AUDIT_LOGS);
+        } else if (!isLiveMode()) {
           // In mock mode, keep the initialized mock log
         } else {
           setAuditLogs([]);
@@ -723,10 +781,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               notificationsService.getNotifications(currentUser.id),
               notificationsService.getPreferences(currentUser.id)
             ]);
-            setNotifications(notifs);
+            if (notifs && notifs.length > 0) {
+              setNotifications(notifs);
+            } else if (import.meta.env.DEV) {
+              const mockData = await import('../data/mockData');
+              const userNotifs = (mockData.INITIAL_NOTIFICATIONS || []).filter((n: any) => n.user_id === currentUser.id);
+              setNotifications(userNotifs);
+            }
             setNotificationPreferences(prefs);
           } catch (nErr) {
             console.error('Failed to load notifications or preferences:', nErr);
+            if (import.meta.env.DEV) {
+              const mockData = await import('../data/mockData');
+              const userNotifs = (mockData.INITIAL_NOTIFICATIONS || []).filter((n: any) => n.user_id === currentUser.id);
+              setNotifications(userNotifs);
+            }
           }
 
           // 11. Fetch Opportunity Applications
@@ -735,9 +804,62 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const apps = isHost
               ? await jobsService.getApplications()
               : await jobsService.getApplicationsForApplicant(currentUser.id);
-            setOpportunityApplications(apps);
+            if (apps && apps.length > 0) {
+              setOpportunityApplications(apps);
+            } else if (import.meta.env.DEV) {
+              const mockData = await import('../data/mockData');
+              const allMockApps = mockData.INITIAL_APPLICATIONS || [];
+              setOpportunityApplications(
+                isHost ? allMockApps : allMockApps.filter((a: any) => a.applicantId === currentUser.id)
+              );
+            }
           } catch (aErr) {
             console.error('Failed to load opportunity applications:', aErr);
+            if (import.meta.env.DEV) {
+              const mockData = await import('../data/mockData');
+              const allMockApps = mockData.INITIAL_APPLICATIONS || [];
+              const isHost = currentUser.role === 'admin' || currentUser.role === 'alumni' || currentUser.role === 'faculty';
+              setOpportunityApplications(
+                isHost ? allMockApps : allMockApps.filter((a: any) => a.applicantId === currentUser.id)
+              );
+            }
+          }
+        }
+
+        // 12. Dev Mock Saved Opportunities synchronization
+        if (import.meta.env.DEV && currentUser?.id === 'user-student-1') {
+          const aanyaSaved = ['job-rushabh-1', 'job-rushabh-2', 'job-sangale-1', 'job-closing-soon-1'];
+          setSavedOpportunityIds(aanyaSaved);
+          try {
+            localStorage.setItem('nexalink_saved_opportunities_user-student-1', JSON.stringify(aanyaSaved));
+          } catch {}
+        }
+
+        // 13. Dev Mock Self-Check
+        if (import.meta.env.DEV) {
+          try {
+            const mockData = await import('../data/mockData');
+            const { runSeedSelfCheck } = await import('../dev/mock/selfCheck');
+            const effectiveSaved = currentUser?.id === 'user-student-1'
+              ? ['job-rushabh-1', 'job-rushabh-2', 'job-sangale-1', 'job-closing-soon-1']
+              : ['job-1'];
+            runSeedSelfCheck(currentUser, {
+              jobsList: mockData.INITIAL_JOBS,
+              eventsList: mockData.INITIAL_EVENTS,
+              mentorshipRequests: mockData.INITIAL_MENTORSHIP_REQUESTS,
+              announcements: mockData.INITIAL_ANNOUNCEMENTS,
+              messages: mockData.INITIAL_MESSAGES,
+              opportunityApplications: mockData.INITIAL_APPLICATIONS,
+              notifications: mockData.INITIAL_NOTIFICATIONS,
+              studentList: mockData.INITIAL_STUDENTS,
+              alumniList: mockData.INITIAL_ALUMNI,
+              facultyList: mockData.INITIAL_TEACHERS,
+              adminList: [mockData.DEMO_ADMIN, mockData.DEMO_ADMIN_2],
+              auditLogs: mockData.INITIAL_AUDIT_LOGS,
+              savedOpportunityIds: effectiveSaved
+            });
+          } catch (scErr) {
+            console.error('[DataContext] Self-check failed to run:', scErr);
           }
         }
       } catch (err) {
@@ -745,6 +867,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } finally {
         setIsDataLoading(false);
       }
+
     }, [currentUser?.id, currentUser?.role]);
 
     // Load live data from Supabase whenever auth session settles or user changes
@@ -1797,7 +1920,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(next)); } catch {}
       return next;
     });
-    addAuditLog('ANNOUNCEMENT_RETRACTED', 'Administrator', `Removed announcement with ID: ${announcementId}`);
+    addAuditLog('ANNOUNCEMENT_RETRACTED', currentUser?.name || 'Administrator', `Removed announcement with ID: ${announcementId}`);
+    try {
+      import('../hooks/useNotices').then(({ invalidateNoticesCache }) => invalidateNoticesCache());
+    } catch {}
 
     if (isSupabaseConfigured()) {
       announcementsService.retractAnnouncement(announcementId)
@@ -2608,7 +2734,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     addAuditLog('MENTORSHIP_STATUS_UPDATE', callerRole || 'Advisor', `Updated request ${requestId} status to ${status}`, requestId);
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && isValidUUID(requestId)) {
       mentorshipService.updateStatus(requestId, status, {
         meetingNotes: notes,
         declineReason: status === 'Declined' ? (notes || 'Declined by mentor') : undefined,
@@ -2636,7 +2762,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     addAuditLog('MENTORSHIP_FEEDBACK', 'Student', `Submitted ${rating}-star feedback rating for mentorship session.`, requestId);
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && isValidUUID(requestId)) {
       mentorshipService.updateStatus(requestId, 'Completed', {
         feedback: feedbackObj
       }).catch(err => console.error('[Supabase submitMentorshipFeedback error]', err));
@@ -2651,7 +2777,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return req;
     }));
     addAuditLog('MENTORSHIP_WITHDRAWN', currentUser?.name || 'Student', `Withdrew mentorship request ${requestId}`, requestId);
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && isValidUUID(requestId)) {
       mentorshipService.updateStatus(requestId, 'Withdrawn')
         .catch(err => console.error('[Supabase withdrawMentorshipRequest error]', err));
     }
@@ -2670,7 +2796,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return req;
     }));
     addAuditLog('MENTORSHIP_COMPLETED', currentUser?.name || 'User', `Marked mentorship request ${requestId} as completed`, requestId);
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && isValidUUID(requestId)) {
       mentorshipService.updateStatus(requestId, 'Completed', {
         feedback: feedbackObj
       }).catch(err => console.error('[Supabase completeMentorship error]', err));
@@ -2687,11 +2813,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return req;
     }));
     if (isSupabaseConfigured()) {
-      if (requestIdOrAll) {
+      if (requestIdOrAll && isValidUUID(requestIdOrAll)) {
         supabase.from('mentorship_requests').update({ seen_at: now } as any).eq('id', requestIdOrAll).then(({ error }) => {
           if (error) console.error('[Supabase markMentorshipSeen error]', error);
         });
-      } else if (currentUser) {
+      } else if (currentUser && isValidUUID(currentUser.id)) {
         supabase.from('mentorship_requests').update({ seen_at: now } as any).or(`student_id.eq.${currentUser.id},mentor_id.eq.${currentUser.id}`).then(({ error }) => {
           if (error) console.error('[Supabase markMentorshipSeen error]', error);
         });
@@ -3261,7 +3387,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (currentUser?.role !== 'admin' || !isSupabaseConfigured()) return;
     try {
       const { data: logsData, error: lErr } = await supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(20);
-      if (!lErr && logsData) {
+      if (!lErr && logsData && logsData.length > 0) {
         setAuditLogs(logsData.map((l: any) => ({
           id: l.id,
           action: l.action,
@@ -3272,16 +3398,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isBulkAction: l.is_bulk_action,
           bulkMetadata: l.bulk_metadata || undefined
         })));
+      } else if (import.meta.env.DEV) {
+        const mockData = await import('../data/mockData');
+        setAuditLogs(mockData.INITIAL_AUDIT_LOGS);
       }
     } catch (err) {
       console.error('[DataContext] Error loading audit logs:', err);
+      if (import.meta.env.DEV) {
+        const mockData = await import('../data/mockData');
+        setAuditLogs(mockData.INITIAL_AUDIT_LOGS);
+      }
     }
   }, [currentUser?.role]);
 
-  const addAnnouncement = async (ancData: Omit<Announcement, 'id' | 'date'>) => {
+  const addAnnouncement = async (ancData: Omit<Announcement, 'id' | 'date'> & { id?: string; authorId?: string }) => {
+    const isAlreadyPersisted = Boolean(ancData.id);
     const newAnc: Announcement = {
       ...ancData,
-      id: generateUUID(),
+      id: ancData.id || generateUUID(),
       date: new Date().toISOString()
     };
     setAnnouncements(prev => {
@@ -3289,9 +3423,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(next)); } catch {}
       return next;
     });
-    addAuditLog('ANNOUNCEMENT_PUBLISHED', 'Administrator', `Published institutional announcement: "${newAnc.title}"`);
+    addAuditLog('ANNOUNCEMENT_PUBLISHED', currentUser?.name || 'Administrator', `Published institutional announcement: "${newAnc.title}"`);
+    try {
+      const { invalidateNoticesCache } = await import('../hooks/useNotices');
+      invalidateNoticesCache();
+    } catch {}
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && !isAlreadyPersisted) {
       const serializedContent = serializeAnnouncementContent(newAnc.content, {
         severity: newAnc.severity || 'standard',
         expiresAt: newAnc.expiresAt,
@@ -3303,6 +3441,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         title: newAnc.title,
         category: newAnc.category,
         author: newAnc.author,
+        author_id: ancData.authorId || currentUser?.id || null,
         date: newAnc.date,
         content: serializedContent,
         is_important: newAnc.severity === 'governance' || !!newAnc.isImportant,
@@ -3376,17 +3515,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(next)); } catch {}
       return next;
     });
-    addAuditLog('ANNOUNCEMENT_DELETED', 'Administrator', `Deleted announcement: "${target?.title || announcementId}"`);
+    addAuditLog('ANNOUNCEMENT_DELETED', currentUser?.name || 'Administrator', `Deleted announcement: "${target?.title || announcementId}"`);
+    try {
+      const { invalidateNoticesCache } = await import('../hooks/useNotices');
+      invalidateNoticesCache();
+    } catch {}
 
     if (isSupabaseConfigured()) {
-      const { error } = await supabase.from('announcements').delete().eq('id', announcementId);
-      if (error) {
-        console.warn('[Supabase deleteAnnouncement failed, attempting soft retract]', error);
-        await supabase.from('announcements').update({
-          is_retracted: true,
-          retracted_at: new Date().toISOString()
-        }).eq('id', announcementId);
-      }
+      await announcementsService.deleteAnnouncement(announcementId);
     }
   };
 

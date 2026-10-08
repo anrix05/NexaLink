@@ -4,6 +4,50 @@ All notable changes to the NexaLink platform are documented in this file.
 
 ---
 
+## [v2.9.1 - Demo Data Completion Pass] - 2026-10-09
+
+### Demo Data Completion Pass & Dual-Mode Fallback
+
+#### Root Cause Analysis & Core Fixes
+1. **Dual-Mode Live Data Empty Overwrite (`DataContext.tsx`):**
+   - *Problem:* When Supabase credentials were present in `.env`, `loadSupabaseData` initialized live queries. Because the remote tables contained 0 records, the previous logic fell through without populating mock fallbacks (which were gated behind `!isLiveMode()`), effectively wiping in-memory state to empty arrays.
+   - *Fix:* Added an explicit `else if (import.meta.env.DEV)` fallback branch in `loadSupabaseData` and `loadAuditLogs` that dynamically imports and loads deterministic mock datasets whenever live tables return 0 records in development.
+2. **Event Taxonomy String Mismatch (`src/dev/mock/generator.ts`):**
+   - *Problem:* The Events UI filter compares exact string equality against sentence-case constants (`'Alumni meet'`, `'Guest lecture'`, `'Career workshop'`), whereas mock data was generated in Title Case (`'Alumni Meet'`), resulting in 0 matches when filtering.
+   - *Fix:* Aligned all event categories in `generator.ts` to exact sentence-case constants.
+3. **Opportunities Referral Taxonomy:**
+   - *Problem:* Opportunity category chip filtering for "Referral" searches for substring `"referral"` in normalized listing type. None of the original mock listings contained this keyword.
+   - *Fix:* Seeded explicit alumni referral opportunities tagged with `'Full-time (Alumni Referral)'` and `'Internship (Direct Referral)'`.
+4. **Dangling Saved Job ID Reference:**
+   - *Problem:* Default saved jobs state referenced `'job-1'`, which did not match generated opportunity IDs, causing the "Saved (1)" tab to render 0 listings.
+   - *Fix:* Added `'job-1'` alias and seeded Aanya's 4 active saved opportunity IDs (`job-rushabh-1`, `job-rushabh-2`, `job-sangale-1`, `job-closing-soon-1`).
+5. **Notice Hardcoded ID Suppression:**
+   - *Problem:* `DataContext` filtered out `ann.id === 'ann-1'` due to an earlier retracted notice workaround.
+   - *Fix:* Prefixed generated announcements with `notice-1` through `notice-12`.
+6. **Messaging Contacts Visibility:**
+   - *Problem:* `MessagingPage` only displays users who have at least one message exchanged with `currentUser.id`. The old seed had only 5 conversations for Aanya.
+   - *Fix:* Seeded 16 complete conversations where Aanya is an active participant (10 alumni, 5 faculty, 1 admin), with 6 unread badges and 3 starred threads.
+
+#### Added
+- **Diagnostic Self-Check Engine (`src/dev/mock/selfCheck.ts`):**
+  - Evaluates 10 mock collections at runtime: Opportunities, Saved Opportunities, Applications, Events, Notices, Mentorship Requests, Messages, Notifications, Verification Queue, and Audit Logs.
+  - Automatically runs at the conclusion of `loadSupabaseData` in dev mode and logs `[Seed Check: ALL PASS]`.
+- **Dev Switcher Health Badge (`src/components/auth/DevLoginPopover.tsx`):**
+  - Displays a live status badge ("Seed OK" in emerald or "Seed: N problems" in amber) inside the bottom-right developer switcher popover.
+- **Documentation:**
+  - `docs/DEMO_SEED_AUDIT.md`: In-depth audit matrix covering all 10 collections, root causes, and architectural protections.
+  - `docs/DEMO_SCRIPT.md`: Refreshed 7-10 min presentation script aligned with current sidebar navigation, featuring the "Reset demo data" rescue procedure.
+  - `docs/MANUAL_QA.md`: Comprehensive v2.9.1 manual test matrix.
+
+#### Assumptions
+1. **Deterministic Pseudo-Random Generation:** All IDs, dates, and relationships use deterministic string templates and seeded counters so every session boot produces an identical dataset.
+2. **Dual-Mode Preservation:** Supabase live mode remains standard; dev fallback activates only in local development when live tables return no rows, guaranteeing production builds never leak mock fixtures.
+
+#### Follow-ups
+1. **Dynamic Applicant Status Mutators:** When host alumni update applicant status in Opportunity Manage Console, state updates optimistically in memory during the dev session.
+
+---
+
 ## [v2.8 - Student Outreach & Discovery] - 2026-10-09
 
 ### App Icons Update
@@ -167,3 +211,65 @@ All notable changes to the NexaLink platform are documented in this file.
 - `src/components/brand/NexaMark.tsx`
 - `src/components/intro/IntroOverlay.tsx`
 - `docs/MANUAL_QA.md`
+
+---
+
+### v2.9: Rich Deterministic Demo Data (DEV Mode Only) & Production Separation Guard
+
+#### Overview
+Implemented a fully populated, deterministic local development dataset designed for comprehensive evaluator walkthroughs while enforcing zero mock data leakage into production bundles. The mock store is strictly gated behind `import.meta.env.DEV` with dynamic loaders and validated by an automated postbuild security guard.
+
+#### Key Enhancements
+1. **Separation Architecture:**
+   - Introduced `src/dev/mock/marker.ts` with `DEV_SEED_MARKER = 'NEXALINK_DEV_SEED_V1'`.
+   - Converted `src/data/mockData.ts` into a thin re-export proxy that only imports `src/dev/mock/**` under `import.meta.env.DEV`. In production bundles, the branch is dead-code eliminated by Rollup/Vite.
+   - Built `scripts/assert-no-mock.mjs` running as `postbuild` hook to assert that no marker strings, dev emails, demo OTPs, or mock folder segments appear in `dist/`.
+2. **Deterministic Entity Population:**
+   - **Students (62):** Across all 5 departments (CMPN, INFT, EXTC, EXCS, BIOM), Semesters 1 to 8, with 24 opted-in to outreach and 4 flagged for graduation recovery.
+   - **Alumni (33):** Across 13 countries and 18 tier-1 employers, including 8 pursuing higher studies and 15+ accepting mentees.
+   - **Faculty (24):** All 5 departments covered with verified HODs (Dr. Ravindra Sangale, Dr. Vidya Chitre, Dr. Arun Chavan, Dr. Sandeep Joshi, Dr. Kavita Nair).
+   - **Mentorship Requests (52):** Pending, accepted, declined (with soft decline notes), and 30+ completed sessions with genuine 1-5 star reviews.
+   - **Opportunities (35):** Covering all 6 categories (Job Vacancies, Internships, Research Projects, Scholarships, Industrial Training, Workshops) with deadlines closing in 1-3 days, expired entries, and 2 in moderation queue.
+   - **Applications (35):** Linked across opportunities with status progression.
+   - **Events (15):** 9 upcoming events across next 3 weeks (including 1 waitlisted at full capacity with 50 registered attendees) and 5 past events with verified certificate issuance.
+   - **NexaChats (16 convos, 200+ msgs):** Multi-day threads with PDF previews, code blocks, unread badges, and 4 reported messages with administrative actions.
+   - **Audit Logs (72):** Spread across 30 days covering verifications, NAAC 5.4.1 exports, NIRF exports, and bulk graduation batches.
+3. **Dev Personas & Fast Reset Switcher:**
+   - Extended `DevLoginPopover.tsx` with 5 additional demo chips:
+     - `Karan Mehta` (Student: new account, 40% profile, empty state)
+     - `Aarav Deshpande` (Student: pending verification stepper)
+     - `Pooja Kulkarni` (Student: rejected state & re-upload pathway)
+     - `Vikram Malhotra` (Alumni: Microsoft Munich, full capacity mentor)
+     - `Prof. Sneha Deshpande` (Faculty: EXTC Assistant Professor, non-HOD)
+   - Added **"Reset demo data"** button that restores the volatile in-memory store and cleans local storage caches without a page reload.
+
+#### Assumptions
+1. **Relative Dates:** All timestamps are computed at runtime relative to `Date.now()` using `time.ts` (`daysAgo`, `daysFromNow`, `hoursAgo`) so data never appears stale or expired during live demos.
+2. **Fixed PRNG Seed:** A custom lightweight `mulberry32` PRNG (seed `20261009`) in `random.ts` is used to ensure deterministic consistency without introducing external generator dependencies like Faker.
+3. **Fictional Personal Contacts:** Personal emails use `@example.com`, institutional emails use `@student.vit.edu.in` and `@alumni.vit.edu.in`, and phone numbers use the obvious fake range `+91 90000 0xxxx`.
+4. **Offline SVG Avatars:** Avatars for generated people are generated as deterministic SVG data URIs with initials on a neutral palette. No external CDNs or network image requests are made.
+5. **In-Memory Mutations:** All demo mutations (creating chat messages, RSVPing, approving verifications) are stored strictly in volatile memory and discarded on reload or reset.
+6. **Preserved Existing Personas:** Existing headline personas (Aanya Patel, Rushabh Sanghavi, Dr. Ravindra Sangale, Dr. Sunita Rawat) maintain their existing IDs, credentials, and image URLs.
+
+#### Follow-ups
+1. **Outreach Mock Store Parity:** `StudentProfile` does not natively declare an `openToOutreach` boolean in `src/types/index.ts` (handled separately via the `StudentOutreachSettings` RPC model in `src/features/outreach/`). Kept existing types unchanged without modifying `types/index.ts`.
+2. **Legacy Headline References:** Institutional references to Dr. Ravindra Sangale (CMPN HOD / NAAC Steering Convener in `constants.ts` and `ReportsExportPage.tsx`) and Rushabh Sanghavi (marketing testimonial in `RoleJourneysSection.tsx`) belong to static UI templates and were preserved without touching components.
+
+#### Modified Files
+- `src/data/mockData.ts` (thin re-export proxy)
+- `src/components/auth/DevLoginPopover.tsx` (dynamic dev persona loader, extra chips, Reset demo data button)
+- `package.json` (added `postbuild` guard script line)
+- `README.md` (appended Demo Data section)
+- `docs/MANUAL_QA.md` (appended v2.9 QA verification checklist)
+
+#### New Files
+- `src/dev/mock/marker.ts`
+- `src/dev/mock/time.ts`
+- `src/dev/mock/random.ts`
+- `src/dev/mock/avatars.ts`
+- `src/dev/mock/lists.ts`
+- `src/dev/mock/generator.ts`
+- `src/dev/mock/index.ts`
+- `scripts/assert-no-mock.mjs`
+- `docs/DEMO_SCRIPT.md`
+

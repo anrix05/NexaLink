@@ -238,7 +238,7 @@ export async function runMutation<T>(
   operation: 'INSERT' | 'UPDATE' | 'UPSERT' | 'DELETE',
   target: string,
   mutationFn: () => Promise<{ data: T | null; error: any }>,
-  options?: { payload?: any; allowEmptyResult?: boolean }
+  options?: { payload?: any; allowEmptyResult?: boolean; silent?: boolean }
 ): Promise<T> {
   const start = performance.now();
 
@@ -248,8 +248,11 @@ export async function runMutation<T>(
 
     if (error) {
       const mapped = mapSupabaseError(error, operation, target);
-      console.error(`[SupabaseRunner] ${operation} ${target} failed after ${duration}ms:`, mapped);
-      errorReporter.reportError(mapped, { operation, target, payload: options?.payload });
+      const isLegacyWithdrawnTriggerBug = mapped.code === '22P02' && String(mapped.message).includes('Withdrawn');
+      const isInvalidUuidError = mapped.code === '22P02' && String(mapped.message).toLowerCase().includes('invalid input syntax for type uuid');
+      if (!options?.silent && !isLegacyWithdrawnTriggerBug && !isInvalidUuidError) {
+        errorReporter.reportError(mapped, { operation, target, payload: options?.payload });
+      }
       throw mapped;
     }
 

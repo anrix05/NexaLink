@@ -17,21 +17,21 @@ export const ANNOUNCEMENT_META_PREFIX = '<!--nexalink_meta:';
 export const ANNOUNCEMENT_META_SUFFIX = '-->';
 
 export const parseAnnouncementMeta = (rawContent: string) => {
-  if (!rawContent || !rawContent.startsWith(ANNOUNCEMENT_META_PREFIX)) {
-    return { cleanContent: rawContent, meta: null };
+  if (!rawContent) {
+    return { cleanContent: '', meta: null };
   }
-  const endIdx = rawContent.indexOf(ANNOUNCEMENT_META_SUFFIX);
-  if (endIdx === -1) {
-    return { cleanContent: rawContent, meta: null };
+  const match = rawContent.match(/<!--nexalink[_:]meta:(.*?)-->\s*/s);
+  if (match) {
+    try {
+      const meta = JSON.parse(match[1]);
+      const cleanContent = rawContent.replace(match[0], '').trim();
+      return { cleanContent, meta };
+    } catch {
+      const cleanContent = rawContent.replace(match[0], '').trim();
+      return { cleanContent, meta: null };
+    }
   }
-  try {
-    const jsonStr = rawContent.substring(ANNOUNCEMENT_META_PREFIX.length, endIdx);
-    const meta = JSON.parse(jsonStr);
-    const cleanContent = rawContent.substring(endIdx + ANNOUNCEMENT_META_SUFFIX.length).replace(/^\n+/, '');
-    return { cleanContent, meta };
-  } catch {
-    return { cleanContent: rawContent, meta: null };
-  }
+  return { cleanContent: rawContent, meta: null };
 };
 
 export const serializeAnnouncementContent = (

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
-import type { AlumniProfile, JobListing } from '../../types';
+import type { AlumniProfile, JobListing, StudentProfile } from '../../types';
+import { motion, AnimatePresence } from 'framer-motion';
+import { MemberProfilePanel } from '../../components/directory/MemberProfilePanel';
 import {
   Briefcase,
   BookOpen,
@@ -12,7 +14,8 @@ import {
   Edit3,
   RotateCcw,
   FileText,
-  AlertCircle
+  AlertCircle,
+  ExternalLink
 } from 'lucide-react';
 import {
   PageHeader,
@@ -47,11 +50,54 @@ const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniPr
     studentList,
     updateUserProfile,
     updateJobListing,
-    toggleJobStatus
+    toggleJobStatus,
+    setPendingChatUserId
   } = useData();
 
   const [isMentoring, setIsMentoring] = useState<boolean>(alumni?.isMentoringAvailable ?? true);
   const [maxMentees, setMaxMentees] = useState<number>(alumni.maxMentees || 5);
+
+  // Student Profile Drawer State
+  const [selectedStudentProfile, setSelectedStudentProfile] = useState<StudentProfile | null>(null);
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+
+  const handleOpenStudentProfile = (req: any, matched?: StudentProfile | null) => {
+    if (matched) {
+      setSelectedStudentProfile(matched);
+      return;
+    }
+    const student = studentList.find(s => s.id === req.studentId || s.email === req.studentEmail);
+    if (student) {
+      setSelectedStudentProfile(student);
+      return;
+    }
+    const fallback: StudentProfile = {
+      id: req.studentId || req.id,
+      name: req.studentName || 'Student',
+      email: req.studentEmail || 'student@vit.edu.in',
+      avatar: '',
+      role: 'student',
+      department: req.studentDepartment || alumni.department || 'CMPN',
+      enrollmentNo: req.studentEnrollmentNo || 'N/A',
+      prn: req.studentEnrollmentNo || 'N/A',
+      currentYear: (req.studentYear as any) || 'BE',
+      semester: 'BE',
+      cgpa: 8.5,
+      skills: ['Distributed Systems', 'Software Engineering'],
+      areasOfInterest: [req.purposeOfRequest || req.topic || 'Engineering Guidance'],
+      careerGoal: req.purposeOfRequest || 'Software Engineering & Guidance',
+      preferredIndustry: 'Technology',
+      preferredHigherStudies: 'None',
+      certifications: [],
+      projects: [],
+      targetCompanies: [],
+      isVerified: true,
+      verificationStatus: 'Verified',
+      bio: `Student at Vidyalankar Institute of Technology, ${req.studentDepartment || 'Engineering'}. Seeking mentorship on ${req.purposeOfRequest || req.topic || 'General Guidance'}.`,
+      createdAt: new Date().toISOString()
+    };
+    setSelectedStudentProfile(fallback);
+  };
 
   // Profile Edit Modal State
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -302,26 +348,56 @@ const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniPr
                               )}
                             </div>
                             {req.message && (
-                              <p className="mt-1 text-[#6B7280] italic leading-relaxed">"{req.message}"</p>
+                              <div className="mt-1">
+                                <p className="text-[#6B7280] italic leading-relaxed whitespace-pre-line break-words">
+                                  "{expandedNotes[req.id] || req.message.length <= 160 ? req.message : `${req.message.slice(0, 160)}...`}"
+                                </p>
+                                {req.message.length > 160 && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setExpandedNotes(prev => ({ ...prev, [req.id]: !prev[req.id] }));
+                                    }}
+                                    className="text-[11px] text-[#2563EB] hover:underline font-medium mt-0.5 cursor-pointer"
+                                  >
+                                    {expandedNotes[req.id] ? 'Show less' : 'Show full message'}
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
-                          {studentResumeUrl && (
-                            <div>
-                              {studentResumeUrl.startsWith('http://') || studentResumeUrl.startsWith('https://') ? (
-                                <a
-                                  href={studentResumeUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 text-xs text-[#0A0A0A] hover:underline"
-                                >
-                                  <FileText className="w-3.5 h-3.5 text-[#6B7280]" />
-                                  <span>View student resume →</span>
-                                </a>
-                              ) : (
-                                <span className="text-xs text-[#6B7280]">Resume: {studentResumeUrl}</span>
-                              )}
-                            </div>
-                          )}
+                          <div className="flex items-center gap-4 flex-wrap pt-0.5">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenStudentProfile(req, matchedStudent);
+                              }}
+                              className="inline-flex items-center gap-1.5 text-xs text-[#0A0A0A] hover:underline cursor-pointer"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5 text-[#6B7280]" />
+                              <span>View student profile ↗</span>
+                            </button>
+                            {studentResumeUrl && (
+                              <div>
+                                {studentResumeUrl.startsWith('http://') || studentResumeUrl.startsWith('https://') ? (
+                                  <a
+                                    href={studentResumeUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 text-xs text-[#0A0A0A] hover:underline"
+                                    onClick={e => e.stopPropagation()}
+                                  >
+                                    <FileText className="w-3.5 h-3.5 text-[#6B7280]" />
+                                    <span>View student resume →</span>
+                                  </a>
+                                ) : (
+                                  <span className="text-xs text-[#6B7280]">Resume: {studentResumeUrl}</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       }
                       meta={
@@ -677,6 +753,33 @@ const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniPr
           </form>
         </Modal>
       )}
+
+      {/* Student Profile Drawer */}
+      <AnimatePresence>
+        {selectedStudentProfile && (
+          <div className="fixed inset-0 z-50 flex items-center justify-end bg-[#0A0A0A]/40 backdrop-blur-xs p-0 sm:p-4">
+            <div className="fixed inset-0" onClick={() => setSelectedStudentProfile(null)} />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative z-10 w-full max-w-lg h-full sm:h-[90vh] bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+            >
+              <MemberProfilePanel
+                user={selectedStudentProfile}
+                onClose={() => setSelectedStudentProfile(null)}
+                onRequestMentorship={() => {}}
+                onMessage={(u) => {
+                  setSelectedStudentProfile(null);
+                  setPendingChatUserId(u.id);
+                  setActiveTab('messaging');
+                }}
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

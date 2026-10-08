@@ -9,6 +9,26 @@ function isValidUuid(id?: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 }
 
+export function getDeletedAnnouncementIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem('nexalink_deleted_announcement_ids');
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return new Set(arr);
+    }
+  } catch {}
+  return new Set();
+}
+
+export function addDeletedAnnouncementId(id: string): void {
+  try {
+    const current = getDeletedAnnouncementIds();
+    current.add(id);
+    localStorage.setItem('nexalink_deleted_announcement_ids', JSON.stringify(Array.from(current)));
+  } catch {}
+  invalidateNoticesCache();
+}
+
 export function mapRowToAnnouncement(a: any): Announcement {
   const parsed = parseAnnouncementMeta(a.content || '');
   return {
@@ -34,10 +54,14 @@ export const announcementsService = {
    * Fetch all unretracted announcements
    */
   async getAnnouncements(): Promise<Announcement[]> {
+    const deletedIds = getDeletedAnnouncementIds();
     if (!isSupabaseConfigured()) {
       try {
         const cached = localStorage.getItem('nexalink_announcements_cache');
-        if (cached) return JSON.parse(cached);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) return parsed.filter((a: any) => !deletedIds.has(a.id));
+        }
       } catch {}
       return [];
     }
@@ -56,7 +80,9 @@ export const announcementsService = {
         { suppressErrorReport: true }
       );
 
-      return (rows || []).map(mapRowToAnnouncement);
+      return (rows || [])
+        .map(mapRowToAnnouncement)
+        .filter(a => !deletedIds.has(a.id) && !a.isRetracted);
     } catch {
       return [];
     }
@@ -71,9 +97,10 @@ export const announcementsService = {
     const { role, limit = 50 } = options;
     const now = Date.now();
 
+    const deletedIds = getDeletedAnnouncementIds();
     const filterAndSort = (list: Announcement[]): Announcement[] => {
       return list
-        .filter(a => !a.isRetracted)
+        .filter(a => !a.isRetracted && !deletedIds.has(a.id))
         .filter(anc => {
           if (anc.expiresAt) {
             const expTime = new Date(anc.expiresAt).getTime();
@@ -109,10 +136,11 @@ export const announcementsService = {
             const res = await supabase
               .from('announcements')
               .select('*')
+              .eq('is_retracted', false)
               .order('date', { ascending: false })
               .limit(limit);
             if (res.error) {
-              return supabase.from('announcements').select('*').limit(limit);
+              return supabase.from('announcements').select('*').eq('is_retracted', false).limit(limit);
             }
             return res;
           },
@@ -314,11 +342,11 @@ export const announcementsService = {
   },
 
   /**
-   * Retract an announcement (soft delete, never hard delete)
+   * Retract an announcement (soft delete, always hide from viewer feeds immediately)
    */
   async retractAnnouncement(id: string): Promise<void> {
-    const isMock = !isSupabaseConfigured() || !isValidUuid(id);
-    if (isMock) {
+    addDeletedAnnouncementId(id);
+    if (!isSupabaseConfigured()) {
       invalidateNoticesCache();
       return;
     }
@@ -328,14 +356,35 @@ export const announcementsService = {
       retracted_at: new Date().toISOString()
     };
 
-    await runMutation<any>(
-      'UPDATE',
-      'announcements',
-      async () => {
-        return supabase.from('announcements').update(payload).eq('id', id).select().single();
-      },
-      { payload }
-    );
+    try {
+      await supabase.from('announcements').update(payload).eq('id', id);
+    } catch (e) {
+      console.warn('[announcementsService] Supabase retract error:', e);
+    }
+    invalidateNoticesCache();
+  },
+
+  /**
+   * Delete an announcement (hard delete or fallback soft delete, immediate local cache eviction)
+   */
+  async deleteAnnouncement(id: string): Promise<void> {
+    addDeletedAnnouncementId(id);
+    if (!isSupabaseConfigured()) {
+      invalidateNoticesCache();
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('announcements').delete().eq('id', id);
+      if (error) {
+        await supabase.from('announcements').update({
+          is_retracted: true,
+          retracted_at: new Date().toISOString()
+        }).eq('id', id);
+      }
+    } catch (e) {
+      console.warn('[announcementsService] Supabase delete error:', e);
+    }
     invalidateNoticesCache();
   }
 };

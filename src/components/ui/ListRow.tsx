@@ -10,6 +10,7 @@ export interface ListRowProps {
   onClick?: () => void;
   className?: string;
   isFirst?: boolean;
+  truncateSubtitle?: boolean;
 }
 
 export const ListRow: React.FC<ListRowProps> = ({
@@ -22,6 +23,7 @@ export const ListRow: React.FC<ListRowProps> = ({
   onClick,
   className = '',
   isFirst = false,
+  truncateSubtitle,
 }) => {
   const isInteractive = Boolean(onClick);
 
@@ -55,7 +57,11 @@ export const ListRow: React.FC<ListRowProps> = ({
             {meta && <span className="text-xs text-[#6B7280] shrink-0">{meta}</span>}
           </div>
           {subtitle && (
-            <div className="text-xs text-[#6B7280] font-normal truncate mt-0.5">
+            <div
+              className={`text-xs text-[#6B7280] font-normal mt-0.5 ${
+                truncateSubtitle ?? (typeof subtitle === 'string') ? 'truncate' : 'break-words'
+              }`}
+            >
               {subtitle}
             </div>
           )}

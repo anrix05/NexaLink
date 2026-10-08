@@ -59,3 +59,11 @@ audit/evidence/
 audit/claims.csv
 audit/findings.csv
 audit/run.sh
+
+# Build & framework caches
+.vercel
+.netlify
+.turbo
+*.tsbuildinfo
+coverage
+.cache

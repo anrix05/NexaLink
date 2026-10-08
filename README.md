@@ -255,3 +255,64 @@ Developed for **Vidyalankar Institute of Technology (VIT Wadala), Mumbai** under
 ## App Icons
 
 The app icons, favicons, and PWA manifest assets live in `public/icons/`. The `-v2` suffix is a deliberate cache-busting convention to ensure browsers and installed PWAs fetch the newest files. When updating the icons next time, bump the suffix to `-v3` (e.g., `icon-192-v3.png`) and update the paths in `index.html` and `public/site.webmanifest`.
+
+---
+
+## Demo Data (Dev Only — v2.9)
+
+NexaLink v2.9 includes rich, deterministic mock datasets specifically engineered for academic evaluations and live demonstrations while enforcing absolute separation from the published production build.
+
+### 1. Separation Architecture
+- **Single Gate:** All access to mock fixtures and dev-only popovers sits behind literal `import.meta.env.DEV` checks with dynamic `import()` loaders. During `npm run build`, Rollup/Vite dead-code eliminates all mock stores and generators.
+- **Marker Constant:** `src/dev/mock/marker.ts` defines `DEV_SEED_MARKER = 'NEXALINK_DEV_SEED_V1'`. If any part of the seed leaks into `dist/`, the build guard aborts immediately.
+- **In-Memory Store:** Dev mutations (new messages, RSVPs, verifications, applications) exist purely in volatile memory. No mock records ever touch Supabase, external APIs, or network storage.
+
+### 2. Available Dev Personas
+
+| Persona | Role | Department / Affiliation | Demo Scope & Focus |
+|---|---|---|---|
+| **Aanya Patel** | Student | CMPN (Sem 7, 100% complete) | Heuristic matching, 3 mentorship asks, 5 registered events, 2 job applications, 16 chats (5 unread). |
+| **Rushabh Sanghavi** | Alumni | Google (Class of 2018) | Mentoring 3 of 5, 4 pending asks, 4.6 review rating, 3 job listings posted (one with 6 applicants). |
+| **Dr. Ravindra Sangale** | Faculty | CMPN (Head of Department) | CMPN departmental student/alumni rosters, 4 pending research asks, research seminar host. |
+| **Dr. Sunita Rawat** | Admin | Dean of Alumni Relations | 10 verification items, 2 pending job moderations, 70 audit logs, populated analytics, NAAC/NIRF export. |
+| **Karan Mehta** | Student (New) | INFT (Sem 3, 40% complete) | Clean empty states, zero active requests/applications, onboarding guidance. |
+| **Aarav Deshpande** | Student (Pending) | EXTC (FE Sem 1) | Verification pending gate with multi-step status stepper. |
+| **Pooja Kulkarni** | Student (Rejected) | BIOM (TE Sem 5) | Rejection resolution state with document re-upload pathway. |
+| **Vikram Malhotra** | Alumni (Second) | Microsoft (Munich, Germany) | Full-capacity mentor load (4 of 4 active mentees), European alumni chapter. |
+| **Prof. Sneha Deshpande**| Faculty (Second) | EXTC (Assistant Professor) | Non-HOD departmental faculty mentor with embedded firmware research lab. |
+
+### 3. Running Dev Mode & Fast Switcher
+Start the local development server:
+```bash
+npm run dev
+```
+Open `http://localhost:5173`. Click the bottom-right **Dev login** button to switch instantly between any of the 9 pre-configured personas.
+
+### 4. Resetting Demo Data
+If any dataset was mutated during live testing, open the **Dev login** menu and click **"Reset demo data"**. This immediately regenerates the in-memory seed relative to the current timestamp and clears temporary browser storage caches without requiring a page reload.
+
+### 5. Automated Build Guard
+To verify that zero mock fixtures, dev emails, or test OTPs leak into production assets, run:
+```bash
+npm run build
+```
+The automated `postbuild` hook executes `node scripts/assert-no-mock.mjs`, scanning all generated bundles in `dist/` against the forbidden secret matrix.
+
+### 6. Published Production Preview
+To inspect the clean production site without dev chips or mock data:
+```bash
+npm run build && npm run preview
+```
+
+---
+
+## Mentorship & Academic Advisory Hardening (v2.9.1)
+
+- **Full Guidance Note Visibility:** Resolved multi-line clipping on mentorship request cards. Student inquiry notes now wrap naturally with expandable "Show full note / Show less" controls across Student, Alumni, and Faculty portals.
+- **Embedded Student Profile Viewer:** Clicking "View student profile ↗" or "Profile" within mentorship request lists opens a dedicated slide-over `MemberProfilePanel` modal, allowing mentors and faculty to inspect academic standing, skills, and goals without navigating away.
+- **PostgreSQL Enum & Trigger Hardening:**
+  - Integrated migration `20261012000001_fix_mentorship_status_and_protect_trigger.sql` adding `'Withdrawn'` to `mentorship_status` and updating `protect_mentorship_update()` with safe `::text` casting.
+  - Authorized students to mark accepted sessions as `Completed` when leaving reviews.
+  - Added UUID guards across all mentorship service calls to isolate local demo identifiers from Supabase remote database synchronization.
+
+

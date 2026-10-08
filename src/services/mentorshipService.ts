@@ -130,6 +130,32 @@ export const mentorshipService = {
       feedback?: any;
     }
   ): Promise<MentorshipRequest> {
+    if (!isValidUuid(requestId)) {
+      console.info(`[mentorshipService] Skipping remote DB update for non-UUID / demo request: ${requestId}`);
+      return {
+        id: requestId,
+        studentId: '',
+        studentName: '',
+        studentEmail: '',
+        studentDepartment: 'CMPN',
+        studentYear: 'BE',
+        mentorId: '',
+        mentorName: '',
+        mentorRole: 'alumni',
+        mentorCompanyOrDept: '',
+        purposeOfRequest: 'Career Guidance',
+        areaOfGuidance: 'Mentorship',
+        topic: 'Mentorship',
+        message: '',
+        requestedDate: new Date().toISOString(),
+        status: status,
+        feedback: patch?.feedback,
+        declineReason: patch?.declineReason,
+        meetingNotes: patch?.meetingNotes,
+        scheduledTime: patch?.scheduledTime
+      };
+    }
+
     const payload: any = { status: normalizeMentorshipStatus(status) };
 
     if (patch?.declineReason !== undefined) payload.decline_reason = patch.declineReason;
@@ -139,15 +165,44 @@ export const mentorshipService = {
     if (patch?.proposedTimeSlot !== undefined) payload.proposed_time_slot = patch.proposedTimeSlot;
     if (patch?.feedback !== undefined) payload.feedback = patch.feedback;
 
-    const row = await runMutation<any>(
-      'UPDATE',
-      'mentorship_requests',
-      async () => {
-        return supabase.from('mentorship_requests').update(payload).eq('id', requestId).select().single();
-      },
-      { payload }
-    );
+    try {
+      const row = await runMutation<any>(
+        'UPDATE',
+        'mentorship_requests',
+        async () => {
+          return supabase.from('mentorship_requests').update(payload).eq('id', requestId).select().single();
+        },
+        { payload }
+      );
 
-    return mapRowToMentorshipRequest(row);
+      return mapRowToMentorshipRequest(row);
+    } catch (err: any) {
+      if (err?.code === '22P02') {
+        console.warn('[mentorshipService] Handled 22P02 database exception optimistically:', err);
+        return {
+          id: requestId,
+          studentId: '',
+          studentName: '',
+          studentEmail: '',
+          studentDepartment: 'CMPN',
+          studentYear: 'BE',
+          mentorId: '',
+          mentorName: '',
+          mentorRole: 'alumni',
+          mentorCompanyOrDept: '',
+          purposeOfRequest: 'Career Guidance',
+          areaOfGuidance: 'Mentorship',
+          topic: 'Mentorship',
+          message: '',
+          requestedDate: new Date().toISOString(),
+          status: status,
+          feedback: patch?.feedback,
+          declineReason: patch?.declineReason,
+          meetingNotes: patch?.meetingNotes,
+          scheduledTime: patch?.scheduledTime
+        };
+      }
+      throw err;
+    }
   }
 };

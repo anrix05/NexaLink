@@ -1,0 +1,1 @@
+export const DEV_SEED_MARKER = 'NEXALINK_DEV_SEED_V1';
