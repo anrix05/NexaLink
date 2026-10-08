@@ -11,7 +11,8 @@ import {
   Settings,
   HelpCircle,
   LogOut,
-  X
+  X,
+  Info
 } from 'lucide-react';
 
 import { NotificationBell } from '../notifications/NotificationBell';
@@ -286,6 +287,17 @@ export const TopBar: React.FC<TopBarProps> = ({
                           <HelpCircle className="w-4 h-4 text-[#6B7280]" />
                           <span>Help</span>
                         </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.location.href = '/';
+                          }}
+                          className="w-full px-3 py-2.5 text-xs text-left text-[#0A0A0A] hover:bg-[#FAFAFA] rounded-lg flex items-center gap-2.5 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0A0A0A]"
+                        >
+                          <Info className="w-4 h-4 text-[#6B7280]" />
+                          <span>About NexaLink</span>
+                        </button>
                       </div>
 
                       <div className="pt-1 border-t border-[#E5E7EB]">
@@ -395,6 +407,18 @@ export const TopBar: React.FC<TopBarProps> = ({
               >
                 <HelpCircle className="w-4 h-4 text-[#6B7280] shrink-0" />
                 <span className="font-medium">Help</span>
+              </button>
+
+              {/* About NexaLink */}
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = '/';
+                }}
+                className="w-full h-12 min-h-[48px] px-4 text-xs sm:text-sm text-left text-[#0A0A0A] hover:bg-[#FAFAFA] active:bg-[#F3F4F6] flex items-center gap-3 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0A0A0A] border-0 bg-transparent touch-target-44"
+              >
+                <Info className="w-4 h-4 text-[#6B7280] shrink-0" />
+                <span className="font-medium">About NexaLink</span>
               </button>
             </div>
 
