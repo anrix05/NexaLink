@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
-import type { FacultyProfile } from '../../types';
+import { announcementsService } from '../../services/announcementsService';
+import { auditService } from '../../services/auditService';
+import type { FacultyProfile, Announcement } from '../../types';
 import {
   BookOpen,
   GraduationCap,
@@ -15,7 +17,9 @@ import {
   ShieldCheck,
   CheckCircle2,
   XCircle,
-  MessageSquare
+  MessageSquare,
+  Radio,
+  AlertCircle
 } from 'lucide-react';
 import {
   PageHeader,
@@ -27,9 +31,11 @@ import {
   Switch,
   EmptyState
 } from '../../components/ui';
-import { Button } from '../../components/common/UIComponents';
-import { InstitutionalAnnouncementFeed } from '../../components/common/InstitutionalAnnouncementFeed';
+import { Button, Modal } from '../../components/common/UIComponents';
+import { NoticeBoard } from '../../components/notices/NoticeBoard';
 import { getGreetingName } from '../../utils/validators';
+
+const SuggestedStudentsCard = React.lazy(() => import('../../features/outreach/SuggestedStudentsCard').then(m => ({ default: m.SuggestedStudentsCard })));
 
 interface FacultyDashboardProps {
   setActiveTab: (tab: string, subTab?: string) => void;
@@ -47,7 +53,10 @@ const FacultyDashboardContent: React.FC<FacultyDashboardProps & { faculty: Facul
     jobsList,
     updateMentorshipStatus,
     updateUserProfile,
-    announcements
+    announcements,
+    addAnnouncement,
+    updateAnnouncement,
+    retractAnnouncement
   } = useData();
 
   const [notice, setNotice] = useState<string | null>(null);
@@ -109,6 +118,137 @@ const FacultyDashboardContent: React.FC<FacultyDashboardProps & { faculty: Facul
   // 5. Hosted Events
   const upcomingHosted = eventsList.filter(e => e.speakerName?.includes(faculty.name) || (e.department && e.department === faculty.department));
 
+  // 6. Announcements State (Restricted Faculty Mode)
+  const [showAncModal, setShowAncModal] = useState(false);
+  const [editingAncId, setEditingAncId] = useState<string | null>(null);
+  const [ancTitle, setAncTitle] = useState('');
+  const [ancContent, setAncContent] = useState('');
+  const [ancCategory, setAncCategory] = useState<'General' | 'Academic' | 'Placement' | 'Alumni'>('General');
+  const [ancTargetAudience, setAncTargetAudience] = useState<'Students' | 'Alumni' | 'Faculty'>('Students');
+  const [ancIsImportant, setAncIsImportant] = useState(false);
+  const [ancHasExpiry, setAncHasExpiry] = useState(false);
+  const [ancExpiresAt, setAncExpiresAt] = useState('');
+  const [ancFilterStatus, setAncFilterStatus] = useState<'Active' | 'Expired' | 'Retracted' | 'All'>('Active');
+  const [isSubmittingAnc, setIsSubmittingAnc] = useState(false);
+  const [ancFormError, setAncFormError] = useState<string | null>(null);
+
+  const handleOpenNewAnnouncement = () => {
+    setEditingAncId(null);
+    setAncTitle('');
+    setAncContent('');
+    setAncCategory('General');
+    setAncTargetAudience('Students');
+    setAncIsImportant(false);
+    setAncHasExpiry(false);
+    setAncExpiresAt('');
+    setAncFormError(null);
+    setShowAncModal(true);
+  };
+
+  const handleOpenEditAnnouncement = (anc: Announcement) => {
+    setEditingAncId(anc.id);
+    setAncTitle(anc.title);
+    setAncContent(anc.content);
+    setAncCategory((anc.category as any) || 'General');
+    setAncTargetAudience((anc.targetAudience as any) || 'Students');
+    setAncIsImportant(Boolean(anc.isImportant || anc.severity === 'governance'));
+    setAncHasExpiry(Boolean(anc.expiresAt));
+    setAncExpiresAt(anc.expiresAt ? anc.expiresAt.split('T')[0] : '');
+    setAncFormError(null);
+    setShowAncModal(true);
+  };
+
+  const handleSubmitAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ancTitle.trim() || !ancContent.trim()) return;
+    setIsSubmittingAnc(true);
+    setAncFormError(null);
+
+    const trimmedTitle = ancTitle.trim().slice(0, 120);
+    const trimmedContent = ancContent.trim().slice(0, 1000);
+    const expiresAt = ancHasExpiry && ancExpiresAt ? new Date(ancExpiresAt + 'T23:59:59').toISOString() : undefined;
+
+    const payload = {
+      title: trimmedTitle,
+      category: ancCategory,
+      author: faculty.name || 'Faculty Member',
+      authorId: faculty.id,
+      content: trimmedContent,
+      isImportant: ancIsImportant,
+      targetAudience: ancTargetAudience,
+      severity: ancIsImportant ? ('governance' as const) : ('standard' as const),
+      expiresAt,
+      isPinned: false
+    };
+
+    try {
+      if (editingAncId) {
+        const saved = await announcementsService.updateAnnouncement(editingAncId, payload);
+        if (!saved || !saved.id) throw new Error('Failed to update announcement.');
+        await updateAnnouncement(editingAncId, payload);
+        await auditService.appendLog({
+          id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined as any,
+          action: 'EDIT_ANNOUNCEMENT',
+          performedBy: faculty.name || 'Faculty Member',
+          targetUserOrItem: editingAncId,
+          timestamp: new Date().toISOString(),
+          details: `Faculty updated announcement: "${trimmedTitle}"`
+        });
+        showToast(`Announcement updated: "${payload.title}"`);
+        setShowAncModal(false);
+      } else {
+        const saved = await announcementsService.createAnnouncement(payload);
+        if (!saved || !saved.id) throw new Error('Failed to publish announcement.');
+        await addAnnouncement({ ...payload, id: saved.id, authorId: saved.authorId || faculty.id } as any);
+        await auditService.appendLog({
+          id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined as any,
+          action: 'PUBLISH_ANNOUNCEMENT',
+          performedBy: faculty.name || 'Faculty Member',
+          targetUserOrItem: trimmedTitle,
+          timestamp: new Date().toISOString(),
+          details: `Faculty published announcement "${trimmedTitle}" for ${payload.targetAudience}`
+        });
+        showToast(`Announcement published: "${payload.title}"`);
+        setShowAncModal(false);
+      }
+    } catch (err: any) {
+      setAncFormError(err.message || 'Failed to save announcement. Please check your inputs and try again.');
+    } finally {
+      setIsSubmittingAnc(false);
+    }
+  };
+
+  const handleRetractAnnouncement = async (anc: Announcement) => {
+    try {
+      await announcementsService.retractAnnouncement(anc.id);
+      retractAnnouncement(anc.id);
+      await auditService.appendLog({
+        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined as any,
+        action: 'RETRACT_ANNOUNCEMENT',
+        performedBy: faculty.name || 'Faculty Member',
+        targetUserOrItem: anc.id,
+        timestamp: new Date().toISOString(),
+        details: `Faculty retracted announcement: "${anc.title}"`
+      });
+      showToast(`Announcement "${anc.title}" retracted.`);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to retract announcement.');
+    }
+  };
+
+  const myAnnouncements = announcements.filter(
+    a => a.authorId === faculty.id || (a.author && a.author === faculty.name)
+  );
+
+  const filteredMyAnnouncements = myAnnouncements.filter(a => {
+    const now = Date.now();
+    const isExp = a.expiresAt ? new Date(a.expiresAt).getTime() <= now : false;
+    if (ancFilterStatus === 'Active') return !a.isRetracted && !isExp;
+    if (ancFilterStatus === 'Expired') return !a.isRetracted && isExp;
+    if (ancFilterStatus === 'Retracted') return a.isRetracted;
+    return true;
+  });
+
   return (
     <div className="space-y-8">
       {/* Toast Notification */}
@@ -145,6 +285,14 @@ const FacultyDashboardContent: React.FC<FacultyDashboardProps & { faculty: Facul
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={handleOpenNewAnnouncement}
+              className="inline-flex items-center gap-1.5 px-3 py-2 border border-[#6B7280] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-lg transition-colors cursor-pointer"
+            >
+              <Radio className="w-3.5 h-3.5 text-[#0A0A0A]" />
+              <span>Post announcement</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('reports')}
               className="inline-flex items-center gap-1.5 px-3 py-2 border border-[#6B7280] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-lg transition-colors cursor-pointer"
             >
@@ -163,8 +311,8 @@ const FacultyDashboardContent: React.FC<FacultyDashboardProps & { faculty: Facul
         }
       />
 
-      {/* Institutional Broadcast Announcements Feed */}
-      <InstitutionalAnnouncementFeed announcements={announcements} userRole="faculty" />
+      {/* Important Notices (Top placement below 1280px) */}
+      <NoticeBoard variant="top" role="faculty" setActiveTab={setActiveTab} onNavigate={(tab) => setActiveTab(tab)} />
 
       {/* Two-Column Responsive Layout: Primary Canvas + Quiet Right Rail */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8 items-start">
@@ -249,6 +397,144 @@ const FacultyDashboardContent: React.FC<FacultyDashboardProps & { faculty: Facul
                     }
                   />
                 ))}
+              </div>
+            )}
+          </Section>
+
+          {/* Section: Faculty Announcements */}
+          <Section
+            title="My announcements"
+            count={filteredMyAnnouncements.length}
+            description="Broadcast notices to students, alumni, and faculty feeds. Pinned notices and 'Everyone' targeting are restricted to Administrators."
+            action={
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center rounded-lg border border-[#E5E7EB] bg-[#FAFAFA] p-0.5 text-xs">
+                  {(['Active', 'Expired', 'Retracted', 'All'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setAncFilterStatus(tab)}
+                      className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                        ancFilterStatus === tab
+                          ? 'bg-white text-[#0A0A0A] shadow-sm'
+                          : 'text-[#6B7280] hover:text-[#0A0A0A]'
+                      }`}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenNewAnnouncement}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#6B7280] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>New announcement</span>
+                </button>
+              </div>
+            }
+          >
+            {filteredMyAnnouncements.length === 0 ? (
+              <EmptyState
+                icon={<Radio className="w-5 h-5 text-[#0A0A0A]" />}
+                title={`No ${ancFilterStatus.toLowerCase()} announcements`}
+                sentence="Publish departmental updates, academic advisories, or placement notifications."
+                action={
+                  <button
+                    type="button"
+                    onClick={handleOpenNewAnnouncement}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#6B7280] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Create notice</span>
+                  </button>
+                }
+              />
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {filteredMyAnnouncements.map(anc => {
+                  const isExpired = anc.expiresAt ? Date.now() > new Date(anc.expiresAt).getTime() : false;
+                  const severity = anc.severity || (anc.isImportant ? 'governance' : 'standard');
+
+                  return (
+                    <div
+                      key={anc.id}
+                      className={`p-4 border border-[#E5E7EB] rounded-xl flex flex-col justify-between gap-3 ${
+                        anc.isRetracted ? 'bg-[#FAFAFA] opacity-75' : 'bg-white'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {anc.isRetracted ? (
+                              <StatusBadge tone="neutral" label="Retracted" />
+                            ) : isExpired ? (
+                              <StatusBadge tone="rose" label="Expired" />
+                            ) : (
+                              <StatusBadge tone="emerald" label="Active" />
+                            )}
+
+                            {anc.isImportant && !anc.isRetracted && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                                Important
+                              </span>
+                            )}
+
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#F3F4F6] text-[#4B5563] border border-[#E5E7EB]">
+                              {anc.category}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-xs text-[#6B7280]">
+                            {anc.expiresAt ? (
+                              <span>Exp: {new Date(anc.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
+                            ) : (
+                              <span>Permanent</span>
+                            )}
+                            <span>·</span>
+                            <span>{anc.date ? new Date(anc.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</span>
+                          </div>
+                        </div>
+
+                        <h4 className="font-semibold text-[#0A0A0A] text-sm leading-snug">
+                          {anc.title}
+                        </h4>
+                        <p className="text-xs text-[#374151] line-clamp-3 leading-relaxed whitespace-pre-line">
+                          {anc.content}
+                        </p>
+                      </div>
+
+                      <div className="pt-2.5 border-t border-[#E5E7EB] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-2 text-[#6B7280]">
+                          <span>Audience:</span>
+                          <span className="font-medium text-[#0A0A0A] bg-[#FAFAFA] border border-[#E5E7EB] px-1.5 py-0.5 rounded text-[11px]">
+                            {anc.targetAudience}
+                          </span>
+                        </div>
+
+                        {!anc.isRetracted && (
+                          <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditAnnouncement(anc)}
+                              className="px-2.5 py-1 border border-[#E5E7EB] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-md transition-colors cursor-pointer"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRetractAnnouncement(anc)}
+                              className="px-2.5 py-1 border border-rose-200 hover:bg-rose-50 text-[#991B1B] text-xs font-medium rounded-md transition-colors cursor-pointer"
+                            >
+                              Retract
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </Section>
@@ -454,6 +740,11 @@ const FacultyDashboardContent: React.FC<FacultyDashboardProps & { faculty: Facul
               <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
           </div>
+
+          {/* Section: Suggested Students */}
+          <React.Suspense fallback={null}>
+            <SuggestedStudentsCard onNavigateToDiscovery={() => setActiveTab('mentorship', 'discover')} />
+          </React.Suspense>
         </div>
 
         {/* Quiet Right Rail (≥1280px / lg) */}
@@ -511,6 +802,13 @@ const FacultyDashboardContent: React.FC<FacultyDashboardProps & { faculty: Facul
             <div className="flex flex-col gap-1.5">
               <button
                 type="button"
+                onClick={handleOpenNewAnnouncement}
+                className="text-left text-xs text-[#6B7280] hover:text-[#0A0A0A] py-1 transition-colors"
+              >
+                Post announcement →
+              </button>
+              <button
+                type="button"
                 onClick={() => setActiveTab('directory')}
                 className="text-left text-xs text-[#6B7280] hover:text-[#0A0A0A] py-1 transition-colors"
               >
@@ -525,8 +823,196 @@ const FacultyDashboardContent: React.FC<FacultyDashboardProps & { faculty: Facul
               </button>
             </div>
           </div>
+
+          {/* Real Important Notices in RightRail (≥1280px) */}
+          <NoticeBoard variant="rail" role="faculty" setActiveTab={setActiveTab} onNavigate={(tab) => setActiveTab(tab)} />
         </RightRail>
       </div>
+
+      {/* RESTRICTED FACULTY ANNOUNCEMENT COMPOSER MODAL */}
+      <Modal
+        isOpen={showAncModal}
+        onClose={() => setShowAncModal(false)}
+        title={editingAncId ? 'Edit Announcement' : 'Compose Announcement'}
+        subtitle="Broadcast notices to students, alumni, and faculty feeds."
+        maxWidth="2xl"
+      >
+        <form onSubmit={handleSubmitAnnouncement} className="space-y-4 font-sans text-xs">
+          {ancFormError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span>{ancFormError}</span>
+            </div>
+          )}
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-[#0A0A0A]">
+                Title (max 120 chars) <span className="text-rose-600">*</span>
+              </label>
+              <span className={`text-[11px] tabular-nums ${ancTitle.length >= 120 ? 'text-rose-600 font-semibold' : 'text-[#6B7280]'}`}>
+                {ancTitle.length}/120
+              </span>
+            </div>
+            <input
+              type="text"
+              required
+              maxLength={120}
+              value={ancTitle}
+              onChange={e => setAncTitle(e.target.value)}
+              placeholder="e.g. Guest lecture on Distributed Systems scheduled for Friday"
+              className="w-full border border-[#6B7280] rounded-lg bg-[#FAFAFA] text-xs p-2.5 text-[#0A0A0A] focus:outline-none focus:ring-1 focus:ring-[#0A0A0A]"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-[#0A0A0A] mb-1.5">
+                Category
+              </label>
+              <select
+                value={ancCategory}
+                onChange={e => setAncCategory(e.target.value as any)}
+                className="w-full border border-[#6B7280] rounded-lg bg-[#FAFAFA] text-xs p-2.5 text-[#0A0A0A] focus:outline-none"
+              >
+                <option value="General">General</option>
+                <option value="Academic">Academic</option>
+                <option value="Placement">Placement</option>
+                <option value="Alumni">Alumni</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#0A0A0A] mb-1.5">
+                Audience
+              </label>
+              <select
+                value={ancTargetAudience}
+                onChange={e => setAncTargetAudience(e.target.value as any)}
+                className="w-full border border-[#6B7280] rounded-lg bg-[#FAFAFA] text-xs p-2.5 text-[#0A0A0A] focus:outline-none"
+              >
+                <option value="Students">Students</option>
+                <option value="Alumni">Alumni</option>
+                <option value="Faculty">Faculty</option>
+              </select>
+              <p className="text-[11px] text-[#6B7280] mt-1 leading-normal">
+                Visible to: {ancTargetAudience}. You will only see this on your own notices board if you include your own role.
+              </p>
+            </div>
+          </div>
+
+          {/* Author Display (Server-side logged in faculty, read-only) */}
+          <div className="bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg p-2.5 flex items-center justify-between text-xs">
+            <span className="text-[#6B7280]">Author:</span>
+            <span className="font-semibold text-[#0A0A0A]">{faculty.name}</span>
+          </div>
+
+          {/* Message Content */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-[#0A0A0A]">
+                Message (max 1000 chars) <span className="text-rose-600">*</span>
+              </label>
+              <span className={`text-[11px] tabular-nums ${ancContent.length >= 1000 ? 'text-rose-600 font-semibold' : 'text-[#6B7280]'}`}>
+                {ancContent.length}/1000
+              </span>
+            </div>
+            <textarea
+              rows={4}
+              required
+              maxLength={1000}
+              value={ancContent}
+              onChange={e => setAncContent(e.target.value)}
+              placeholder="Provide notice instructions, deadlines, or meeting links..."
+              className="w-full border border-[#6B7280] rounded-lg bg-[#FAFAFA] text-xs p-3 text-[#0A0A0A] focus:outline-none focus:ring-1 focus:ring-[#0A0A0A]"
+            />
+          </div>
+
+          {/* Toggles: Important, Expiry (Pin is omitted for Faculty) */}
+          <div className="p-3.5 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl space-y-3">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={ancIsImportant}
+                onChange={e => setAncIsImportant(e.target.checked)}
+                className="w-4 h-4 rounded text-[#0A0A0A] border-[#6B7280] focus:ring-[#0A0A0A]"
+              />
+              <span className="font-medium text-xs text-[#0A0A0A]">Mark as Important notice</span>
+            </label>
+
+            <div className="border-t border-[#E5E7EB] pt-2.5">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={ancHasExpiry}
+                  onChange={e => {
+                    setAncHasExpiry(e.target.checked);
+                    if (!e.target.checked) setAncExpiresAt('');
+                  }}
+                  className="w-4 h-4 rounded text-[#0A0A0A] border-[#6B7280] focus:ring-[#0A0A0A]"
+                />
+                <span className="font-medium text-xs text-[#0A0A0A]">Optional expiry date</span>
+              </label>
+
+              {ancHasExpiry && (
+                <div className="mt-2 pl-6">
+                  <input
+                    type="date"
+                    required={ancHasExpiry}
+                    value={ancExpiresAt}
+                    onChange={e => setAncExpiresAt(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="text-xs border border-[#6B7280] rounded-lg bg-white px-3 py-1.5 text-[#0A0A0A]"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* LIVE PREVIEW CONTAINER */}
+          <div className="border border-[#E5E7EB] rounded-xl p-4 bg-white space-y-2">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-[#6B7280]">Live preview</span>
+            <div className="border-l-2 border-[#0A0A0A] pl-3 py-1 space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                {ancIsImportant && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                    Important
+                  </span>
+                )}
+                <span className="text-[11px] text-[#6B7280]">{ancCategory}</span>
+              </div>
+              <h4 className="text-xs font-semibold text-[#0A0A0A] line-clamp-1">
+                {ancTitle || 'Notice title will appear here'}
+              </h4>
+              <p className="text-xs text-[#4B5563] line-clamp-2 leading-relaxed">
+                {ancContent || 'Notice preview description will appear here as you type...'}
+              </p>
+              <div className="text-[11px] text-[#9CA3AF] pt-1">
+                Posted by {faculty.name} · Just now
+              </div>
+            </div>
+          </div>
+
+          {/* Footer Actions */}
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#E5E7EB]">
+            <button
+              type="button"
+              disabled={isSubmittingAnc}
+              onClick={() => setShowAncModal(false)}
+              className="px-3.5 py-2 border border-[#6B7280] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-lg transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmittingAnc}
+              className="px-4 py-2 bg-[#0A0A0A] hover:bg-[#262626] text-white text-xs font-medium rounded-lg transition-colors cursor-pointer"
+            >
+              {isSubmittingAnc ? 'Saving...' : editingAncId ? 'Save changes' : 'Publish notice'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

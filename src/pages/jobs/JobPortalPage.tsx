@@ -769,7 +769,7 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
                         <span>•</span>
                         <span>{j.location}</span>
                         <span>•</span>
-                        <span className="font-mono text-[#0A0A0A]">{j.stipendOrSalary}</span>
+                        <span className="font-sans tabular-nums text-[#0A0A0A]">{j.stipendOrSalary}</span>
                         <span>•</span>
                         <span>Closes {j.applicationDeadline}</span>
                       </div>

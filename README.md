@@ -192,6 +192,56 @@ supabase/migrations/
 - [x] **Phase 5.1:** Admin Invite System (Role-gated faculty-to-admin promotion, audit trail)
 - [x] **Phase 6:** Motion System (Intro animation, landing page scroll-driven motion, Framer Motion physics)
 - [x] **Phase 7:** Mobile & Tablet Motion Parity (Touch gestures, performance tiers, safe-area insets, landscape fallbacks)
+- [x] **Phase 8 (v2.8):** Student Outreach & Discovery (Opt-in, sovereign student consent, responsive 10-tier discovery matrix)
+
+---
+
+## Student Outreach (v2.8)
+
+NexaLink v2.8 introduces student discovery for verified alumni and faculty members, built on the principle of sovereign student consent:
+- Students stay completely in control. Alumni and faculty can discover students who explicitly opted in, but they can only send invitations.
+- A 1:1 conversation opens only after the student accepts the invitation.
+- Privacy masking is enforced in PostgreSQL RLS (`SECURITY DEFINER` RPC functions), not in client code.
+
+### Visibility Matrix
+
+| Viewer Role | Eligible Students | Discoverable Fields | Post-Acceptance Access |
+|---|---|---|---|
+| **Alumni (verified)** | Only students with `open_to_outreach = true` | Name, department, semester/year, skills, career goal, interests. **Initials avatar only, no photo.** | Photo, signed resume URL (10-minute token), login email |
+| **Faculty (verified)** | **Own department:** all verified students. **Other departments:** opted-in students only | Same fields, plus PRN and photo for own-department students | Signed resume URL |
+| **Anyone / Public** | None | Phone number, verification proof documents, institutional email, and personal email are never exposed | Phone and proof documents remain private |
+
+### Invitation Lifecycle & Protections
+- **Weekly quota**: Verified senders are limited to at most 5 invitations per rolling 7-day period.
+- **Invitation reason**: Required text between 20 and 200 characters explaining the mentorship or referral purpose.
+- **Expiration**: Invitations expire after 14 days (`expired`).
+- **Cooldown**: If a student declines, a mandatory 60-day cooldown prevents re-inviting that student.
+- **Block & Report**: Students can block senders permanently and trigger a moderation review.
+- **Profile views**: View events are recorded per viewer per student per day, visible to the student in their 30-day view history.
+
+### Responsive & Mobile Architecture
+- **10-tier responsive matrix**: Tested from 320px up to 1920px+.
+- **Modal ergonomics**: Bottom sheets on mobile (<1024px) capped at 560px on tablets (640-1023px); centered dialogs on desktop (>=1024px).
+- **Keyboard & iOS handling**: Textarea inputs use 16px font below 1024px to prevent Safari auto-zoom; sticky bottom action bars prevent on-screen keyboard occlusion.
+- **Zero CLS**: Skeletons sized identically to populated content cards.
+- **Touch targets**: All interactive buttons and switches conform to the 44×44px minimum touch target rule.
+
+### Code Organization
+- Feature directory: `src/features/outreach/`
+  - Types: `types.ts`
+  - RPC & API client: `api.ts`
+  - State & query hooks: `useOutreach.ts`
+  - In-memory dev fallback: `mockStore.ts` (DEV-gated dynamic import)
+  - Components: `StudentCard.tsx`, `InviteSheet.tsx`, `FilterSheet.tsx`, `BaseSheet.tsx`, `OutreachVisibilityCard.tsx`, `StudentInvitationsPanel.tsx`, `DiscoverStudentsPanel.tsx`, `SuggestedStudentsCard.tsx`, `OutreachSkeletons.tsx`
+- Database migration:
+  - `supabase/migrations/20261009000001_student_outreach.sql`
+
+### Running the Migration
+Apply the migration using the Supabase CLI:
+```bash
+supabase db push
+# Or run 20261009000001_student_outreach.sql in the Supabase Dashboard SQL Editor
+```
 
 ---
 
@@ -199,3 +249,9 @@ supabase/migrations/
 
 Developed for **Vidyalankar Institute of Technology (VIT Wadala), Mumbai** under SIH25017 Problem Statement.
 © 2026 NexaLink. All rights reserved.
+
+---
+
+## App Icons
+
+The app icons, favicons, and PWA manifest assets live in `public/icons/`. The `-v2` suffix is a deliberate cache-busting convention to ensure browsers and installed PWAs fetch the newest files. When updating the icons next time, bump the suffix to `-v3` (e.g., `icon-192-v3.png`) and update the paths in `index.html` and `public/site.webmanifest`.

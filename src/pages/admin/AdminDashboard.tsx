@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
+import { auditService } from '../../services/auditService';
 import type { AlumniProfile, StudentProfile, FacultyProfile, Announcement, AnnouncementSeverity } from '../../types';
 import { useCountUp } from '../../hooks/useCountUp';
 import {
@@ -36,6 +38,7 @@ import { UserManagementTable } from '../../components/admin/UserManagementTable'
 import { VerificationQueueMasterDetail, type VerificationItem } from '../../components/admin/VerificationQueueMasterDetail';
 import { AdminVisualAnalytics } from './AdminVisualAnalytics';
 import { AdminModerationQueue } from '../../components/admin/AdminModerationQueue';
+import { NoticeBoard } from '../../components/notices/NoticeBoard';
 import {
   PageHeader,
   FocusPanel,
@@ -79,6 +82,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
     graduateStudentToAlumni,
     addAnnouncement,
     updateAnnouncement,
+    retractAnnouncement,
     deleteAnnouncement,
     togglePinAnnouncement,
     roleTransitionRequests,
@@ -92,12 +96,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
     bulkGraduateStudents,
     isDataLoading
   } = useData();
+  const { currentUser } = useAuth();
 
   const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>(() => {
     if (initialTab) return initialTab;
     if (initialView === 'console') return 'approvals';
     return 'overview';
   });
+
+  const [ancFilterStatus, setAncFilterStatus] = useState<'All' | 'Active' | 'Expired' | 'Retracted'>('All');
 
   useEffect(() => {
     if (initialTab) {
@@ -258,17 +265,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
     setShowAncModal(true);
   };
 
+  const handleRetractAnnouncement = async (anc: Announcement) => {
+    try {
+      await retractAnnouncement(anc.id);
+      await auditService.appendLog({
+        id: `audit-${Date.now()}`,
+        action: 'RETRACT_ANNOUNCEMENT',
+        performedBy: currentUser?.name || 'Administrator',
+        targetUserOrItem: anc.id,
+        timestamp: new Date().toISOString(),
+        details: `Retracted broadcast announcement: "${anc.title}"`
+      });
+      showNotification(`Announcement "${anc.title}" retracted.`);
+    } catch (err: any) {
+      console.error(err);
+      showNotification('Failed to retract announcement.');
+    }
+  };
+
   const handleSubmitAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ancTitle.trim() || !ancContent.trim()) return;
 
     setIsSubmittingAnc(true);
     try {
+      const trimmedTitle = ancTitle.trim().slice(0, 120);
+      const trimmedContent = ancContent.trim().slice(0, 1000);
+      const adminAuthor = currentUser?.name || 'Institutional Admin Cell';
+
       const payload = {
-        title: ancTitle.trim(),
+        title: trimmedTitle,
         category: ancCategory,
-        author: 'Institutional Admin Cell',
-        content: ancContent.trim(),
+        author: adminAuthor,
+        content: trimmedContent,
         isImportant: ancSeverity === 'governance',
         targetAudience: ancTargetAudience,
         severity: ancSeverity,
@@ -278,9 +307,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
 
       if (editingAncId) {
         await updateAnnouncement(editingAncId, payload);
+        await auditService.appendLog({
+          id: `audit-${Date.now()}`,
+          action: 'EDIT_ANNOUNCEMENT',
+          performedBy: adminAuthor,
+          targetUserOrItem: editingAncId,
+          timestamp: new Date().toISOString(),
+          details: `Updated announcement: "${trimmedTitle}"`
+        });
         showNotification(`Updated announcement: "${payload.title}"`);
       } else {
         await addAnnouncement(payload);
+        await auditService.appendLog({
+          id: `audit-${Date.now()}`,
+          action: 'PUBLISH_ANNOUNCEMENT',
+          performedBy: adminAuthor,
+          targetUserOrItem: trimmedTitle,
+          timestamp: new Date().toISOString(),
+          details: `Published announcement "${trimmedTitle}" to audience ${payload.targetAudience}`
+        });
         showNotification(`Broadcast announcement published: "${payload.title}"`);
       }
       setShowAncModal(false);
@@ -489,6 +534,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
             }
           />
 
+          {/* Important notices (<1280px compact top strip placement) */}
+          <NoticeBoard
+            variant="top"
+            role="admin"
+            onNavigate={(tab) => {
+              if (tab === 'notices') setActiveAdminTab('announcements');
+              else setActiveTab(tab);
+            }}
+          />
+
           {/* FocusPanel: Single Emphasis Surface per Viewport ("Needs attention" / "All clear") */}
           {totalPendingQueue > 0 ? (
             <FocusPanel
@@ -658,13 +713,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              deleteAnnouncement(anc.id);
-                              showNotification(`Announcement "${anc.title}" deleted.`);
-                            }}
+                            onClick={() => handleRetractAnnouncement(anc)}
                             className="px-2.5 py-1 border border-rose-200 hover:bg-rose-50 text-[#991B1B] text-xs font-medium rounded-md transition-colors"
                           >
-                            Delete
+                            Retract
                           </button>
                         </div>
                       </div>
@@ -688,10 +740,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
       {/* VIEW: ANNOUNCEMENTS */}
       {activeAdminTab === 'announcements' && (
         <div className="space-y-4">
+          {/* Status Filter Pills */}
+          <div className="flex items-center gap-2 border-b border-[#E5E7EB] pb-3">
+            {(['All', 'Active', 'Expired', 'Retracted'] as const).map(st => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => setAncFilterStatus(st)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  ancFilterStatus === st
+                    ? 'bg-[#0A0A0A] text-white'
+                    : 'text-[#6B7280] hover:text-[#0A0A0A] hover:bg-[#F3F4F6]'
+                }`}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
+
           <Section
-            title="Published announcements"
-            count={announcements.filter(a => !a.isRetracted).length}
-            description="Live broadcast notices synchronized across student, alumni, and faculty portal feeds with audience targeting."
+            title="Institutional announcements"
+            count={
+              announcements.filter(a => {
+                const now = Date.now();
+                const isExp = a.expiresAt ? new Date(a.expiresAt).getTime() <= now : false;
+                if (ancFilterStatus === 'Active') return !a.isRetracted && !isExp;
+                if (ancFilterStatus === 'Expired') return !a.isRetracted && isExp;
+                if (ancFilterStatus === 'Retracted') return a.isRetracted;
+                return true;
+              }).length
+            }
+            description="Manage live broadcast notices across student, alumni, and faculty feeds with audience targeting."
             noTopHairline
             action={
               <button
@@ -704,105 +783,128 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
               </button>
             }
           >
-            {announcements.filter(a => !a.isRetracted).length === 0 ? (
+            {announcements.filter(a => {
+              const now = Date.now();
+              const isExp = a.expiresAt ? new Date(a.expiresAt).getTime() <= now : false;
+              if (ancFilterStatus === 'Active') return !a.isRetracted && !isExp;
+              if (ancFilterStatus === 'Expired') return !a.isRetracted && isExp;
+              if (ancFilterStatus === 'Retracted') return a.isRetracted;
+              return true;
+            }).length === 0 ? (
               <EmptyState
                 icon={<BookOpen className="w-5 h-5 text-[#0A0A0A]" />}
-                title="No active announcements"
+                title={`No ${ancFilterStatus.toLowerCase()} announcements`}
                 sentence="Click 'New announcement' to broadcast a notice to students, faculty, or alumni."
               />
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {announcements.filter(a => !a.isRetracted).map(anc => {
-                  const isExpired = anc.expiresAt ? Date.now() > new Date(anc.expiresAt).getTime() : false;
-                  const severity = anc.severity || (anc.isImportant ? 'governance' : 'standard');
+                {announcements
+                  .filter(a => {
+                    const now = Date.now();
+                    const isExp = a.expiresAt ? new Date(a.expiresAt).getTime() <= now : false;
+                    if (ancFilterStatus === 'Active') return !a.isRetracted && !isExp;
+                    if (ancFilterStatus === 'Expired') return !a.isRetracted && isExp;
+                    if (ancFilterStatus === 'Retracted') return a.isRetracted;
+                    return true;
+                  })
+                  .map(anc => {
+                    const isExpired = anc.expiresAt ? Date.now() > new Date(anc.expiresAt).getTime() : false;
+                    const severity = anc.severity || (anc.isImportant ? 'governance' : 'standard');
 
-                  return (
-                    <div
-                      key={anc.id}
-                      className="p-4 border border-[#E5E7EB] rounded-xl flex flex-col justify-between gap-3 bg-white"
-                    >
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {anc.isPinned && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#0A0A0A] text-white">
-                                <Pin className="w-3 h-3 fill-white" />
-                                Pinned
-                              </span>
-                            )}
-                            <StatusBadge
-                              tone={
-                                severity === 'governance'
-                                  ? 'rose'
-                                  : severity === 'actionable'
-                                  ? 'amber'
-                                  : severity === 'academic'
-                                  ? 'indigo'
-                                  : 'neutral'
-                              }
-                              label={anc.category}
-                            />
+                    return (
+                      <div
+                        key={anc.id}
+                        className={`p-4 border border-[#E5E7EB] rounded-xl flex flex-col justify-between gap-3 ${
+                          anc.isRetracted ? 'bg-[#FAFAFA] opacity-75' : 'bg-white'
+                        }`}
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {anc.isRetracted ? (
+                                <StatusBadge tone="neutral" label="Retracted" />
+                              ) : isExpired ? (
+                                <StatusBadge tone="rose" label="Expired" />
+                              ) : (
+                                <StatusBadge tone="emerald" label="Active" />
+                              )}
+
+                              {anc.isPinned && !anc.isRetracted && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#0A0A0A] text-white">
+                                  <Pin className="w-3 h-3 fill-white" />
+                                  Pinned
+                                </span>
+                              )}
+                              <StatusBadge
+                                tone={
+                                  severity === 'governance'
+                                    ? 'rose'
+                                    : severity === 'actionable'
+                                    ? 'amber'
+                                    : severity === 'academic'
+                                    ? 'indigo'
+                                    : 'neutral'
+                                }
+                                label={anc.category}
+                              />
+                            </div>
+
+                            <div className="flex items-center gap-2 text-xs text-[#6B7280]">
+                              {anc.expiresAt ? (
+                                <span>Exp: {new Date(anc.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
+                              ) : (
+                                <span>Permanent</span>
+                              )}
+                              <span>·</span>
+                              <span>{anc.date ? new Date(anc.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</span>
+                            </div>
                           </div>
 
-                          <div className="flex items-center gap-2 text-xs text-[#6B7280]">
-                            {isExpired ? (
-                              <span className="text-[#991B1B] font-medium">Expired</span>
-                            ) : anc.expiresAt ? (
-                              <span>Exp: {new Date(anc.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
-                            ) : (
-                              <span>Permanent</span>
-                            )}
-                            <span>·</span>
-                            <span>{anc.date ? new Date(anc.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</span>
+                          <h4 className="font-semibold text-[#0A0A0A] text-sm leading-snug">
+                            {anc.title}
+                          </h4>
+                          <p className="text-xs text-[#374151] line-clamp-3 leading-relaxed whitespace-pre-line">
+                            {anc.content}
+                          </p>
+                        </div>
+
+                        <div className="pt-2.5 border-t border-[#E5E7EB] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-2 text-[#6B7280]">
+                            <span>Audience:</span>
+                            <span className="font-medium text-[#0A0A0A] bg-[#FAFAFA] border border-[#E5E7EB] px-1.5 py-0.5 rounded text-[11px]">
+                              {anc.targetAudience === 'All' ? 'Everyone' : anc.targetAudience || 'Everyone'}
+                            </span>
                           </div>
-                        </div>
 
-                        <h4 className="font-semibold text-[#0A0A0A] text-sm leading-snug">
-                          {anc.title}
-                        </h4>
-                        <p className="text-xs text-[#374151] line-clamp-3 leading-relaxed whitespace-pre-line">
-                          {anc.content}
-                        </p>
-                      </div>
-
-                      <div className="pt-2.5 border-t border-[#E5E7EB] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-2 text-[#6B7280]">
-                          <span>Audience:</span>
-                          <span className="font-medium text-[#0A0A0A] bg-[#FAFAFA] border border-[#E5E7EB] px-1.5 py-0.5 rounded text-[11px]">
-                            {anc.targetAudience || 'All'}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 self-end sm:self-auto">
-                          <button
-                            type="button"
-                            onClick={() => togglePinAnnouncement(anc.id)}
-                            className="px-2.5 py-1 border border-[#E5E7EB] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-md transition-colors"
-                          >
-                            {anc.isPinned ? 'Unpin' : 'Pin'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditAnnouncement(anc)}
-                            className="px-2.5 py-1 border border-[#E5E7EB] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-md transition-colors"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              deleteAnnouncement(anc.id);
-                              showNotification(`Announcement "${anc.title}" deleted.`);
-                            }}
-                            className="px-2.5 py-1 border border-rose-200 hover:bg-rose-50 text-[#991B1B] text-xs font-medium rounded-md transition-colors"
-                          >
-                            Delete
-                          </button>
+                          {!anc.isRetracted && (
+                            <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                              <button
+                                type="button"
+                                onClick={() => togglePinAnnouncement(anc.id)}
+                                className="px-2.5 py-1 border border-[#E5E7EB] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-md transition-colors"
+                              >
+                                {anc.isPinned ? 'Unpin' : 'Pin'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditAnnouncement(anc)}
+                                className="px-2.5 py-1 border border-[#E5E7EB] hover:bg-[#FAFAFA] text-[#0A0A0A] text-xs font-medium rounded-md transition-colors"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRetractAnnouncement(anc)}
+                                className="px-2.5 py-1 border border-rose-200 hover:bg-rose-50 text-[#991B1B] text-xs font-medium rounded-md transition-colors cursor-pointer"
+                              >
+                                Retract
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             )}
           </Section>
@@ -1357,25 +1459,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
         );
       })()}
 
-      {/* ANNOUNCEMENT MODAL */}
+      {/* ANNOUNCEMENT COMPOSER MODAL (with Live Preview and B4 Constraints) */}
       <Modal
         isOpen={showAncModal}
         onClose={() => setShowAncModal(false)}
-        title={editingAncId ? 'Edit Announcement' : 'Publish Institutional Announcement'}
-        subtitle="Broadcast urgent updates, placement drives, and governance notifications."
-        maxWidth="lg"
+        title={editingAncId ? 'Edit Announcement' : 'Compose Announcement'}
+        subtitle="Broadcast notices to students, alumni, and faculty feeds."
+        maxWidth="2xl"
       >
         <form onSubmit={handleSubmitAnnouncement} className="space-y-4 font-sans text-xs">
           <div>
-            <label className="block text-xs font-semibold text-[#0A0A0A] mb-1.5">
-              Notice title <span className="text-rose-600">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-[#0A0A0A]">
+                Title (max 120 chars) <span className="text-rose-600">*</span>
+              </label>
+              <span className={`text-[11px] tabular-nums ${ancTitle.length >= 120 ? 'text-rose-600 font-semibold' : 'text-[#6B7280]'}`}>
+                {ancTitle.length}/120
+              </span>
+            </div>
             <input
               type="text"
               required
+              maxLength={120}
               value={ancTitle}
               onChange={e => setAncTitle(e.target.value)}
-              placeholder="e.g. Campus Placement Drive — Batch 2025"
+              placeholder="e.g. Placement cell campus recruitment registration window open for Batch 2025"
               className="w-full border border-[#6B7280] rounded-lg bg-[#FAFAFA] text-xs p-2.5 text-[#0A0A0A] focus:outline-none focus:ring-1 focus:ring-[#0A0A0A]"
             />
           </div>
@@ -1390,63 +1498,54 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
                 onChange={e => setAncCategory(e.target.value)}
                 className="w-full border border-[#6B7280] rounded-lg bg-[#FAFAFA] text-xs p-2.5 text-[#0A0A0A] focus:outline-none"
               >
-                <option value="Placement Alert">Placement alert</option>
-                <option value="Academic Governance">Academic governance</option>
-                <option value="Alumni Homecoming">Alumni homecoming</option>
-                <option value="Research & Grants">Research & grants</option>
-                <option value="Campus Safety">Campus safety</option>
+                <option value="Placement Alert">Placement Alert</option>
+                <option value="Academic Governance">Academic Governance</option>
+                <option value="Alumni Homecoming">Alumni Homecoming</option>
+                <option value="Research & Grants">Research & Grants</option>
+                <option value="Campus Safety">Campus Safety</option>
               </select>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-[#0A0A0A] mb-1.5">
-                Target audience
+                Audience
               </label>
               <select
                 value={ancTargetAudience}
                 onChange={e => setAncTargetAudience(e.target.value)}
                 className="w-full border border-[#6B7280] rounded-lg bg-[#FAFAFA] text-xs p-2.5 text-[#0A0A0A] focus:outline-none"
               >
-                <option value="All">All campus members</option>
-                <option value="Students Only">Students only</option>
-                <option value="Alumni Only">Alumni only</option>
-                <option value="Faculty Only">Faculty only</option>
+                <option value="All">Everyone</option>
+                <option value="Students Only">Students</option>
+                <option value="Alumni Only">Alumni</option>
+                <option value="Faculty Only">Faculty</option>
               </select>
+              <p className="text-[11px] text-[#6B7280] mt-1 leading-normal">
+                Visible to: {ancTargetAudience === 'All' ? 'Everyone' : ancTargetAudience}. You will only see this on your own notices board if you include your own role.
+              </p>
             </div>
           </div>
 
-          {/* Severity */}
-          <div>
-            <label className="block text-xs font-semibold text-[#0A0A0A] mb-1.5">
-              Notice severity tier
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {(['standard', 'actionable', 'governance', 'academic'] as const).map(sev => (
-                <button
-                  key={sev}
-                  type="button"
-                  onClick={() => setAncSeverity(sev)}
-                  className={`text-left p-3 rounded-xl border transition-all text-xs flex items-center justify-between cursor-pointer ${
-                    ancSeverity === sev
-                      ? 'border-[#0A0A0A] bg-[#FAFAFA]'
-                      : 'border-[#E5E7EB] bg-white hover:border-[#6B7280]'
-                  }`}
-                >
-                  <span className="capitalize font-medium text-[#0A0A0A]">{sev}</span>
-                  {ancSeverity === sev && <Check className="w-3.5 h-3.5 text-[#0A0A0A]" />}
-                </button>
-              ))}
-            </div>
+          {/* Author Display (Server-side logged in admin, read-only) */}
+          <div className="bg-[#FAFAFA] border border-[#E5E7EB] rounded-lg p-2.5 flex items-center justify-between text-xs">
+            <span className="text-[#6B7280]">Author:</span>
+            <span className="font-semibold text-[#0A0A0A]">{currentUser?.name || 'Institutional Administrator'}</span>
           </div>
 
-          {/* Content Body */}
+          {/* Message Content */}
           <div>
-            <label className="block text-xs font-semibold text-[#0A0A0A] mb-1.5">
-              Notice content <span className="text-rose-600">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-[#0A0A0A]">
+                Message (max 1000 chars) <span className="text-rose-600">*</span>
+              </label>
+              <span className={`text-[11px] tabular-nums ${ancContent.length >= 1000 ? 'text-rose-600 font-semibold' : 'text-[#6B7280]'}`}>
+                {ancContent.length}/1000
+              </span>
+            </div>
             <textarea
               rows={4}
               required
+              maxLength={1000}
               value={ancContent}
               onChange={e => setAncContent(e.target.value)}
               placeholder="Provide complete announcement details, instructions, or links..."
@@ -1454,17 +1553,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
             />
           </div>
 
-          {/* Controls: Pinning & Expiry */}
+          {/* Toggles: Important, Pin, Expiry */}
           <div className="p-3.5 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl space-y-3">
-            <label className="flex items-center gap-2.5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={ancIsPinned}
-                onChange={e => setAncIsPinned(e.target.checked)}
-                className="w-4 h-4 rounded text-[#0A0A0A] border-[#6B7280] focus:ring-[#0A0A0A]"
-              />
-              <span className="font-medium text-xs text-[#0A0A0A]">Pin announcement to top of feeds</span>
-            </label>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={ancSeverity === 'governance'}
+                  onChange={e => setAncSeverity(e.target.checked ? 'governance' : 'standard')}
+                  className="w-4 h-4 rounded text-[#0A0A0A] border-[#6B7280] focus:ring-[#0A0A0A]"
+                />
+                <span className="font-medium text-xs text-[#0A0A0A]">Mark as Important notice</span>
+              </label>
+
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={ancIsPinned}
+                  onChange={e => setAncIsPinned(e.target.checked)}
+                  className="w-4 h-4 rounded text-[#0A0A0A] border-[#6B7280] focus:ring-[#0A0A0A]"
+                />
+                <span className="font-medium text-xs text-[#0A0A0A]">Pin to top of list</span>
+              </label>
+            </div>
 
             <div className="border-t border-[#E5E7EB] pt-2.5">
               <label className="flex items-center gap-2.5 cursor-pointer select-none">
@@ -1477,7 +1588,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
                   }}
                   className="w-4 h-4 rounded text-[#0A0A0A] border-[#6B7280] focus:ring-[#0A0A0A]"
                 />
-                <span className="font-medium text-xs text-[#0A0A0A]">Set auto-expiry date</span>
+                <span className="font-medium text-xs text-[#0A0A0A]">Optional expiry date</span>
               </label>
 
               {ancHasExpiry && (
@@ -1492,6 +1603,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, in
                   />
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* LIVE PREVIEW CONTAINER */}
+          <div className="border border-[#E5E7EB] rounded-xl p-4 bg-white space-y-2">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-[#6B7280]">Live preview</span>
+            <div className="border-l-2 border-[#0A0A0A] pl-3 py-1 space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                {ancSeverity === 'governance' && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                    Important
+                  </span>
+                )}
+                {ancIsPinned && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#0A0A0A] text-white">
+                    Pinned
+                  </span>
+                )}
+                <span className="text-[11px] text-[#6B7280]">{ancCategory}</span>
+              </div>
+              <h4 className="text-xs font-semibold text-[#0A0A0A] line-clamp-1">
+                {ancTitle || 'Notice title will appear here'}
+              </h4>
+              <p className="text-xs text-[#4B5563] line-clamp-2 leading-relaxed">
+                {ancContent || 'Notice preview description will appear here as you type...'}
+              </p>
+              <div className="text-[11px] text-[#9CA3AF] pt-1">
+                Posted by {currentUser?.name || 'Administrator'} · Just now
+              </div>
             </div>
           </div>
 

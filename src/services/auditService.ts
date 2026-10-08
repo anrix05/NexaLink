@@ -2,6 +2,11 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { runQuery, runMutation } from './supabaseRunner';
 import type { AuditLogEntry } from '../types';
 
+function isValidUuid(id?: string): boolean {
+  if (!id) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+}
+
 export const AUDIT_PAGE_SIZE = 20;
 
 export interface AuditLogPaginationParams {
@@ -154,18 +159,27 @@ export const auditService = {
   async appendLog(entry: AuditLogEntry): Promise<void> {
     if (!isSupabaseConfigured()) return;
     try {
+      const logId = isValidUuid(entry.id)
+        ? entry.id
+        : (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined);
+
+      const payload: any = {
+        action: entry.action,
+        performed_by: entry.performedBy,
+        target_user_or_item: entry.targetUserOrItem || null,
+        timestamp: entry.timestamp,
+        details: entry.details,
+        is_bulk_action: entry.isBulkAction || false,
+        bulk_metadata: entry.bulkMetadata || null
+      };
+
+      if (logId) {
+        payload.id = logId;
+      }
+
       await runMutation('INSERT', 'audit_logs', async () => {
-        return supabase.from('audit_logs').insert({
-          id: entry.id,
-          action: entry.action,
-          performed_by: entry.performedBy,
-          target_user_or_item: entry.targetUserOrItem || null,
-          timestamp: entry.timestamp,
-          details: entry.details,
-          is_bulk_action: entry.isBulkAction || false,
-          bulk_metadata: entry.bulkMetadata || null
-        });
-      }, { payload: entry });
+        return supabase.from('audit_logs').insert(payload);
+      }, { payload });
     } catch (e) {
       console.error('[auditService.appendLog] failed:', e);
     }

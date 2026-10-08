@@ -26,8 +26,10 @@ import {
   EmptyState
 } from '../../components/ui';
 import { Modal, TextField, SelectField, TextArea } from '../../components/common/UIComponents';
-import { InstitutionalAnnouncementFeed } from '../../components/common/InstitutionalAnnouncementFeed';
+import { NoticeBoard } from '../../components/notices/NoticeBoard';
 import { getGreetingName } from '../../utils/validators';
+
+const SuggestedStudentsCard = React.lazy(() => import('../../features/outreach/SuggestedStudentsCard').then(m => ({ default: m.SuggestedStudentsCard })));
 
 interface AlumniDashboardProps {
   setActiveTab: (tab: string, subTab?: string) => void;
@@ -184,8 +186,8 @@ const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniPr
         }
       />
 
-      {/* Institutional Broadcast Announcements Feed */}
-      <InstitutionalAnnouncementFeed announcements={announcements} userRole="alumni" />
+      {/* Important Notices (Top placement below 1280px) */}
+      <NoticeBoard variant="top" role="alumni" setActiveTab={setActiveTab} onNavigate={(tab) => setActiveTab(tab)} />
 
       {/* Accreditation Employment Banner (if data incomplete) */}
       {missingEmploymentFields.length > 0 && (
@@ -461,6 +463,11 @@ const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniPr
               </div>
             )}
           </Section>
+
+          {/* Section: Suggested Students */}
+          <React.Suspense fallback={null}>
+            <SuggestedStudentsCard onNavigateToDiscovery={() => setActiveTab('mentorship', 'discover')} />
+          </React.Suspense>
         </div>
 
         {/* Quiet Right Rail (≥1280px / lg) */}
@@ -517,6 +524,9 @@ const AlumniDashboardContent: React.FC<AlumniDashboardProps & { alumni: AlumniPr
               </button>
             </div>
           </div>
+
+          {/* Real Important Notices in RightRail (≥1280px) */}
+          <NoticeBoard variant="rail" role="alumni" setActiveTab={setActiveTab} onNavigate={(tab) => setActiveTab(tab)} />
         </RightRail>
       </div>
 

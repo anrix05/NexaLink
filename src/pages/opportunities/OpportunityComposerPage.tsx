@@ -1099,7 +1099,7 @@ export const OpportunityComposerPage: React.FC<OpportunityComposerPageProps> = (
               <div className="p-3 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl flex items-center justify-between text-xs">
                 <div>
                   <span className="text-[10px] text-[#6B7280] uppercase tracking-wider block">Package</span>
-                  <span className="font-bold text-[#0A0A0A] font-mono">{formattedCompString}</span>
+                  <span className="font-bold text-[#0A0A0A] font-sans tabular-nums">{formattedCompString}</span>
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] text-[#6B7280] uppercase tracking-wider block">Openings</span>

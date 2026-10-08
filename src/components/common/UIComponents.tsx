@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -912,6 +913,26 @@ export const Sheet: React.FC<SheetProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  useEffect(() => {
+    if (!isOpen || typeof document === 'undefined') return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const bottomNav = document.querySelector('nav[aria-label="Primary"]');
+    if (bottomNav) {
+      bottomNav.setAttribute('inert', '');
+      bottomNav.setAttribute('aria-hidden', 'true');
+    }
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      if (bottomNav) {
+        bottomNav.removeAttribute('inert');
+        bottomNav.removeAttribute('aria-hidden');
+      }
+    };
+  }, [isOpen]);
+
   const getMaxWidthClass = () => {
     switch (maxWidth) {
       case 'sm': return 'max-w-sm';
@@ -923,10 +944,10 @@ export const Sheet: React.FC<SheetProps> = ({
     }
   };
 
-  return (
+  const sheetElement = (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -941,7 +962,7 @@ export const Sheet: React.FC<SheetProps> = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 450, damping: 30 }}
-            className={`relative bg-white border border-[#E5E7EB] rounded-t-2xl sm:rounded-2xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-y-auto custom-scrollbar p-5 sm:p-6 space-y-5 shadow-none font-sans text-xs z-10 pb-safe ${getMaxWidthClass()} ${className}`}
+            className={`relative bg-white border border-[#E5E7EB] rounded-t-2xl sm:rounded-2xl w-full max-h-[calc(100dvh-24px-env(safe-area-inset-top))] sm:max-h-[85vh] overflow-y-auto custom-scrollbar p-5 sm:p-6 space-y-5 shadow-none font-sans text-xs z-10 pb-[calc(env(safe-area-inset-bottom)+16px)] sm:pb-6 ${getMaxWidthClass()} ${className}`}
           >
             {/* Mobile Bottom Sheet Handle */}
             <div className="sm:hidden flex justify-center -mt-2 mb-1">
@@ -986,6 +1007,11 @@ export const Sheet: React.FC<SheetProps> = ({
       )}
     </AnimatePresence>
   );
+
+  if (typeof document !== 'undefined') {
+    return createPortal(sheetElement, document.body);
+  }
+  return sheetElement;
 };
 
 // Export Modal as alias to Sheet for full backwards compatibility

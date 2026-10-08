@@ -4,6 +4,60 @@ All notable changes to the NexaLink platform are documented in this file.
 
 ---
 
+## [v2.8 - Student Outreach & Discovery] - 2026-10-09
+
+### App Icons Update
+- Replaced PWA, favicon and apple-touch icons with the current N-Link logo.
+
+### Student Discovery for Alumni and Faculty (Opt-in, Sovereign Consent)
+
+#### Added
+- **Database Migration (`supabase/migrations/20261009000001_student_outreach.sql`):**
+  - Tables: `student_outreach_settings`, `outreach_invitations`, `outreach_blocks`, `student_profile_views`
+  - RLS Policies: Sovereign student consent enforcement, sender read limits, block protections
+  - RPC Functions: `list_discoverable_students`, `suggest_students`, `send_outreach_invitation`, `respond_to_invitation`, `withdraw_invitation`, `record_profile_view`, `get_student_resume_url`
+  - Telemetry view: `outreach_volume_by_sender`
+- **Outreach Feature Module (`src/features/outreach/`):**
+  - `types.ts`: TypeScript contracts for settings, invitations, discoverable and suggested students
+  - `mockStore.ts`: In-memory evaluation store for offline/demo sessions (DEV-gated)
+  - `api.ts`: Typed RPC callers with automatic dual-mode fallback
+  - `useOutreach.ts`: React hooks with 300ms search debouncing and cancellation
+  - `BaseSheet.tsx`: Responsive bottom-sheet (<1024px) / centered dialog (≥1024px) base with focus trap, swipe dismiss, safe areas, and keyboard awareness
+  - `StudentCard.tsx`: Standardized student cards with initials avatars for alumni, photo/PRN for faculty, 44px min touch buttons, and max 2-line clamps
+  - `InviteSheet.tsx`: Reason validation (20-200 characters), 5/week rolling quota display, sticky actions, 16px font on mobile
+  - `FilterSheet.tsx`: Mobile filter selection bottom sheet for narrow viewports
+  - `OutreachVisibilityCard.tsx`: Master toggle, per-field toggles, 30-day "Who viewed my profile" transparency history
+  - `StudentInvitationsPanel.tsx`: Responsive card-and-row invitation inbox with Accept, Decline, and Block & Report actions; connects directly to 1:1 chat
+  - `DiscoverStudentsPanel.tsx`: Search, multi-facet filtering, 24-item pagination with centered "Load more", and sent invitations tracking with Withdraw action
+  - `SuggestedStudentsCard.tsx`: Top 3 match recommendations showing "Why matched" reasons, horizontal snap row on mobile, 3-column desktop grid
+  - `OutreachSkeletons.tsx`: CLS=0 dimension-matched skeleton loaders
+- **Documentation:**
+  - `docs/DATA_GOVERNANCE_ADDENDUM.md`: Ready-to-paste governance documentation covering data exposure, 90-day retention of view logs, and rate limits
+  - `README.md`: New section detailing Student Outreach (v2.8) architecture and usage
+
+#### Assumptions
+1. **Opt-in default OFF**: Every student starts with `open_to_outreach = false` until they intentionally enable it in Field Privacy settings.
+2. **Alumni initials only**: Verified alumni view initials-based avatars only; personal photos and PRN are never exposed to alumni prior to student acceptance.
+3. **Faculty own-department default**: In accordance with academic mentorship mandates, faculty view all verified students in their own department (with photo and PRN), but view only opted-in students from other departments.
+4. **5 invitations per week**: Rolling 7-day rate limit enforced strictly at the database function level; withdrawals within 5 minutes do not consume quota.
+5. **14-day expiration & 60-day cooldown**: Pending invitations expire after 14 days; a student declining an invitation triggers a 60-day cooldown against re-invitation.
+6. **Resume access gating**: Resumes are strictly inaccessible until an invitation is accepted (or viewed by own-department faculty), retrieved via 10-minute signed URLs.
+7. **Discovery navigation**: Discovery is mounted inside the existing Mentorship Hub ("Guidance & Mentees") as a dedicated tab, avoiding any unauthorized changes to top-level navigation.
+8. **BottomNav untouched**: Bottom navigation was not modified, respecting Scope Guard section 1.3.
+
+#### Follow-ups
+1. **Student dashboard prompt**: A one-time 100% completion prompt for students to enable outreach was deferred because the student dashboard was not in the allowed mount points table in Section 1.2.
+2. **Opportunity applicants view**: An applicants view for opportunities was not built because it was outside Section 1.2 allowed mount points.
+3. **Reported items integration**: Block & report writes to `outreach_blocks (reported = true)`; can be piped into an admin moderation feed when administrative review UI is expanded.
+
+#### Modified Files (Mount Points)
+- `src/pages/SettingsPage.tsx`: Mounted `<OutreachVisibilityCard />` below existing privacy controls
+- `src/pages/mentorship/MentorshipPage.tsx`: Added `Invitations` tab for students and `Discover students` tab for alumni and faculty
+- `src/pages/alumni/AlumniDashboard.tsx`: Mounted `<SuggestedStudentsCard />` as last card in main column
+- `src/pages/faculty/FacultyDashboard.tsx`: Mounted `<SuggestedStudentsCard />` as last card in main column
+
+---
+
 ## [v2.8.0] - 2026-10-02
 
 ### Mobile & Tablet Motion Parity

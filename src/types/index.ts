@@ -163,6 +163,7 @@ export interface AdminInvite {
   invitedAt: string;
   status: 'pending' | 'accepted' | 'revoked';
   acceptedAt?: string;
+  expiresAt?: string;
 }
 
 export type MentorshipGuidancePurpose =
@@ -642,6 +643,7 @@ export interface Announcement {
   title: string;
   category: 'Placement Alert' | 'Alumni News' | 'Institutional Update' | 'Event Highlight' | string;
   author: string;
+  authorId?: string;
   date: string;
   content: string;
   isImportant: boolean;

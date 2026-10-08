@@ -41,6 +41,7 @@ import { getBuildInfo } from '../utils/buildInfo';
 import { getUserEmails } from '../utils/userEmails';
 
 const AvatarCropModal = React.lazy(() => import('../components/profile/AvatarCropModal'));
+const OutreachVisibilityCard = React.lazy(() => import('../features/outreach/OutreachVisibilityCard').then(m => ({ default: m.OutreachVisibilityCard })));
 
 export const SettingsPage: React.FC = () => {
   const { currentUser, currentRole, updateCurrentUserState } = useAuth();
@@ -52,6 +53,9 @@ export const SettingsPage: React.FC = () => {
   // Admin Invites & Role Step-Down States
   const [inviteEmailInput, setInviteEmailInput] = useState('');
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
+  const [newlyCreatedLinks, setNewlyCreatedLinks] = useState<Record<string, string>>({});
+  const [isInvitingAdmin, setIsInvitingAdmin] = useState(false);
+  const [isRegeneratingId, setIsRegeneratingId] = useState<string | null>(null);
   const [showStepDownModal, setShowStepDownModal] = useState(false);
   const [stepDownTargetRole, setStepDownTargetRole] = useState<'faculty' | 'alumni'>('faculty');
   const [stepDownTargetDepartment, setStepDownTargetDepartment] = useState<string>('CMPN');
@@ -1304,6 +1308,7 @@ export const SettingsPage: React.FC = () => {
 
       {/* TAB 2: FIELD PRIVACY CONTROLS */}
       {activeTab === 'privacy' && (
+        <>
         <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-6 space-y-5 sm:space-y-6 text-xs shadow-none">
           <div className="border-b border-[#E5E7EB] pb-3 sm:pb-4">
             <h2 className="text-xs sm:text-sm font-semibold text-[#0A0A0A] flex items-center gap-2">
@@ -1354,6 +1359,10 @@ export const SettingsPage: React.FC = () => {
             </Button>
           </div>
         </div>
+        <React.Suspense fallback={null}>
+          <OutreachVisibilityCard />
+        </React.Suspense>
+        </>
       )}
 
       {/* TAB 3: ADVISOR CAPACITY */}
@@ -1565,17 +1574,35 @@ export const SettingsPage: React.FC = () => {
 
               {/* Form 1: Invite New Admin */}
               <div className="p-5 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl space-y-4 font-sans text-xs">
-                <h3 className="font-semibold text-[#0A0A0A] text-xs">Invite New Administrator</h3>
-                {/* Cryptographically secure single-use 72h tokens are verified via accept-admin-invite edge function */}
+                <div>
+                  <h3 className="font-semibold text-[#0A0A0A] text-xs">Invite New Administrator</h3>
+                  <p className="text-[#6B7280] text-[11px] mt-0.5">
+                    Generate a cryptographically secure, single-use activation invitation valid for 7 days.
+                  </p>
+                </div>
                 <form
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
-                    const res = inviteNewAdmin(inviteEmailInput, currentUser.id);
-                    if (res.success) {
-                      showToast(`Admin invite sent to ${inviteEmailInput}!`);
-                      setInviteEmailInput('');
-                    } else {
-                      showToast(res.error || 'Failed to send invite.');
+                    if (!inviteEmailInput.trim() || isInvitingAdmin) return;
+                    setIsInvitingAdmin(true);
+                    try {
+                      const res = await inviteNewAdmin(inviteEmailInput, currentUser.id);
+                      if (res.success) {
+                        if (res.inviteLink) {
+                          setNewlyCreatedLinks(prev => ({
+                            ...prev,
+                            [inviteEmailInput.trim().toLowerCase()]: res.inviteLink!
+                          }));
+                        }
+                        showToast(`Admin invite link created for ${inviteEmailInput}!`);
+                        setInviteEmailInput('');
+                      } else {
+                        showToast(res.error || 'Failed to send invite.');
+                      }
+                    } catch (err: any) {
+                      showToast(err?.message || 'Error creating invite.');
+                    } finally {
+                      setIsInvitingAdmin(false);
                     }
                   }}
                   className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 max-w-lg"
@@ -1586,78 +1613,162 @@ export const SettingsPage: React.FC = () => {
                     placeholder="enter.new.admin@vit.edu.in"
                     value={inviteEmailInput}
                     onChange={e => setInviteEmailInput(e.target.value)}
-                    className="app-input flex-1 font-bold border-[#E5E7EB] rounded-lg bg-white"
+                    className="app-input flex-1 font-medium border-[#E5E7EB] rounded-lg bg-white min-h-[44px] text-base sm:text-xs"
                   />
-                  <Button type="submit" variant="primary" size="md" icon={<Mail className="w-4 h-4" />}>
-                    Send Invite
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="md"
+                    disabled={isInvitingAdmin}
+                    className="min-h-[44px]"
+                    icon={<Mail className="w-4 h-4" />}
+                  >
+                    {isInvitingAdmin ? 'Creating...' : 'Send Invite'}
                   </Button>
                 </form>
 
                 {/* Pending Invites List */}
                 <div className="pt-3 border-t border-[#E5E7EB] space-y-3">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-semibold text-[#0A0A0A] text-xs">Pending Admin Invites</h4>
-                    <Badge variant="indigo" size="sm">
-                      {adminInvites.filter(i => i.status === 'pending').length}
-                    </Badge>
-                  </div>
+                  {(() => {
+                    const seen = new Set<string>();
+                    const pendingInvites = adminInvites.filter(i => {
+                      if (i.status !== 'pending') return false;
+                      const key = i.invitedEmail.toLowerCase();
+                      if (seen.has(key)) return false;
+                      seen.add(key);
+                      return true;
+                    });
 
-                  {adminInvites.filter(i => i.status === 'pending').length === 0 ? (
-                    <p className="text-xs text-[#6B7280] font-medium">No active pending Admin invites.</p>
-                  ) : (
-                    <div className="space-y-2 max-w-lg">
-                      {adminInvites.filter(i => i.status === 'pending').map(inv => {
-                        const inviteUrl = `${window.location.origin}/?tab=admin-invite&email=${encodeURIComponent(inv.invitedEmail)}`;
+                    return (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-semibold text-[#0A0A0A] text-xs">Pending Admin Invites</h4>
+                          <Badge variant="indigo" size="sm">
+                            {pendingInvites.length}
+                          </Badge>
+                        </div>
+
+                        {pendingInvites.length === 0 ? (
+                          <p className="text-xs text-[#6B7280] font-medium">No active pending Admin invites.</p>
+                        ) : (
+                          <div className="space-y-3 max-w-xl">
+                            {pendingInvites.map(inv => {
+                              const emailKey = inv.invitedEmail.toLowerCase();
+                              const freshLink = newlyCreatedLinks[emailKey];
+                        const expiryMs = inv.expiresAt ? new Date(inv.expiresAt).getTime() : new Date(inv.invitedAt).getTime() + 7 * 86400000;
+                        const remainingDays = Math.max(0, Math.ceil((expiryMs - Date.now()) / (1000 * 60 * 60 * 24)));
+                        let formattedDate = inv.invitedAt;
+                        try {
+                          formattedDate = new Intl.DateTimeFormat('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          }).format(new Date(inv.invitedAt));
+                        } catch {}
+
                         return (
-                          <div key={inv.id} className="p-3 bg-white border border-[#E5E7EB] rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="flex-1 min-w-0 space-y-2">
+                          <div key={inv.id} className="p-3.5 bg-white border border-[#E5E7EB] rounded-xl flex flex-col gap-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                               <div>
                                 <p className="font-bold text-[#0A0A0A] text-xs font-mono">{inv.invitedEmail}</p>
-                                <p className="text-[10px] text-[#6B7280]">
-                                  Invited on: {new Date(inv.invitedAt).toLocaleDateString('en-IN')}
+                                <p className="text-[11px] text-[#6B7280] mt-0.5">
+                                  Invited on {formattedDate} • Expires in {remainingDays} {remainingDays === 1 ? 'day' : 'days'}
                                 </p>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <code className="flex-1 block truncate text-[10px] bg-[#F3F4F6] text-[#374151] px-2 py-1.5 rounded border border-[#E5E7EB]">
-                                  {inviteUrl}
-                                </code>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                className="shrink-0 self-start sm:self-center min-h-[44px]"
+                                onClick={async () => {
+                                  await revokeAdminInvite(inv.id);
+                                  setNewlyCreatedLinks(prev => {
+                                    const next = { ...prev };
+                                    delete next[emailKey];
+                                    return next;
+                                  });
+                                  showToast(`Revoked Admin invite for ${inv.invitedEmail}`);
+                                }}
+                                icon={<Trash2 className="w-3.5 h-3.5" />}
+                              >
+                                Revoke
+                              </Button>
+                            </div>
+
+                            {freshLink ? (
+                              <div className="space-y-1.5 pt-1 border-t border-[#F3F4F6]">
+                                <p className="text-[10px] text-[#059669] font-medium">
+                                  Link generated! Copy and share this link now. It will not be shown again once you reload.
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <code className="flex-1 block truncate text-[11px] font-mono bg-[#F9FAFB] text-[#111827] px-2.5 py-2 rounded-lg border border-[#E5E7EB]">
+                                    {freshLink}
+                                  </code>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(freshLink);
+                                      setCopiedInviteId(inv.id);
+                                      setTimeout(() => setCopiedInviteId(null), 2500);
+                                    }}
+                                    className="shrink-0 min-h-[44px] px-3.5 flex items-center gap-1.5 text-xs font-medium text-[#0A0A0A] bg-white hover:bg-[#F9FAFB] rounded-lg transition-colors border border-[#E5E7EB]"
+                                    title="Copy invite link"
+                                  >
+                                    {copiedInviteId === inv.id ? (
+                                      <>
+                                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                        <span className="text-emerald-700 font-semibold">Link copied</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy className="w-3.5 h-3.5 text-[#6B7280]" />
+                                        <span>Copy link</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="pt-2 border-t border-[#F3F4F6] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                <p className="text-[11px] text-[#6B7280] font-normal">
+                                  Link was shown once. Revoke and resend to get a new link.
+                                </p>
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(inviteUrl);
-                                    setCopiedInviteId(inv.id);
-                                    setTimeout(() => setCopiedInviteId(null), 2000);
+                                  disabled={isRegeneratingId === inv.id}
+                                  onClick={async () => {
+                                    setIsRegeneratingId(inv.id);
+                                    try {
+                                      await revokeAdminInvite(inv.id);
+                                      const res = await inviteNewAdmin(inv.invitedEmail, currentUser.id);
+                                      if (res.success && res.inviteLink) {
+                                        setNewlyCreatedLinks(prev => ({
+                                          ...prev,
+                                          [emailKey]: res.inviteLink!
+                                        }));
+                                        showToast(`Generated new link for ${inv.invitedEmail}`);
+                                      } else {
+                                        showToast(res.error || 'Failed to generate new link');
+                                      }
+                                    } finally {
+                                      setIsRegeneratingId(null);
+                                    }
                                   }}
-                                  className="shrink-0 p-1.5 text-[#6B7280] hover:text-[#0A0A0A] hover:bg-[#F3F4F6] rounded-md transition-colors border border-[#E5E7EB]"
-                                  title="Copy invite link"
+                                  className="inline-flex items-center justify-center min-h-[44px] px-3 py-2 text-xs font-semibold text-[#0A0A0A] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[#F3F4F6] transition-colors disabled:opacity-50"
                                 >
-                                  {copiedInviteId === inv.id ? (
-                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                                  ) : (
-                                    <Copy className="w-3.5 h-3.5" />
-                                  )}
+                                  {isRegeneratingId === inv.id ? 'Generating...' : 'Generate new link'}
                                 </button>
                               </div>
-                            </div>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              className="shrink-0 self-start sm:self-center"
-                              onClick={() => {
-                                revokeAdminInvite(inv.id);
-                                showToast(`Revoked Admin invite for ${inv.invitedEmail}`);
-                              }}
-                              icon={<Trash2 className="w-3.5 h-3.5" />}
-                            >
-                              Revoke
-                            </Button>
+                            )}
                           </div>
                         );
                       })}
                     </div>
                   )}
-                </div>
-              </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
 
               {/* Form 2: Step Down / Role Handoff */}
               <div className="p-5 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl space-y-3 font-sans text-xs">

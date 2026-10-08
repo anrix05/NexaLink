@@ -164,7 +164,7 @@ export const jobsService = {
    * Fetch applications submitted by a specific student / applicant
    */
   async getApplicationsForApplicant(applicantId: string): Promise<OpportunityApplication[]> {
-    if (!isSupabaseConfigured() || !applicantId) return [];
+    if (!isSupabaseConfigured() || !applicantId || !isValidUuid(applicantId)) return [];
     try {
       const rows = await runQuery<any[]>('job_applications', async () => {
         return (supabase.from as any)('job_applications')
@@ -182,7 +182,7 @@ export const jobsService = {
    * Fetch applications for a specific job (used by poster)
    */
   async getApplicationsForJob(jobId: string): Promise<OpportunityApplication[]> {
-    if (!isSupabaseConfigured() || !jobId) return [];
+    if (!isSupabaseConfigured() || !jobId || !isValidUuid(jobId)) return [];
     try {
       const rows = await runQuery<any[]>('job_applications', async () => {
         return (supabase.from as any)('job_applications')

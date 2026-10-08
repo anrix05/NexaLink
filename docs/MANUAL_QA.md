@@ -20,3 +20,40 @@ This document outlines the standard end-to-end verification procedures for the N
 | **10** | **Mobile Responsiveness (320px, 375px, 430px)** | In DevTools responsive mode, test at widths 320px, 375px, and 430px. | The mark height scales appropriately to `min(40vw, 160px)`, background dots are disabled, hold durations are shortened to ~2.4s total, and the mark lands accurately onto the mobile header logo without horizontal scroll drift. | [ ] |
 | **11** | **Color Handoff Verification** | Observe the mark closely during the exit flight phase (2200–3000ms). | The mark transitions from white to the target header color during mid-flight (at overlay alpha ~0.5), remaining clearly visible against the mid-tone background. The central orange node retains its `#FD9C03` accent throughout. | [ ] |
 | **12** | **Cumulative Layout Shift (CLS = 0)** | Run a Google Lighthouse Performance audit on `/`. | Cumulative Layout Shift (CLS) remains **0.000**. The intro overlay does not displace any DOM layout containers before, during, or after playback. | [ ] |
+
+---
+
+## v2.8 Student Outreach & Discovery QA Checklist
+
+### 1. Functional Verification
+- [ ] **Student:** Master toggle starts OFF by default. Turn it on and choose fields. The student appears in an alumnus's Discover list with initials only and no phone or email. Turn it off and the student disappears immediately.
+- [ ] **Student Invitations:** An invitation shows in Find a Mentor → Invitations with the reason text fully rendered. Accept opens a chat and the sender can then open the resume. Decline blocks re-invites for 60 days. Block and report stops all future invitations and records a moderation block.
+- [ ] **Profile Views Transparency:** "Who viewed my profile (last 30 days)" lists viewers once per day per viewer.
+- [ ] **Alumni:** Sees only opted-in students. Cannot send an invitation without a reason of 20 to 200 characters. The counter shows N of 5 left, and the sixth attempt in 7 days is refused by the server (enforced via database RPC). Cannot invite a student who blocked them. Can withdraw a pending invitation.
+- [ ] **Suggested Students Card:** Shows reasons ("Shared skills: React, Node. Same department"), not percentages, and sits as the last card in the main column (below "Requests waiting for your response").
+- [ ] **Faculty:** Sees all verified students of their own department (with PRN and photo) and only opted-in students from other departments.
+- [ ] **Privacy Boundary:** As an alumnus, query the student tables directly through the Supabase client; access is denied. A signed resume URL fails for a sender without an accepted invitation and expires after ~10 minutes.
+- [ ] **Empty States:** When no students are opted in, shows "No students are open to outreach yet. Check back as more students join." When filters return no results, shows "No students match these filters." with a "Reset filters" button. Never shows the filter message when no filter is applied.
+- [ ] **Regression:** Sign in, Register, NexaChats, Alumni Directory "Message" button, opportunities, admin console, and all existing navigation look and behave exactly as before.
+
+### 2. Responsive Device Matrix Verification
+Test each screen: Field Privacy card, Invitations tab, Discover students tab, Suggested students card, Invite sheet, Filter sheet.
+- [ ] **Portrait Tiers:**
+  - 320×568 (Tier 1): 1 column, full-width buttons, filters behind Filter button sheet, horizontal tab scroll, clamped padding, no clipping with 200% zoom.
+  - 375×667 (Tier 2): 1 column, stable layout, 44px touch targets.
+  - 390×844 & 430×932 (Tier 3): Suggested students is a horizontal snap row with peek hint (`min(82vw, 300px)`).
+  - 540×960 & 640×900 (Tiers 4-5): Grid flows to 2 columns at ≥640px, search + selects wrap smoothly, Invite sheet remains bottom sheet capped at 560px and centered.
+  - 768×1024 & 834×1194 (Tier 6): 2-column grid, invitation rows show inline actions on right, BottomNav remains active.
+- [ ] **1023px vs 1024px Boundary (Tier 7):** Sidebar appears at 1024px; content width drops sharply and auto-fill grid reflows without clipped cards; sheets turn into centered dialogs (max-w-[480px]).
+- [ ] **Desktop Tiers (Tiers 8-10):**
+  - 1025–1279px: Filter row inline, grid 2 columns.
+  - 1280–1439px: Grid 2-3 columns by container width.
+  - 1440–1920px+: Content stays inside existing max-width container; maximum 3 columns.
+- [ ] **Landscape Phones (667×375 & 844×390):** Sheet takes full viewport height with internal scroll and sticky action bar.
+- [ ] **200% Browser Zoom:** Tested at 320px with 200% text scaling; nothing clips or overlaps.
+- [ ] **No Sideways Page Scroll:** Body does not scroll horizontally at any viewport width; only tab row and suggested students snap row scroll with `overflow-x: auto`.
+- [ ] **BottomNav Clearance:** Last card and "Load more" button have sufficient bottom padding and are never obscured behind fixed `BottomNav`.
+- [ ] **iOS Safari Inputs:** Focusing reason textarea does not trigger browser auto-zoom (16px font below 1024px); on-screen keyboard does not cover textarea or "Send invitation" button.
+- [ ] **Sheet Ergonomics:** Swipe down, scrim tap, `Esc` key, and visible close button all dismiss sheets; background page is scroll-locked; notch/home-indicator safe areas respected.
+- [ ] **Accessibility & Reduced Motion:** Focus is trapped in sheets and returned on close; visible focus rings; with `prefers-reduced-motion: reduce`, sheets fade instead of sliding.
+- [ ] **Performance & CLS:** Skeleton-to-content swap causes zero layout shift (Lighthouse mobile CLS = 0).

@@ -42,10 +42,14 @@ import {
 import { Avatar } from '../../utils/avatarHelper';
 import { Badge, Button, Modal, ToastNotice } from '../../components/common/UIComponents';
 import { RequestMentorshipSheet, type TargetMentorInfo } from '../../components/directory/RequestMentorshipSheet';
+import { useStudentInvitations } from '../../features/outreach/useOutreach';
+
+const StudentInvitationsPanel = React.lazy(() => import('../../features/outreach/StudentInvitationsPanel').then(m => ({ default: m.StudentInvitationsPanel })));
+const DiscoverStudentsPanel = React.lazy(() => import('../../features/outreach/DiscoverStudentsPanel').then(m => ({ default: m.DiscoverStudentsPanel })));
 
 interface MentorshipPageProps {
   selectedMentorForBooking?: AlumniProfile | FacultyProfile | any | null;
-  initialSubTab?: 'find' | 'requests' | 'my-mentors' | 'mentees' | 'my-sent' | 'incoming';
+  initialSubTab?: 'find' | 'requests' | 'my-mentors' | 'mentees' | 'my-sent' | 'incoming' | 'invitations' | 'discover';
   setActiveTab: (tab: string, subTab?: string) => void;
 }
 
@@ -147,12 +151,14 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
   const isMentor = currentRole === 'alumni' || currentRole === 'faculty' || currentRole === 'teacher';
 
   // Subtabs
-  const [studentTab, setStudentTab] = useState<'find' | 'requests' | 'my-mentors'>(
-    initialSubTab === 'requests' || initialSubTab === 'my-sent' ? 'requests' : initialSubTab === 'my-mentors' ? 'my-mentors' : 'find'
+  const [studentTab, setStudentTab] = useState<'find' | 'requests' | 'my-mentors' | 'invitations'>(
+    initialSubTab === 'requests' || initialSubTab === 'my-sent' ? 'requests' : initialSubTab === 'my-mentors' ? 'my-mentors' : initialSubTab === 'invitations' ? 'invitations' : 'find'
   );
-  const [mentorTab, setMentorTab] = useState<'requests' | 'mentees'>(
-    initialSubTab === 'mentees' ? 'mentees' : 'requests'
+  const [mentorTab, setMentorTab] = useState<'requests' | 'mentees' | 'discover'>(
+    initialSubTab === 'mentees' ? 'mentees' : initialSubTab === 'discover' ? 'discover' : 'requests'
   );
+
+  const { pendingCount: pendingInvitationsCount } = useStudentInvitations(isStudent ? currentUser?.id : undefined);
 
   // Search & Filter state for Find a mentor
   const [searchQuery, setSearchQuery] = useState('');
@@ -545,13 +551,13 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
         </div>
 
         {/* ─── UNDERLINE TABS ────────────────────────────────────────────── */}
-        <div className="flex items-center border-b border-[#E5E7EB] space-x-6">
+        <div className="flex items-center border-b border-[#E5E7EB] space-x-6 overflow-x-auto">
           {isStudent ? (
             <>
               <button
                 type="button"
                 onClick={() => setStudentTab('find')}
-                className={`py-3 text-xs transition-colors relative cursor-pointer ${
+                className={`py-3 text-xs transition-colors relative cursor-pointer shrink-0 ${
                   studentTab === 'find'
                     ? 'font-semibold text-[#0A0A0A] border-b-2 border-[#0A0A0A]'
                     : 'font-medium text-[#6B7280] hover:text-[#0A0A0A] border-b-2 border-transparent'
@@ -562,7 +568,7 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
               <button
                 type="button"
                 onClick={() => setStudentTab('requests')}
-                className={`py-3 text-xs transition-colors relative cursor-pointer flex items-center gap-1.5 ${
+                className={`py-3 text-xs transition-colors relative cursor-pointer flex items-center gap-1.5 shrink-0 ${
                   studentTab === 'requests'
                     ? 'font-semibold text-[#0A0A0A] border-b-2 border-[#0A0A0A]'
                     : 'font-medium text-[#6B7280] hover:text-[#0A0A0A] border-b-2 border-transparent'
@@ -578,7 +584,7 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
               <button
                 type="button"
                 onClick={() => setStudentTab('my-mentors')}
-                className={`py-3 text-xs transition-colors relative cursor-pointer flex items-center gap-1.5 ${
+                className={`py-3 text-xs transition-colors relative cursor-pointer flex items-center gap-1.5 shrink-0 ${
                   studentTab === 'my-mentors'
                     ? 'font-semibold text-[#0A0A0A] border-b-2 border-[#0A0A0A]'
                     : 'font-medium text-[#6B7280] hover:text-[#0A0A0A] border-b-2 border-transparent'
@@ -591,13 +597,29 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
                   </span>
                 )}
               </button>
+              <button
+                type="button"
+                onClick={() => setStudentTab('invitations')}
+                className={`py-3 text-xs transition-colors relative cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                  studentTab === 'invitations'
+                    ? 'font-semibold text-[#0A0A0A] border-b-2 border-[#0A0A0A]'
+                    : 'font-medium text-[#6B7280] hover:text-[#0A0A0A] border-b-2 border-transparent'
+                }`}
+              >
+                <span>Invitations</span>
+                {pendingInvitationsCount > 0 && (
+                  <span className="px-1.5 py-0.2 bg-[#FEF3C7] text-[#92400E] text-[10px] font-bold rounded-full border border-[#FDE68A]">
+                    {pendingInvitationsCount}
+                  </span>
+                )}
+              </button>
             </>
           ) : (
             <>
               <button
                 type="button"
                 onClick={() => setMentorTab('requests')}
-                className={`py-3 text-xs transition-colors relative cursor-pointer flex items-center gap-1.5 ${
+                className={`py-3 text-xs transition-colors relative cursor-pointer flex items-center gap-1.5 shrink-0 ${
                   mentorTab === 'requests'
                     ? 'font-semibold text-[#0A0A0A] border-b-2 border-[#0A0A0A]'
                     : 'font-medium text-[#6B7280] hover:text-[#0A0A0A] border-b-2 border-transparent'
@@ -613,7 +635,7 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
               <button
                 type="button"
                 onClick={() => setMentorTab('mentees')}
-                className={`py-3 text-xs transition-colors relative cursor-pointer flex items-center gap-1.5 ${
+                className={`py-3 text-xs transition-colors relative cursor-pointer flex items-center gap-1.5 shrink-0 ${
                   mentorTab === 'mentees'
                     ? 'font-semibold text-[#0A0A0A] border-b-2 border-[#0A0A0A]'
                     : 'font-medium text-[#6B7280] hover:text-[#0A0A0A] border-b-2 border-transparent'
@@ -625,6 +647,17 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
                     {activeMentees.length}
                   </span>
                 )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMentorTab('discover')}
+                className={`py-3 text-xs transition-colors relative cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                  mentorTab === 'discover'
+                    ? 'font-semibold text-[#0A0A0A] border-b-2 border-[#0A0A0A]'
+                    : 'font-medium text-[#6B7280] hover:text-[#0A0A0A] border-b-2 border-transparent'
+                }`}
+              >
+                <span>Discover students</span>
               </button>
             </>
           )}
@@ -1203,6 +1236,20 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
               </div>
             )}
           </div>
+        )}
+
+        {/* ─── TAB CONTENT: STUDENT -> INVITATIONS ───────────────────────── */}
+        {isStudent && studentTab === 'invitations' && (
+          <React.Suspense fallback={<div className="p-8 text-center text-xs text-[#6B7280]">Loading invitations...</div>}>
+            <StudentInvitationsPanel onOpenChat={handleMessageUser} />
+          </React.Suspense>
+        )}
+
+        {/* ─── TAB CONTENT: MENTOR -> DISCOVER STUDENTS ─────────────────── */}
+        {isMentor && mentorTab === 'discover' && (
+          <React.Suspense fallback={<div className="p-8 text-center text-xs text-[#6B7280]">Loading discoverable students...</div>}>
+            <DiscoverStudentsPanel role={currentRole === 'faculty' || currentRole === 'teacher' ? 'faculty' : 'alumni'} />
+          </React.Suspense>
         )}
 
       </div>

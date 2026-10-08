@@ -124,7 +124,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
 
   return (
     <div className={`relative ${className}`} ref={containerRef}>
-      {/* Bell Trigger Button */}
+      {/* Bell Trigger Button: borderless 40px ghost button (#F3F4F6 hover, 2px #0A0A0A focus ring with offset) */}
       <button
         type="button"
         aria-label={`Notifications${unreadNotificationCount > 0 ? `, ${unreadNotificationCount} unread` : ''}`}
@@ -133,12 +133,12 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
           setIsOpen(!isOpen);
           setShowSettings(false);
         }}
-        className="relative p-2 text-[#4B5563] hover:text-[#0A0A0A] transition rounded-lg border border-[#E5E7EB] hover:bg-[#F9FAFB] bg-white cursor-pointer touch-target-44"
+        className="relative w-10 h-10 min-w-[40px] min-h-[40px] flex items-center justify-center text-[#4B5563] hover:text-[#0A0A0A] hover:bg-[#F3F4F6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0A0A0A] focus-visible:ring-offset-2 transition-colors rounded-lg border-0 bg-transparent cursor-pointer touch-target-44"
       >
-        <Bell className="w-4 h-4" />
+        <Bell className="w-5 h-5" />
         {unreadNotificationCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#0A0A0A] text-white text-[10px] font-mono font-bold flex items-center justify-center shadow-xs">
-            {capUnreadCount(unreadNotificationCount)}
+          <span className="absolute top-1.5 right-1.5 min-w-[16px] h-[16px] px-1 rounded-full bg-[#0A0A0A] text-white text-[10px] font-sans font-bold flex items-center justify-center pointer-events-none tabular-nums leading-none">
+            {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
           </span>
         )}
       </button>

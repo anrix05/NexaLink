@@ -583,7 +583,7 @@ export const OpportunityManageConsole: React.FC<OpportunityManageConsoleProps> =
               <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block mb-1">
                 Compensation & Work Mode
               </span>
-              <p className="text-base font-bold text-[#0A0A0A] font-mono">{job.stipendOrSalary}</p>
+              <p className="text-base font-bold text-[#0A0A0A] font-sans tabular-nums">{job.stipendOrSalary}</p>
               <p className="text-xs text-[#6B7280] mt-0.5">
                 {job.location} ({job.workMode || 'hybrid'})
               </p>

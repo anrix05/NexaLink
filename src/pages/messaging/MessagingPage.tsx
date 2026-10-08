@@ -62,6 +62,7 @@ import {
   ChevronLeft
 } from 'lucide-react';
 import { Modal } from '../../components/common/UIComponents';
+import { getDepartmentDisplayName } from '../../utils/enumMappers';
 
 export interface ContactItem {
   id: string;
@@ -70,12 +71,13 @@ export interface ContactItem {
   company: string;
   department: string;
   designation?: string;
-  type?: 'alumni' | 'faculty' | 'student';
+  type?: 'alumni' | 'faculty' | 'student' | 'admin';
   gradYear?: string;
   skills: string[];
   online: boolean;
   lastSeen?: string;
   lastMessageTopic: MentorshipGuidancePurpose;
+  isVerified?: boolean;
 }
 
 export const MessagingPage: React.FC = () => {
@@ -93,6 +95,7 @@ export const MessagingPage: React.FC = () => {
     alumniList,
     facultyList,
     studentList,
+    adminList,
     mentorshipRequests,
     markThreadAsRead,
     isDataLoading,
@@ -163,7 +166,7 @@ export const MessagingPage: React.FC = () => {
   // New conversation modal
   const [showNewConversationModal, setShowNewConversationModal] = useState(false);
   const [modalSearch, setModalSearch] = useState('');
-  const [modalFilter, setModalFilter] = useState<'all' | 'alumni' | 'faculty'>('all');
+  const [modalFilter, setModalFilter] = useState<'all' | 'student' | 'alumni' | 'faculty'>('all');
   const [manuallyAddedContactIds, setManuallyAddedContactIds] = useState<string[]>([]);
 
   // Scroll tracking
@@ -178,61 +181,105 @@ export const MessagingPage: React.FC = () => {
 
   // 1. Directory Profiles for contact resolution
   const allDirectoryProfiles = useMemo(() => {
-    return [
-      ...alumniList.map(a => {
-        const gradYear = (a as any).graduationYear || (a as any).gradYear;
-        const comp = a.company && a.company.toLowerCase() !== 'alumni' ? a.company : '';
-        const desig = (a.designation && a.designation.toLowerCase() !== 'alumni') ? a.designation : '';
-        return {
-          id: a.id,
-          name: a.name,
-          avatarUrl: a.avatar || '',
-          company: comp,
-          designation: desig,
-          department: a.department || 'Engineering',
-          type: 'alumni' as const,
-          gradYear: gradYear ? String(gradYear) : undefined,
-          skills: a.skills || [],
-          online: false,
-          lastSeen: 'Active recently',
-          lastMessageTopic: 'Career Mentorship' as MentorshipGuidancePurpose
-        };
-      }),
-      ...facultyList.map(f => {
-        const deptStr = f.department || 'CMPN';
-        const desigStr = f.designation && f.designation.toLowerCase() !== 'faculty' ? f.designation : 'Professor';
-        return {
-          id: f.id,
-          name: f.name,
-          avatarUrl: f.avatar || '',
-          company: 'Vidyalankar Institute of Technology',
-          designation: desigStr,
-          department: deptStr,
-          type: 'faculty' as const,
-          skills: f.researchAreas || [],
-          online: false,
-          lastSeen: 'Active recently',
-          lastMessageTopic: 'Research Guidance' as MentorshipGuidancePurpose
-        };
-      }),
-      ...studentList.map(s => {
-        const yearStr = (s as any).currentYear ? `${(s as any).currentYear} Year` : 'Student';
-        return {
-          id: s.id,
-          name: s.name,
-          avatarUrl: s.avatar || '',
-          company: s.department || 'Engineering',
-          designation: yearStr,
-          department: s.department || 'Engineering',
-          type: 'student' as const,
-          skills: s.skills || [],
-          online: false,
-          lastSeen: 'Active recently',
-          lastMessageTopic: 'General Mentorship' as MentorshipGuidancePurpose
-        };
-      })
-    ];
-  }, [alumniList, facultyList, studentList]);
+    const list: ContactItem[] = [];
+    const seenIds = new Set<string>();
+
+    // 1. Alumni
+    alumniList.forEach(a => {
+      if (seenIds.has(a.id)) return;
+      seenIds.add(a.id);
+      const isVerified = a.isVerified !== false && a.verificationStatus !== 'Pending Verification' && a.verificationStatus !== 'Rejected';
+      const gradYear = (a as any).graduationYear || (a as any).gradYear;
+      const comp = a.company && a.company.toLowerCase() !== 'alumni' && a.company.toLowerCase() !== 'campus member' ? a.company : '';
+      const desig = (a.designation && a.designation.toLowerCase() !== 'alumni') ? a.designation : '';
+      const deptName = getDepartmentDisplayName(a.department);
+
+      list.push({
+        id: a.id,
+        name: a.name,
+        avatarUrl: a.avatar || '',
+        company: comp || deptName || 'Alumni Member',
+        designation: desig || (gradYear ? `Class of ${gradYear}` : 'Alumni'),
+        department: a.department || 'Engineering',
+        type: ((a as any).role === 'faculty' ? 'faculty' : (a as any).role === 'student' ? 'student' : 'alumni') as 'alumni' | 'faculty' | 'student' | 'admin',
+        gradYear: gradYear ? String(gradYear) : undefined,
+        skills: a.skills || [],
+        online: false,
+        lastSeen: 'Active recently',
+        lastMessageTopic: 'Career Mentorship' as MentorshipGuidancePurpose,
+        isVerified
+      });
+    });
+
+    // 2. Faculty
+    facultyList.forEach(f => {
+      if (seenIds.has(f.id)) return;
+      seenIds.add(f.id);
+      const isVerified = f.isVerified !== false && f.verificationStatus !== 'Pending Verification' && f.verificationStatus !== 'Rejected';
+      const deptStr = f.department ? getDepartmentDisplayName(f.department) : 'Computer Engineering';
+      const desigStr = f.designation && f.designation.toLowerCase() !== 'faculty' ? f.designation : 'Professor';
+      list.push({
+        id: f.id,
+        name: f.name,
+        avatarUrl: f.avatar || '',
+        company: 'Vidyalankar Institute of Technology',
+        designation: desigStr,
+        department: deptStr,
+        type: ((f as any).role === 'alumni' ? 'alumni' : (f as any).role === 'student' ? 'student' : 'faculty') as 'alumni' | 'faculty' | 'student' | 'admin',
+        skills: f.researchAreas || [],
+        online: false,
+        lastSeen: 'Active recently',
+        lastMessageTopic: 'Research Guidance' as MentorshipGuidancePurpose,
+        isVerified
+      });
+    });
+
+    // 3. Students
+    studentList.forEach(s => {
+      if (seenIds.has(s.id)) return;
+      seenIds.add(s.id);
+      const isVerified = s.isVerified !== false && s.verificationStatus !== 'Pending Verification' && s.verificationStatus !== 'Rejected';
+      const yearStr = (s as any).currentYear ? `${(s as any).currentYear} Year` : 'Student';
+      const deptName = getDepartmentDisplayName(s.department);
+      list.push({
+        id: s.id,
+        name: s.name,
+        avatarUrl: s.avatar || '',
+        company: deptName || s.department || 'Engineering',
+        designation: yearStr,
+        department: s.department || 'Engineering',
+        type: ((s as any).role === 'faculty' ? 'faculty' : (s as any).role === 'alumni' ? 'alumni' : 'student') as 'alumni' | 'faculty' | 'student' | 'admin',
+        skills: s.skills || [],
+        online: false,
+        lastSeen: 'Active recently',
+        lastMessageTopic: 'General Mentorship' as MentorshipGuidancePurpose,
+        isVerified
+      });
+    });
+
+    // 4. Admins
+    (adminList || []).forEach(adm => {
+      if (seenIds.has(adm.id)) return;
+      seenIds.add(adm.id);
+      const isVerified = adm.isVerified !== false && adm.verificationStatus !== 'Pending Verification' && adm.verificationStatus !== 'Rejected';
+      list.push({
+        id: adm.id,
+        name: adm.name,
+        avatarUrl: adm.avatar || '',
+        company: 'Institutional Administration',
+        designation: 'Administrator',
+        department: adm.department || 'CMPN',
+        type: 'admin' as const,
+        skills: [],
+        online: false,
+        lastSeen: 'Active recently',
+        lastMessageTopic: 'Governance' as MentorshipGuidancePurpose,
+        isVerified
+      });
+    });
+
+    return list;
+  }, [alumniList, facultyList, studentList, adminList]);
 
   // Sync activeContactId to DataContext
   useEffect(() => {
@@ -1755,7 +1802,7 @@ export const MessagingPage: React.FC = () => {
         isOpen={showNewConversationModal}
         onClose={() => setShowNewConversationModal(false)}
         title="New direct conversation"
-        subtitle="Select any verified alumni or faculty member to start a direct thread."
+        subtitle="Select any verified member to start a direct thread."
         maxWidth="lg"
       >
         <div className="space-y-4 font-sans text-xs -mx-6 -my-6">
@@ -1771,8 +1818,8 @@ export const MessagingPage: React.FC = () => {
               />
             </div>
 
-            <div className="flex items-center gap-1.5">
-              {(['all', 'alumni', 'faculty'] as const).map(tab => (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {(['all', 'student', 'alumni', 'faculty'] as const).map(tab => (
                 <button
                   key={tab}
                   onClick={() => setModalFilter(tab)}
@@ -1782,7 +1829,7 @@ export const MessagingPage: React.FC = () => {
                       : 'bg-white text-[#6B7280] border border-[#E5E7EB] hover:text-[#0A0A0A]'
                   }`}
                 >
-                  {tab === 'all' ? 'All' : tab === 'alumni' ? 'Alumni' : 'Faculty'}
+                  {tab === 'all' ? 'All' : tab === 'student' ? 'Students' : tab === 'alumni' ? 'Alumni' : 'Faculty'}
                 </button>
               ))}
             </div>
@@ -1791,14 +1838,44 @@ export const MessagingPage: React.FC = () => {
           <div className="overflow-y-auto max-h-[50vh] p-4 px-6 divide-y divide-[#E5E7EB] custom-scrollbar">
             {allDirectoryProfiles
               .filter(p => p.id !== currentUserId)
+              .filter(p => (p as any).isVerified !== false)
               .filter(p => {
+                if (modalFilter === 'student' && p.type !== 'student') return false;
                 if (modalFilter === 'alumni' && p.type !== 'alumni') return false;
                 if (modalFilter === 'faculty' && p.type !== 'faculty') return false;
                 if (!modalSearch.trim()) return true;
                 const q = modalSearch.toLowerCase();
-                return p.name.toLowerCase().includes(q) || p.company.toLowerCase().includes(q) || p.department.toLowerCase().includes(q);
+                return (
+                  p.name.toLowerCase().includes(q) ||
+                  (p.company && p.company.toLowerCase().includes(q)) ||
+                  (p.department && p.department.toLowerCase().includes(q)) ||
+                  (p.designation && p.designation.toLowerCase().includes(q))
+                );
               })
               .map(person => {
+                const roleBadgeStyle =
+                  person.type === 'faculty'
+                    ? 'bg-purple-50 text-purple-700 border-purple-200'
+                    : person.type === 'alumni'
+                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                    : person.type === 'student'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-neutral-100 text-neutral-700 border-neutral-200';
+
+                const roleLabel =
+                  person.type === 'faculty'
+                    ? 'Faculty'
+                    : person.type === 'alumni'
+                    ? 'Alumni'
+                    : person.type === 'student'
+                    ? 'Student'
+                    : 'Admin';
+
+                const subtitleText =
+                  person.company && person.designation
+                    ? `${person.company} · ${person.designation}`
+                    : person.company || person.designation || person.department || 'NexaLink Member';
+
                 return (
                   <div
                     key={person.id}
@@ -1814,12 +1891,12 @@ export const MessagingPage: React.FC = () => {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <h4 className="font-semibold text-xs text-[#0A0A0A] truncate">{person.name}</h4>
-                          <span className="px-1.5 py-0.5 bg-[#F3F4F6] text-[#0A0A0A] border border-[#E5E7EB] text-[10px] font-semibold rounded-md">
-                            {person.type === 'alumni' ? 'Alumni' : 'Faculty'}
+                          <span className={`px-1.5 py-0.5 border text-[10px] font-semibold rounded-md ${roleBadgeStyle}`}>
+                            {roleLabel}
                           </span>
                         </div>
                         <p className="text-[11px] text-[#6B7280] truncate mt-0.5">
-                          {person.company} · {person.designation}
+                          {subtitleText}
                         </p>
                       </div>
                     </div>

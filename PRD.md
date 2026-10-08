@@ -126,9 +126,19 @@ All sensitive state mutations must pass through authenticated stored procedures 
 - Entries can only be written by the internal `private.write_audit()` procedure.
 - Each entry computes a SHA-256 hash chaining `id`, `prev_hash`, `action`, `actor_id`, `created_at`, and `payload`, creating an immutable cryptographic chain.
 
+#### 4.4.1 Profile View Transparency & 90-Day Retention
+- The `student_profile_views` table records one entry per viewer per student per calendar day (`viewer_id`, `student_id`, `viewed_on`).
+- Students have transparent read access to their 30-day viewer history in Field Privacy settings.
+- Automated data retention policy purges entries older than 90 days.
+
 ### 4.5 Server-Side Lockout & Rate Limiting
 - `auth_attempts` tracks failed authentication attempts using a SHA-256 hash of the email and client IP.
 - The `auth-login-guard` Supabase Edge Function enforces a 15-minute lockout if 5 failed attempts occur within a 15-minute sliding window.
+
+#### 4.5.1 Outreach Rate Limiting & Cooldown Guards
+- The `send_outreach_invitation` RPC enforces a strict rolling 7-day rate limit of at most 5 invitations per sender.
+- Rapid withdrawals within 5 minutes do not penalize sender quota.
+- When a student declines an invitation, a mandatory 60-day decline cooldown prevents re-invitations to that student.
 
 ### 4.6 Storage Hardening & Chat Attachment Pipeline
 - Verification proof documents in the `proof-documents` bucket are non-public and require 60-second time-limited signed URLs generated via server RPC.
@@ -141,6 +151,15 @@ All sensitive state mutations must pass through authenticated stored procedures 
 - `20261002000001_v3_flows_and_moderation.sql`: Moderation reporting snapshots, role transition triggers.
 - `20261002000002_chat_and_mentorship_hardening.sql`: Chat reactions, soft deletes, mentorship seen-at timestamps.
 - `20261003000001_messaging_v2_core.sql`: Client message ID UUID idempotency, attachment metadata models, 15m edit windows.
+- `20261009000001_student_outreach.sql`: Student discovery settings, invitations, blocks, views, and privileged RPCs.
+
+### 4.8 Sovereign Student Discovery & Outreach (v2.8.0)
+- **Sovereign Student Consent:** Students maintain complete control over outreach visibility via `student_outreach_settings` (`open_to_outreach` master toggle, defaulting to `false`).
+- **Database Masking:** Alumni discovery queries return initials avatars only, suppressing personal photos, PRNs, personal emails, institutional emails, and phone numbers.
+- **Academic Mandate Support:** Faculty view all verified students in their own department (with photo and PRN), but view cross-department students only if opted in.
+- **1:1 Chat Channel Creation:** Acceptance transitions invitation status to `accepted` and triggers 1:1 conversation opening via `setPendingChatUserId`.
+- **Signed Resume Access:** The `get_student_resume_url` RPC dispenses short-lived (10-minute) signed resume URLs strictly after invitation acceptance or to own-department faculty.
+- **10-Tier Responsive Matrix:** Fully responsive layout ranging from 320px to 1920px+ viewports, bottom sheets (<1024px) capped at 560px on tablet, centered dialogs (≥1024px), 44×44px touch targets, and zero CLS skeleton layouts.
 
 ---
 

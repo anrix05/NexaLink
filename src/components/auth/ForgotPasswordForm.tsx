@@ -39,7 +39,7 @@ export const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
 
     const trimmed = email.trim().toLowerCase();
     if (!trimmed) {
-      setEmailError('Please enter your institutional email address.');
+      setEmailError('Please enter your registered email address.');
       return;
     }
 
@@ -186,7 +186,7 @@ export const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
               type="email"
               inputMode="email"
               autoComplete="username"
-              placeholder="e.g. yourname@student.vit.edu.in"
+              placeholder="e.g. yourname@student.vit.edu.in or personal email"
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);

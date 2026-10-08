@@ -538,7 +538,7 @@ export const AdminModerationQueue: React.FC<AdminModerationQueueProps> = ({
                   <div className="p-3.5 bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
                     <div>
                       <span className="text-[10px] text-[#6B7280] uppercase tracking-wider block">Compensation</span>
-                      <span className="font-bold text-[#0A0A0A] font-mono">{activeJob.stipendOrSalary}</span>
+                      <span className="font-bold text-[#0A0A0A] font-sans tabular-nums">{activeJob.stipendOrSalary}</span>
                     </div>
                     <div>
                       <span className="text-[10px] text-[#6B7280] uppercase tracking-wider block">Deadline</span>

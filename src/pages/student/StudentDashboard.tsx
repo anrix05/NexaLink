@@ -32,8 +32,9 @@ import {
 } from '../../components/ui';
 import { Button, TextField, Modal } from '../../components/common/UIComponents';
 import { uploadProofDocument } from '../../lib/storage';
-import { InstitutionalAnnouncementFeed } from '../../components/common/InstitutionalAnnouncementFeed';
 import { getGreetingName } from '../../utils/validators';
+import { NoticeBoard } from '../../components/notices/NoticeBoard';
+import { formatIstDate } from '../../utils/dateUtils';
 
 interface StudentDashboardProps {
   setActiveTab: (tab: string, subTab?: string) => void;
@@ -336,6 +337,9 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
         )}
       </PageHeader>
 
+      {/* Important notices (placed at the top on <1280px screens) */}
+      <NoticeBoard variant="top" role="student" setActiveTab={setActiveTab} />
+
       {/* 2. FocusPanel: Single Emphasis Surface per Viewport ("Your next step") */}
       <FocusPanel
         eyebrow="Next action"
@@ -420,10 +424,6 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
         
         {/* Main Column */}
         <div className="flex-1 min-w-0 space-y-10 w-full">
-          
-          {/* Institutional Announcements Feed */}
-          <InstitutionalAnnouncementFeed announcements={announcements} userRole="student" />
-
           {/* Recommended Mentors Section (Rendered as ListRow rows, not cards) */}
           <Section
             title="Recommended mentors"
@@ -511,8 +511,8 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
                       </div>
                     }
                     title={job.title}
-                    meta={<span className="text-xs font-mono text-[#0A0A0A]">{job.stipendOrSalary}</span>}
-                    subtitle={`${job.company} · ${job.location} · Posted: ${job.postedDate}`}
+                    meta={<span className="text-xs font-sans tabular-nums text-[#0A0A0A]">{job.stipendOrSalary}</span>}
+                    subtitle={`${job.company} · ${job.location} · Posted ${formatIstDate(job.postedDate)}`}
                     trailing={
                       <button
                         type="button"
@@ -557,7 +557,7 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
                       className="p-3 rounded-lg border border-[#E5E7EB] hover:bg-[#FAFAFA] transition-colors cursor-pointer space-y-1.5"
                     >
                       <div className="flex items-center justify-between text-[11px] text-[#6B7280]">
-                        <span className="font-mono">{event.date}</span>
+                        <span className="font-sans tabular-nums">{event.date ? formatIstDate(event.date) : ''}</span>
                         {isRsvpd && (
                           <StatusBadge label="RSVP'd" tone="emerald" size="sm" />
                         )}
@@ -575,14 +575,8 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
             )}
           </div>
 
-          {/* Academic Deadlines / Notices */}
-          <div className="space-y-3 pt-6 border-t border-[#E5E7EB]">
-            <h3 className="text-sm font-semibold text-[#0A0A0A]">Important notices</h3>
-            <div className="space-y-2 text-xs text-[#6B7280] leading-relaxed">
-              <p>• Final semester project review submissions due by next Friday.</p>
-              <p>• Placement cell campus recruitment registration window open for Batch 2025.</p>
-            </div>
-          </div>
+          {/* Real Important Notices in RightRail (≥1280px) */}
+          <NoticeBoard variant="rail" role="student" setActiveTab={setActiveTab} />
         </RightRail>
 
       </div>

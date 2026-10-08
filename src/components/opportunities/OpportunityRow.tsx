@@ -134,7 +134,7 @@ export const OpportunityRow: React.FC<OpportunityRowProps> = ({
                         idx === 0
                           ? 'font-medium text-[#0A0A0A]'
                           : idx === 1
-                          ? 'font-mono text-[#0A0A0A]'
+                          ? 'font-sans tabular-nums text-[#0A0A0A]'
                           : deadlineStatus.isUrgent
                           ? 'text-[#B45309] font-medium'
                           : 'text-[#6B7280]'

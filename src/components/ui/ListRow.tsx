@@ -36,7 +36,7 @@ export const ListRow: React.FC<ListRowProps> = ({
           onClick?.();
         }
       }}
-      className={`min-h-[56px] sm:min-h-[64px] py-3.5 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E5E7EB] transition-colors duration-150 ${
+      className={`min-h-[56px] sm:min-h-[64px] py-3.5 px-4 flex items-center justify-between gap-3 border-b border-[#E5E7EB] transition-colors duration-150 ${
         isFirst ? 'border-t border-[#E5E7EB]' : ''
       } ${
         isInteractive
@@ -49,10 +49,10 @@ export const ListRow: React.FC<ListRowProps> = ({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-[#0A0A0A] truncate">
+            <span className="text-sm font-semibold text-[#0A0A0A] line-clamp-2 leading-snug break-words">
               {title}
             </span>
-            {meta && <span className="text-xs text-[#6B7280]">{meta}</span>}
+            {meta && <span className="text-xs text-[#6B7280] shrink-0">{meta}</span>}
           </div>
           {subtitle && (
             <div className="text-xs text-[#6B7280] font-normal truncate mt-0.5">
@@ -63,7 +63,7 @@ export const ListRow: React.FC<ListRowProps> = ({
       </div>
 
       {trailing && (
-        <div className="shrink-0 flex items-center gap-2 self-start sm:self-auto">
+        <div className="shrink-0 flex items-center gap-2">
           {trailing}
         </div>
       )}

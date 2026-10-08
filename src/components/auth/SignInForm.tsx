@@ -40,14 +40,24 @@ export const SignInForm: React.FC<SignInFormProps> = ({
   const [emailUnconfirmed, setEmailUnconfirmed] = useState(false);
   const resendCooldown = useCountdown({ initialSeconds: 30, autoStart: false });
 
+  // Notice state for post-password-reset redirection
+  const [resetNotice, setResetNotice] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const notice = sessionStorage.getItem('nexalink_signin_notice');
+      if (notice) {
+        sessionStorage.removeItem('nexalink_signin_notice');
+        return notice;
+      }
+    }
+    return null;
+  });
+
   const emailInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
-
-
   const validate = () => {
     const errors: { email?: string; password?: string } = {};
-    const trimmedEmail = email.trim();
+    const trimmedEmail = email.trim().toLowerCase();
 
     if (!trimmedEmail) {
       errors.email = 'Email address is required.';
@@ -77,7 +87,7 @@ export const SignInForm: React.FC<SignInFormProps> = ({
     setIsSubmitting(true);
 
     try {
-      const res = await login(email.trim(), password);
+      const res = await login(email.trim().toLowerCase(), password);
 
       if (res.success) {
         setIsSuccess(true);
@@ -119,6 +129,15 @@ export const SignInForm: React.FC<SignInFormProps> = ({
           Sign in with the email linked to your VIT Wadala profile.
         </p>
       </div>
+
+      {/* Reset Password Success Notice */}
+      {resetNotice && (
+        <InlineAlert
+          tone="emerald"
+          title="Password updated"
+          message={resetNotice}
+        />
+      )}
 
       {/* Server Lockout Alert (aria-live) */}
       {lockoutTimer.isRunning && (

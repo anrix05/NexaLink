@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { FormField } from './FormField';
 import { PasswordField } from './PasswordField';
 import { InlineAlert } from './InlineAlert';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { authService } from '../../services/authService';
 
 export interface ResetPasswordFormProps {
   onSuccess: () => void;
@@ -51,19 +51,17 @@ export const ResetPasswordForm: React.FC<ResetPasswordFormProps> = ({
     setIsSubmitting(true);
 
     try {
-      if (isSupabaseConfigured()) {
-        const { error } = await supabase.auth.updateUser({ password });
-        if (error) {
-          setGeneralError(error.message || 'Failed to update password. Link may have expired.');
-          setIsSubmitting(false);
-          return;
-        }
+      const res = await authService.updatePassword(password);
+      if (!res.ok) {
+        setGeneralError(res.error || 'Failed to update password. Link may have expired.');
+        setIsSubmitting(false);
+        return;
       }
 
       setIsSuccess(true);
       setTimeout(() => {
         onSuccess();
-      }, 1800);
+      }, 1500);
     } catch (err: any) {
       setGeneralError(err.message || 'Failed to reset password.');
     } finally {

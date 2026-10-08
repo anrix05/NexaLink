@@ -39,8 +39,19 @@ import { GlobalErrorToaster } from './components/common/GlobalErrorToaster';
 import { useData } from './context/DataContext';
 import { MobileChromeProvider } from './context/MobileChromeContext';
 import { NotificationToast } from './components/notifications/NotificationToast';
+import { NoticesViewAllPage } from './components/notices/NoticesViewAllPage';
 import type { AlumniProfile } from './types';
 
+// Eager capture of admin invite token before any redirect, tab normalisation, or history.replaceState
+if (typeof window !== 'undefined') {
+  try {
+    const startupParams = new URLSearchParams(window.location.search);
+    const initialToken = startupParams.get('token');
+    if (initialToken) {
+      sessionStorage.setItem('nexalink:admin-invite-token', initialToken.trim());
+    }
+  } catch {}
+}
 
 const getInitialActiveTab = (): string => {
   if (typeof window === 'undefined') return 'landing';
@@ -174,9 +185,11 @@ const MainContent: React.FC = () => {
     if (TAB_PATH_MAP[tab]) return TAB_PATH_MAP[tab];
     const url = new URL(window.location.href);
     url.pathname = '/';
+    const currentToken = tab === 'admin-invite' ? (url.searchParams.get('token') || (typeof window !== 'undefined' ? sessionStorage.getItem('nexalink:admin-invite-token') : null)) : null;
     url.search = '';
     url.searchParams.set('tab', tab);
     if (sub) url.searchParams.set('subtab', sub);
+    if (currentToken) url.searchParams.set('token', currentToken);
     return url.pathname + url.search;
   };
 
@@ -361,6 +374,8 @@ const MainContent: React.FC = () => {
         return <AdminDashboard setActiveTab={handleTabChange} initialTab="moderation" />;
       case 'announcements':
         return <AdminDashboard setActiveTab={handleTabChange} initialTab="announcements" />;
+      case 'notices':
+        return <NoticesViewAllPage setActiveTab={handleTabChange} />;
       case 'audit':
       case 'audit-log':
         return <AdminDashboard setActiveTab={handleTabChange} initialTab="audit" />;
@@ -394,7 +409,7 @@ const MainContent: React.FC = () => {
   const showAdminMobileInterstitial = isPortalTab && currentRole === 'admin' && isMobileScreen && !adminBypassWarning;
 
   // Intercept unverified accounts and isolate in minimal GateShell (no sidebar, no search, no bell)
-  if (isUnverified && activeTab !== 'privacy' && activeTab !== 'terms' && activeTab !== 'data-governance' && activeTab !== 'auth' && activeTab !== 'verify') {
+  if (isUnverified && activeTab !== 'privacy' && activeTab !== 'terms' && activeTab !== 'data-governance' && activeTab !== 'auth' && activeTab !== 'verify' && activeTab !== 'admin-invite') {
     return (
       <GateShell>
         <VerificationPendingPage setActiveTab={setActiveTab} />
@@ -450,7 +465,7 @@ const MainContent: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {!welcomeRevealName && !isPortalTab && activeTab !== 'verify' && (
+      {!welcomeRevealName && !isPortalTab && activeTab !== 'verify' && activeTab !== 'admin-invite' && (
         <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
       )}
 
@@ -591,8 +606,8 @@ const MainContent: React.FC = () => {
         </main>
       )}
 
-      {/* Footer rendered for public and verified portal pages only (hidden for unverified pending and verify views) */}
-      {!isUnverified && !isPortalTab && activeTab !== 'verify' && <Footer setActiveTab={setActiveTab} isPublicPage={true} />}
+      {/* Footer rendered for public and verified portal pages only (hidden for unverified pending, verify, and admin-invite views) */}
+      {!isUnverified && !isPortalTab && activeTab !== 'verify' && activeTab !== 'admin-invite' && <Footer setActiveTab={setActiveTab} isPublicPage={true} />}
 
       {/* Global Realtime Notification Toast */}
       <NotificationToast

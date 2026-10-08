@@ -674,17 +674,25 @@ export const authService = {
     const targetEmail = (email || '').replace(/^\+/, '').trim().toLowerCase();
     const isMock = import.meta.env.DEV && import.meta.env.VITE_DATA_MODE === 'mock';
 
+    if (typeof window !== 'undefined' && targetEmail) {
+      sessionStorage.setItem('nexalink_active_recovery_email', targetEmail);
+    }
+
     if (!isMock && isSupabaseConfigured()) {
       try {
         const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
           redirectTo: `${window.location.origin}/reset-password`
         });
         if (error) {
-          return { ok: false, error: error.message };
+          const lower = (error.message || '').toLowerCase();
+          if (lower.includes('smtp') || lower.includes('mail') || lower.includes('rate limit')) {
+            return { ok: false, error: 'We could not send the code. Try again later' };
+          }
+          return { ok: false, error: error.message || 'We could not send the code. Try again later' };
         }
         return { ok: true };
       } catch (err: any) {
-        return { ok: false, error: err.message || 'Failed to request password reset.' };
+        return { ok: false, error: err.message || 'We could not send the code. Try again later' };
       }
     }
 
@@ -692,7 +700,7 @@ export const authService = {
       return { ok: true };
     }
 
-    return { ok: false, error: 'Authentication service unavailable.' };
+    return { ok: false, error: 'We could not send the code. Try again later' };
   },
 
   /**
@@ -711,6 +719,10 @@ export const authService = {
 
     if (!token || token.length !== 6) {
       return { ok: false, error: 'Please enter the complete 6-digit code.' };
+    }
+
+    if (typeof window !== 'undefined' && targetEmail) {
+      sessionStorage.setItem('nexalink_active_recovery_email', targetEmail);
     }
 
     const isMock = import.meta.env.DEV && import.meta.env.VITE_DATA_MODE === 'mock';
@@ -743,10 +755,10 @@ export const authService = {
     }
 
     if (isMock) {
-      if (token === '123456') {
+      if (token === '482910') {
         return { ok: true };
       }
-      return { ok: false, error: 'Incorrect recovery code. (Demo code: 123456)' };
+      return { ok: false, error: 'Incorrect recovery code. (Demo code: 482910)' };
     }
 
     return { ok: false, error: 'Authentication service unavailable.' };
@@ -764,6 +776,7 @@ export const authService = {
    */
   async updatePassword(newPassword: string): Promise<{ ok: boolean; user?: any; error?: string }> {
     const isMock = import.meta.env.DEV && import.meta.env.VITE_DATA_MODE === 'mock';
+    const targetEmail = typeof window !== 'undefined' ? sessionStorage.getItem('nexalink_active_recovery_email') : null;
 
     if (!isMock && isSupabaseConfigured()) {
       try {
@@ -771,8 +784,40 @@ export const authService = {
           password: newPassword
         });
         if (error) {
-          return { ok: false, error: error.message };
+          const lower = (error.message || '').toLowerCase();
+          let userMsg = error.message;
+          if (lower.includes('same password') || lower.includes('different from old')) {
+            userMsg = 'New password cannot be the same as your old password.';
+          } else if (lower.includes('weak') || lower.includes('at least')) {
+            userMsg = 'Password is too weak. Please choose a stronger password with at least 10 characters.';
+          } else if (lower.includes('session') || lower.includes('expired') || lower.includes('jwt')) {
+            userMsg = 'Your recovery session has expired. Please request a new code.';
+          } else if (lower.includes('network') || lower.includes('fetch')) {
+            userMsg = 'Network connection error. Please check your internet connection and retry.';
+          }
+          return { ok: false, error: userMsg };
         }
+
+        // Sign out recovery session so user logs in fresh
+        await supabase.auth.signOut().catch(() => {});
+
+        // Clear server lockout if email known
+        if (targetEmail) {
+          try {
+            await supabase.from('login_attempts').delete().eq('email', targetEmail);
+          } catch {}
+          try {
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem(`nexalink_lockout_${targetEmail}`);
+            }
+          } catch {}
+        }
+
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('nexalink_signin_notice', 'Sign in with your new password');
+          sessionStorage.removeItem('nexalink_active_recovery_email');
+        }
+
         return { ok: true, user: data?.user };
       } catch (err: any) {
         return { ok: false, error: err.message || 'Failed to update password.' };
@@ -780,7 +825,69 @@ export const authService = {
     }
 
     if (isMock) {
-      return { ok: true };
+      try {
+        if (typeof window !== 'undefined') {
+          // 1. Update mock credentials store
+          const credsStr = localStorage.getItem('nexalink_mock_credentials');
+          let creds: Record<string, string> = {};
+          if (credsStr) {
+            try { creds = JSON.parse(credsStr); } catch {}
+          }
+          if (targetEmail) {
+            creds[targetEmail] = newPassword;
+            localStorage.setItem('nexalink_mock_credentials', JSON.stringify(creds));
+          }
+
+          // 2. Update nexalink_users_registry
+          const regStr = localStorage.getItem('nexalink_users_registry');
+          if (regStr) {
+            try {
+              const reg = JSON.parse(regStr);
+              if (Array.isArray(reg)) {
+                const updated = reg.map((u: any) => {
+                  if (
+                    targetEmail &&
+                    (u.email?.toLowerCase() === targetEmail ||
+                     u.personalEmail?.toLowerCase() === targetEmail ||
+                     u.institutionalEmail?.toLowerCase() === targetEmail)
+                  ) {
+                    return { ...u, password: newPassword };
+                  }
+                  return u;
+                });
+                localStorage.setItem('nexalink_users_registry', JSON.stringify(updated));
+              }
+            } catch {}
+          }
+
+          // 3. Update nexalink_auth_user if matches
+          const authUserStr = localStorage.getItem('nexalink_auth_user');
+          if (authUserStr) {
+            try {
+              const au = JSON.parse(authUserStr);
+              if (
+                targetEmail &&
+                (au.email?.toLowerCase() === targetEmail ||
+                 au.personalEmail?.toLowerCase() === targetEmail ||
+                 au.institutionalEmail?.toLowerCase() === targetEmail)
+              ) {
+                au.password = newPassword;
+                localStorage.setItem('nexalink_auth_user', JSON.stringify(au));
+              }
+            } catch {}
+          }
+
+          // 4. Clear any local lockout
+          if (targetEmail) {
+            localStorage.removeItem(`nexalink_lockout_${targetEmail}`);
+          }
+          sessionStorage.setItem('nexalink_signin_notice', 'Sign in with your new password');
+          sessionStorage.removeItem('nexalink_active_recovery_email');
+        }
+        return { ok: true };
+      } catch (err: any) {
+        return { ok: false, error: err.message || 'Failed to update mock password.' };
+      }
     }
 
     return { ok: false, error: 'Authentication service unavailable.' };

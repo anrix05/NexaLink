@@ -67,6 +67,9 @@ export const ThreadHeader: React.FC<ThreadHeaderProps> = ({
       if (contact.designation && contact.designation.toLowerCase() !== 'faculty') {
         parts.push(contact.designation);
       }
+    } else if (contact.type === 'admin') {
+      parts.push('Admin');
+      parts.push('Institutional Administration');
     } else {
       parts.push('Student');
       if (contact.department) parts.push(contact.department);
@@ -84,7 +87,7 @@ export const ThreadHeader: React.FC<ThreadHeaderProps> = ({
       return true;
     });
 
-    return unique.join(' · ') || (contact.type === 'alumni' ? 'Alumni' : contact.type === 'faculty' ? 'Faculty' : 'Student');
+    return unique.join(' · ') || (contact.type === 'alumni' ? 'Alumni' : contact.type === 'faculty' ? 'Faculty' : contact.type === 'admin' ? 'Admin' : 'Student');
   }, [contact]);
 
   return (

@@ -396,8 +396,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: err };
     }
 
-    // 4. Check for user registered locally in this browser
+    const mockCredsStr = typeof window !== 'undefined' ? localStorage.getItem('nexalink_mock_credentials') : null;
+    let mockCreds: Record<string, string> = {};
+    if (mockCredsStr) {
+      try { mockCreds = JSON.parse(mockCredsStr); } catch {}
+    }
     const savedLocalUser = getLocalMockUser(targetEmail);
+    const expectedPassword = mockCreds[targetEmail] || savedLocalUser?.password;
+    if (expectedPassword && actualPassword && actualPassword !== expectedPassword) {
+      const err = "We couldn't sign you in. Check your email and password.";
+      setLoginError(err);
+      setIsAuthenticated(false);
+      setWelcomeRevealName(null);
+      return { success: false, message: err };
+    }
+
+    // 4. Check for user registered locally in this browser
     if (savedLocalUser) {
       setCurrentRole(savedLocalUser.role || 'student');
       setCurrentUser(savedLocalUser);
@@ -694,68 +708,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const completePasswordReset = async (
     newPassword: string
   ): Promise<{ success: boolean; message: string }> => {
-    if (!newPassword || newPassword.length < 6) {
-      return { success: false, message: 'Password must be at least 6 characters in length.' };
+    if (!newPassword || newPassword.length < 10) {
+      return { success: false, message: 'Password must be at least 10 characters in length.' };
     }
 
-    if (isSupabaseConfigured() && (import.meta.env.PROD || import.meta.env.VITE_DATA_MODE !== 'mock')) {
-      try {
-        // 1. Update the password using the active recovery session (Rule 1)
-        const updateRes = await authService.updatePassword(newPassword);
-        if (!updateRes.ok) {
-          return {
-            success: false,
-            message: updateRes.error || 'Failed to update password. Reset code may be invalid or expired.'
-          };
-        }
-
-        // 2. Properly refresh the session to exit recovery state into full authenticated session
-        const { data: refreshData } = await supabase.auth.refreshSession();
-        const authedUser = refreshData?.session?.user || updateRes.user || (await supabase.auth.getUser()).data?.user;
-
-        if (!authedUser) {
-          return {
-            success: false,
-            message: 'Password updated, but active session could not be refreshed. Please sign in.'
-          };
-        }
-
-        // 3. Clear recovery gating flags
-        setIsRecoveryMode(false);
-        isRecoveryModeRef.current = false;
-        setRecoveryError(null);
-
-        // 4. Load full profile from database and establish authenticated state
-        await loadUserProfileFromSupabase(authedUser.id, true);
-        setIsAuthenticated(true);
-        wasAuthenticatedRef.current = true;
-
-        // 5. Clean up the URL (remove #access_token=... and reset-password paths)
-        if (typeof window !== 'undefined' && window.history?.replaceState) {
-          const cleanPath = window.location.pathname === '/reset-password' ? '/' : window.location.pathname;
-          window.history.replaceState({}, document.title, cleanPath);
-        }
-
-        return {
-          success: true,
-          message: 'Password successfully updated! Redirecting to your dashboard...'
-        };
-      } catch (err: any) {
+    try {
+      const updateRes = await authService.updatePassword(newPassword);
+      if (!updateRes.ok) {
         return {
           success: false,
-          message: err.message || 'An unexpected error occurred while resetting password.'
+          message: updateRes.error || 'Failed to update password. Reset code may be invalid or expired.'
         };
       }
-    }
 
-    // Fallback for demo mode
-    setIsRecoveryMode(false);
-    isRecoveryModeRef.current = false;
-    setRecoveryError(null);
-    return {
-      success: true,
-      message: 'Password updated successfully (Demo Mode).'
-    };
+      // Exit recovery mode without auto-login
+      setIsRecoveryMode(false);
+      isRecoveryModeRef.current = false;
+      setRecoveryError(null);
+      setIsAuthenticated(false);
+      wasAuthenticatedRef.current = false;
+
+      // Clean up URL parameters
+      if (typeof window !== 'undefined' && window.history?.replaceState) {
+        const cleanPath = window.location.pathname === '/reset-password' ? '/' : window.location.pathname;
+        window.history.replaceState({}, document.title, cleanPath);
+      }
+
+      return {
+        success: true,
+        message: 'Password changed successfully. Sign in with your new password.'
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err.message || 'An unexpected error occurred while resetting password.'
+      };
+    }
   };
 
   const confirmPasswordReset = async (
@@ -786,7 +774,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     clearRecoveryMode();
     if (typeof window !== 'undefined') {
       localStorage.removeItem('nexalink_auth_user');
+      const savedInviteToken = sessionStorage.getItem('nexalink:admin-invite-token');
       sessionStorage.clear();
+      if (savedInviteToken) {
+        sessionStorage.setItem('nexalink:admin-invite-token', savedInviteToken);
+      }
     }
   };
 
