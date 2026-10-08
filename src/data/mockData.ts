@@ -5,8 +5,8 @@
 // ============================================================================
 
 let devMock: any = {};
-if (import.meta.env.DEV) {
-  devMock = await import('../dev/mock');
+if ((typeof import.meta !== 'undefined' && import.meta?.env?.DEV) || (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production')) {
+  devMock = await import('../dev/mock/index.ts');
 }
 
 export const DEV_SEED_MARKER = devMock.DEV_SEED_MARKER;

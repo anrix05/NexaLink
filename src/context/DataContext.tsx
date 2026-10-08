@@ -544,11 +544,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (import.meta.env.DEV) {
             console.log('[DataContext] Supabase returned empty users or error, populating initial demo users');
             const mockData = await import('../data/mockData');
-            setAdminList([mockData.DEMO_ADMIN, mockData.DEMO_ADMIN_2]);
-            setAdminInvites(mockData.INITIAL_ADMIN_INVITES);
-            setAlumniList(mockData.INITIAL_ALUMNI);
-            setStudentList(mockData.INITIAL_STUDENTS);
-            setFacultyList(mockData.INITIAL_TEACHERS);
+            setAdminList([mockData.DEMO_ADMIN, mockData.DEMO_ADMIN_2].filter(Boolean));
+            setAdminInvites((mockData.INITIAL_ADMIN_INVITES || []).filter(Boolean));
+            setAlumniList((mockData.INITIAL_ALUMNI || []).filter(Boolean));
+            setStudentList((mockData.INITIAL_STUDENTS || []).filter(Boolean));
+            setFacultyList((mockData.INITIAL_TEACHERS || []).filter(Boolean));
           } else {
             setStudentList([]);
             setAlumniList([]);
@@ -1155,9 +1155,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const allUsers = [...adminList, ...alumniList, ...studentList, ...facultyList];
+  const allUsers = [...adminList, ...alumniList, ...studentList, ...facultyList].filter(Boolean);
   const pendingUsersList = allUsers.filter(
     u =>
+      u &&
       u.verificationStatus !== 'Rejected' &&
       u.verificationStatus !== 'Deactivated' &&
       u.verificationStatus !== 'Verified' &&

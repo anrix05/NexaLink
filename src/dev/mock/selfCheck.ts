@@ -15,7 +15,7 @@ import type {
   OpportunityApplication,
   AuditLogEntry
 } from '../../types';
-import { normalizeOpportunityType, EVENT_CATEGORIES } from '../../constants/taxonomy';
+import { normalizeOpportunityType, EVENT_CATEGORIES } from '../../constants/taxonomy.ts';
 
 export interface SelfCheckDataStore {
   jobsList: JobListing[];

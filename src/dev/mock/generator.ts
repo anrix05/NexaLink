@@ -17,14 +17,14 @@ import type {
   EventType,
   NotificationType
 } from '../../types';
-import { SeededRandom } from './random';
-import { generateSvgAvatar, generateSampleDocumentSvg } from './avatars';
+import { SeededRandom } from './random.ts';
+import { generateSvgAvatar, generateSampleDocumentSvg } from './avatars.ts';
 import {
   daysAgo,
   daysFromNow,
   hoursAgo,
   dateOnlyString
-} from './time';
+} from './time.ts';
 import {
   DEPARTMENTS,
   DEPARTMENT_NAMES,
@@ -34,7 +34,7 @@ import {
   LAST_NAMES,
   SKILLS_BY_DEPARTMENT,
   CAREER_GOALS
-} from './lists';
+} from './lists.ts';
 
 export interface GeneratedSeedData {
   demoAdmin: User;

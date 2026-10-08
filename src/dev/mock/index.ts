@@ -1,4 +1,4 @@
-import { buildDeterministicSeed, type GeneratedSeedData } from './generator';
+import { buildDeterministicSeed, type GeneratedSeedData } from './generator.ts';
 import type {
   User,
   StudentProfile,
@@ -20,8 +20,8 @@ import type {
   UserRole
 } from '../../types';
 
-export { DEV_SEED_MARKER } from './marker';
-export { runSeedSelfCheck, getLastSelfCheckResult } from './selfCheck';
+export { DEV_SEED_MARKER } from './marker.ts';
+export { runSeedSelfCheck, getLastSelfCheckResult } from './selfCheck.ts';
 
 // In-memory single instance holding the active mock dataset
 let currentSeed: GeneratedSeedData = buildDeterministicSeed();

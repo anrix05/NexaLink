@@ -1,4 +1,4 @@
-import { DEPARTMENTS, type DepartmentInfo } from '../data/constants';
+import { DEPARTMENTS, type DepartmentInfo } from '../data/constants.ts';
 
 export type { DepartmentInfo };
 export const DEPARTMENT_TAXONOMY = DEPARTMENTS;
