@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotices } from '../../hooks/useNotices';
 import { NoticeDetailModal } from './NoticeDetailModal';
+import { stripAnnouncementMeta } from '../common/InstitutionalAnnouncementFeed';
 import type { Announcement, UserRole } from '../../types';
 import { formatIstDate } from '../../utils/dateUtils';
 import { formatRelativeTime } from '../../utils/notificationHelpers';
@@ -203,7 +204,7 @@ const NoticeBoardContent: React.FC<NoticeBoardProps> = ({
                     {notice.title}
                   </h4>
                   <p className="text-xs text-[#4B5563] line-clamp-2 mt-0.5 leading-relaxed">
-                    {notice.content}
+                    {stripAnnouncementMeta(notice.content)}
                   </p>
                 </div>
 
@@ -292,7 +293,7 @@ const NoticeBoardContent: React.FC<NoticeBoardProps> = ({
                   {notice.title}
                 </h4>
                 <p className="text-[11px] text-[#6B7280] line-clamp-2 mt-0.5 leading-relaxed">
-                  {notice.content}
+                  {stripAnnouncementMeta(notice.content)}
                 </p>
               </button>
             ))}

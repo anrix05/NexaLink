@@ -16,22 +16,24 @@ import { Badge } from './UIComponents';
 export const ANNOUNCEMENT_META_PREFIX = '<!--nexalink_meta:';
 export const ANNOUNCEMENT_META_SUFFIX = '-->';
 
+export const stripAnnouncementMeta = (rawContent?: string | null): string => {
+  if (!rawContent) return '';
+  return rawContent.replace(/<!--[\s\S]*?-->/g, '').trim();
+};
+
 export const parseAnnouncementMeta = (rawContent: string) => {
   if (!rawContent) {
     return { cleanContent: '', meta: null };
   }
-  const match = rawContent.match(/<!--nexalink[_:]meta:(.*?)-->\s*/s);
+  let meta: any = null;
+  const match = rawContent.match(/<!--nexalink[_:]meta:(.*?)-->/s);
   if (match) {
     try {
-      const meta = JSON.parse(match[1]);
-      const cleanContent = rawContent.replace(match[0], '').trim();
-      return { cleanContent, meta };
-    } catch {
-      const cleanContent = rawContent.replace(match[0], '').trim();
-      return { cleanContent, meta: null };
-    }
+      meta = JSON.parse(match[1]);
+    } catch {}
   }
-  return { cleanContent: rawContent, meta: null };
+  const cleanContent = stripAnnouncementMeta(rawContent);
+  return { cleanContent, meta };
 };
 
 export const serializeAnnouncementContent = (

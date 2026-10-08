@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotices } from '../../hooks/useNotices';
 import { NoticeDetailModal } from './NoticeDetailModal';
+import { stripAnnouncementMeta } from '../common/InstitutionalAnnouncementFeed';
 import type { Announcement } from '../../types';
 import { formatIstDate } from '../../utils/dateUtils';
 import { formatRelativeTime } from '../../utils/notificationHelpers';
@@ -234,7 +235,7 @@ export const NoticesViewAllPage: React.FC<NoticesViewAllPageProps> = ({ setActiv
               </h3>
 
               <p className="text-xs sm:text-sm text-[#4B5563] line-clamp-3 mt-1.5 leading-relaxed whitespace-pre-line">
-                {notice.content}
+                {stripAnnouncementMeta(notice.content)}
               </p>
             </div>
           ))}

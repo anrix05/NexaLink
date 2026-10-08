@@ -316,6 +316,7 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
   const studentAcceptedRequests = studentRequests.filter(r => r.status === 'Accepted');
   const studentPendingRequests = studentRequests.filter(r => r.status === 'Pending');
   const studentDeclinedRequests = studentRequests.filter(r => r.status === 'Declined');
+  const studentCompletedRequests = studentRequests.filter(r => r.status === 'Completed');
 
   // Student active relationships (My Mentors)
   const myActiveMentors = useMemo(() => {
@@ -618,9 +619,9 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
                 }`}
               >
                 <span>Requests</span>
-                {studentRequests.length > 0 && (
-                  <span className="px-1.5 py-0.2 bg-[#F3F4F6] text-[#0A0A0A] text-[10px] font-bold rounded-full border border-[#E5E7EB]">
-                    {studentRequests.length}
+                {studentPendingCount > 0 && (
+                  <span className="px-1.5 py-0.2 bg-[#FEF3C7] text-[#92400E] text-[10px] font-bold rounded-full border border-[#FDE68A]">
+                    {studentPendingCount}
                   </span>
                 )}
               </button>
@@ -925,7 +926,7 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
               </div>
             )}
 
-            {studentRequests.length === 0 ? (
+            {studentPendingRequests.length === 0 && studentAcceptedRequests.length === 0 && studentDeclinedRequests.length === 0 && studentCompletedRequests.length === 0 ? (
               <div className="border border-[#E5E7EB] rounded-2xl p-12 text-center max-w-md mx-auto space-y-3">
                 <Clock className="w-8 h-8 text-[#9CA3AF] mx-auto opacity-50" />
                 <h3 className="font-bold text-sm text-[#0A0A0A]">No mentorship requests yet</h3>
@@ -1083,6 +1084,56 @@ const StandardMentorshipPage: React.FC<MentorshipPageProps> = ({
                               onClick={() => setStudentTab('find')}
                             >
                               Find another mentor
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Completed Section */}
+                {studentCompletedRequests.length > 0 && (
+                  <div className="space-y-3">
+                    <h2 className="text-xs font-bold text-[#0A0A0A] uppercase tracking-wider flex items-center gap-2">
+                      <span>Completed sessions</span>
+                      <span className="px-2 py-0.5 bg-[#ECFDF5] text-[#065F46] text-[10px] font-bold rounded-full border border-[#A7F3D0]">
+                        {studentCompletedRequests.length}
+                      </span>
+                    </h2>
+
+                    <div className="divide-y divide-[#E5E7EB] border border-[#E5E7EB] rounded-2xl bg-white overflow-hidden">
+                      {studentCompletedRequests.map(req => (
+                        <div key={req.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="space-y-1.5 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-xs text-[#0A0A0A]">{req.mentorName}</span>
+                              <span className="px-2 py-0.5 bg-[#ECFDF5] text-[#065F46] text-[10px] font-semibold rounded-full border border-[#A7F3D0]">
+                                Completed
+                              </span>
+                              {req.feedback && typeof req.feedback === 'object' && req.feedback.rating && (
+                                <span className="text-[11px] text-[#D97706] font-semibold flex items-center gap-0.5">
+                                  ★ {req.feedback.rating}/5
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs font-medium text-[#0A0A0A]">{req.topic || req.purposeOfRequest}</p>
+                            {req.feedback && typeof req.feedback === 'object' && req.feedback.review && (
+                              <p className="text-[11px] text-[#6B7280]">
+                                Your feedback: "{req.feedback.review}"
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleMessageUser(req.mentorId)}
+                              className="cursor-pointer"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5 mr-1" />
+                              <span>Message</span>
                             </Button>
                           </div>
                         </div>

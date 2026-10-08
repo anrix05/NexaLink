@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { X, Calendar, User, Tag, AlertTriangle, Pin } from 'lucide-react';
 import type { Announcement } from '../../types';
 import { formatIstDate } from '../../utils/dateUtils';
+import { stripAnnouncementMeta } from '../common/InstitutionalAnnouncementFeed';
 
 export interface NoticeDetailModalProps {
   notice: Announcement | null;
@@ -73,7 +74,7 @@ export const NoticeDetailModal: React.FC<NoticeDetailModalProps> = ({
 
         {/* Content Body */}
         <div className="p-6 overflow-y-auto space-y-4 text-xs sm:text-sm text-[#1F2937] leading-relaxed whitespace-pre-line">
-          {notice.content}
+          {stripAnnouncementMeta(notice.content)}
         </div>
 
         {/* Footer Metadata */}
