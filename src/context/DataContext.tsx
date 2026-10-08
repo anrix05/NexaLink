@@ -72,6 +72,37 @@ const addDeletedAnnouncementId = (id: string) => {
   } catch {}
 };
 
+const MENTORSHIP_OVERRIDES_STORAGE_KEY = 'nexalink_mentorship_overrides';
+
+const getMentorshipOverrides = (): Record<string, Partial<MentorshipRequest>> => {
+  try {
+    const raw = localStorage.getItem(MENTORSHIP_OVERRIDES_STORAGE_KEY);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch {}
+  return {};
+};
+
+const saveMentorshipOverride = (requestId: string, patch: Partial<MentorshipRequest>) => {
+  try {
+    const overrides = getMentorshipOverrides();
+    overrides[requestId] = { ...(overrides[requestId] || {}), ...patch };
+    localStorage.setItem(MENTORSHIP_OVERRIDES_STORAGE_KEY, JSON.stringify(overrides));
+  } catch {}
+};
+
+const applyMentorshipOverrides = (requests: MentorshipRequest[]): MentorshipRequest[] => {
+  const overrides = getMentorshipOverrides();
+  if (!overrides || Object.keys(overrides).length === 0) return requests;
+  return requests.map(req => {
+    if (overrides[req.id]) {
+      return { ...req, ...overrides[req.id] };
+    }
+    return req;
+  });
+};
+
 interface DataContextType {
   alumniList: AlumniProfile[];
   studentList: StudentProfile[];
@@ -612,26 +643,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           try {
             const mRequests = await mentorshipService.getMentorshipRequests();
             if (mRequests && mRequests.length > 0) {
-              setMentorshipRequests(mRequests);
+              setMentorshipRequests(applyMentorshipOverrides(mRequests));
             } else if (import.meta.env.DEV) {
               const mockData = await import('../data/mockData');
-              setMentorshipRequests(mockData.INITIAL_MENTORSHIP_REQUESTS);
+              setMentorshipRequests(applyMentorshipOverrides(mockData.INITIAL_MENTORSHIP_REQUESTS));
             } else if (!isLiveMode()) {
               const mockData = await import('../data/mockData');
-              setMentorshipRequests(mockData.INITIAL_MENTORSHIP_REQUESTS);
+              setMentorshipRequests(applyMentorshipOverrides(mockData.INITIAL_MENTORSHIP_REQUESTS));
             } else {
-              setMentorshipRequests([]);
+              setMentorshipRequests(applyMentorshipOverrides([]));
             }
           } catch (e) {
             console.error('Failed to load mentorship requests from mentorshipService:', e);
             if (import.meta.env.DEV || !isLiveMode()) {
               const mockData = await import('../data/mockData');
-              setMentorshipRequests(mockData.INITIAL_MENTORSHIP_REQUESTS);
+              setMentorshipRequests(applyMentorshipOverrides(mockData.INITIAL_MENTORSHIP_REQUESTS));
             }
           }
         } else {
           const mockData = await import('../data/mockData');
-          setMentorshipRequests(mockData.INITIAL_MENTORSHIP_REQUESTS);
+          setMentorshipRequests(applyMentorshipOverrides(mockData.INITIAL_MENTORSHIP_REQUESTS));
         }
 
         // 5. Fetch Announcements
@@ -2732,6 +2763,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
     );
 
+    saveMentorshipOverride(requestId, {
+      status,
+      meetingNotes: notes || undefined,
+      declineReason: status === 'Declined' ? (notes || 'Declined by mentor') : undefined,
+      scheduledTime: status === 'Accepted' ? 'Upcoming Saturday at 7:00 PM IST' : undefined
+    });
+
     addAuditLog('MENTORSHIP_STATUS_UPDATE', callerRole || 'Advisor', `Updated request ${requestId} status to ${status}`, requestId);
 
     if (isSupabaseConfigured() && isValidUUID(requestId)) {
@@ -2760,6 +2798,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       )
     );
 
+    saveMentorshipOverride(requestId, {
+      status: 'Completed',
+      feedback: feedbackObj
+    });
+
     addAuditLog('MENTORSHIP_FEEDBACK', 'Student', `Submitted ${rating}-star feedback rating for mentorship session.`, requestId);
 
     if (isSupabaseConfigured() && isValidUUID(requestId)) {
@@ -2776,6 +2819,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return req;
     }));
+    saveMentorshipOverride(requestId, { status: 'Withdrawn' });
     addAuditLog('MENTORSHIP_WITHDRAWN', currentUser?.name || 'Student', `Withdrew mentorship request ${requestId}`, requestId);
     if (isSupabaseConfigured() && isValidUUID(requestId)) {
       mentorshipService.updateStatus(requestId, 'Withdrawn')
@@ -2795,6 +2839,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return req;
     }));
+    saveMentorshipOverride(requestId, {
+      status: 'Completed',
+      ...(feedbackObj ? { feedback: feedbackObj } : {})
+    });
     addAuditLog('MENTORSHIP_COMPLETED', currentUser?.name || 'User', `Marked mentorship request ${requestId} as completed`, requestId);
     if (isSupabaseConfigured() && isValidUUID(requestId)) {
       mentorshipService.updateStatus(requestId, 'Completed', {
