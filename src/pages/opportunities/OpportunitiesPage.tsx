@@ -57,7 +57,7 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
   const liveJobsCount = React.useMemo(() => {
     return jobsList.filter(
       j => j.status !== 'Closed' &&
-        (!j.moderationStatus || j.moderationStatus === 'Approved')
+        (!j.moderationStatus || j.moderationStatus === 'Approved' || j.postedByRole === 'admin' || j.postedByRole === 'faculty')
     ).length;
   }, [jobsList]);
 

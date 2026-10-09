@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { jobsService } from '../../services/jobsService';
 import { Modal, Button, TextArea } from '../../components/common/UIComponents';
 import { exportCsvBlob } from '../../utils/chunkedExporter';
+import { formatDate } from '../../utils/formatters';
 import type {
   JobListing,
   OpportunityApplication,
@@ -84,39 +85,7 @@ export const OpportunityManageConsole: React.FC<OpportunityManageConsoleProps> =
 
   // Get applications for this opportunity
   const currentApplications: OpportunityApplication[] = useMemo(() => {
-    const list = opportunityApplications.filter(a => a.opportunityId === jobId);
-    if (list.length > 0) return list;
-    // Fallback: If no application records in mock, provide simulated applicants matching candidates
-    return [
-      {
-        id: `app-demo-1`,
-        opportunityId: jobId,
-        applicantId: 'user-student-1',
-        applicantName: 'Aanya Sharma',
-        applicantEmail: 'aanya.sharma@vit.edu.in',
-        applicantDepartment: 'CMPN' as const,
-        applicantYear: '2026',
-        matchScore: 94,
-        resumePath: 'https://nexalink.vit.edu.in/resumes/aanya-sharma.pdf',
-        studentNote: 'I have hands-on experience building distributed systems in Go and TypeScript with Docker and Redis.',
-        status: 'shortlisted',
-        appliedAt: '2026-03-12T10:30:00Z'
-      },
-      {
-        id: `app-demo-2`,
-        opportunityId: jobId,
-        applicantId: 'user-student-2',
-        applicantName: 'Rohan Mehta',
-        applicantEmail: 'rohan.mehta@vit.edu.in',
-        applicantDepartment: 'INFT' as const,
-        applicantYear: '2025',
-        matchScore: 82,
-        resumePath: 'https://nexalink.vit.edu.in/resumes/rohan-mehta.pdf',
-        studentNote: 'Strong background in cloud infrastructure, AWS lambda, and full-stack web applications.',
-        status: 'submitted',
-        appliedAt: '2026-03-14T14:15:00Z'
-      }
-    ];
+    return opportunityApplications.filter(a => a.opportunityId === jobId);
   }, [opportunityApplications, jobId]);
 
   // Filtered applicants
@@ -286,7 +255,7 @@ export const OpportunityManageConsole: React.FC<OpportunityManageConsoleProps> =
               {job.title}
             </h1>
             <p className="text-xs text-[#6B7280]">
-              {job.company} • {job.location} • Closes {job.applicationDeadline} ({daysRemaining} days left)
+              {job.company} • {job.location} • Closes {job.applicationDeadline ? formatDate(job.applicationDeadline) : '—'} ({daysRemaining} days left)
             </p>
           </div>
         </div>
@@ -363,7 +332,7 @@ export const OpportunityManageConsole: React.FC<OpportunityManageConsoleProps> =
             Deadline
           </span>
           <p className="text-2xl font-bold text-[#0A0A0A] font-mono">{daysRemaining}d</p>
-          <span className="text-[11px] text-[#6B7280]">{job.applicationDeadline}</span>
+          <span className="text-[11px] text-[#6B7280]">{job.applicationDeadline ? formatDate(job.applicationDeadline) : '—'}</span>
         </div>
       </div>
 

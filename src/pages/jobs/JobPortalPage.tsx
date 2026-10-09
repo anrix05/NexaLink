@@ -10,6 +10,7 @@ import { OpportunityDetailPanel } from '../../components/opportunities/Opportuni
 import { ApplyOpportunitySheet } from '../../components/opportunities/ApplyOpportunitySheet';
 import { OpportunityComposerPage } from '../opportunities/OpportunityComposerPage';
 import { OpportunityManageConsole } from '../opportunities/OpportunityManageConsole';
+import { formatDate } from '../../utils/formatters';
 import {
   Search,
   Plus,
@@ -225,7 +226,7 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
   const publishedJobs = useMemo(() => {
     return jobsList.filter(
       j => j.status !== 'Closed' &&
-        (!j.moderationStatus || j.moderationStatus === 'Approved' || j.postedByRole === 'admin' || currentRole === 'admin')
+        (!j.moderationStatus || j.moderationStatus === 'Approved' || j.postedByRole === 'admin' || j.postedByRole === 'faculty' || currentRole === 'admin' || currentRole === 'faculty')
     );
   }, [jobsList, currentRole]);
 
@@ -397,7 +398,8 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
     setNewSalary('');
     setNewDescription('');
 
-    if (isAdmin) {
+    const isAutoPub = isAdmin || currentRole === 'faculty';
+    if (isAutoPub) {
       setApplySuccessMsg('Opportunity published directly to institutional feeds.');
     } else {
       setApplySuccessMsg('Opportunity submitted to admin queue for moderation.');
@@ -729,8 +731,8 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
           ) : (
             <div className="bg-white border border-[#E5E7EB] rounded-2xl overflow-hidden shadow-none divide-y divide-[#E5E7EB]">
               {hostJobs.map(j => {
-                const isLive = j.status === 'Active';
-                const isUnderReview = j.status === 'Pending Approval' || j.moderationStatus === 'Pending Approval';
+                const isLive = j.status === 'Active' || j.postedByRole === 'faculty' || j.postedByRole === 'admin' || j.moderationStatus === 'Approved';
+                const isUnderReview = !isLive && (j.status === 'Pending Approval' || j.moderationStatus === 'Pending Approval');
                 const isDraft = j.lifecycleStatus === 'draft';
 
                 return (
@@ -771,7 +773,7 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
                         <span>•</span>
                         <span className="font-sans tabular-nums text-[#0A0A0A]">{j.stipendOrSalary}</span>
                         <span>•</span>
-                        <span>Closes {j.applicationDeadline}</span>
+                        <span>Closes {j.applicationDeadline ? formatDate(j.applicationDeadline) : '—'}</span>
                       </div>
                     </div>
 

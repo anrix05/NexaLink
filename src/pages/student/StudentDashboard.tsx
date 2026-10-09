@@ -139,7 +139,7 @@ const StudentDashboardContent: React.FC<StudentDashboardProps & { studentProfile
   const activeStudentRequests = myStudentRequests.filter(r => r.status === 'Pending' || r.status === 'Accepted');
   const totalSmartMatches = recommendedAlumniMatches.length + recommendedFacultyMatches.length;
   const publishedJobs = jobsList.filter(
-    j => j.status !== 'Closed' && (j.moderationStatus === 'Approved' || j.postedByRole === 'admin')
+    j => j.status !== 'Closed' && (j.moderationStatus === 'Approved' || j.postedByRole === 'admin' || j.postedByRole === 'faculty')
   );
   const upcomingEvents = eventsList.filter(e => {
     const eventTime = new Date(`${e.date} ${e.time || '00:00'}`).getTime();

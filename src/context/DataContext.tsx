@@ -1556,19 +1556,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const isPostByAdmin = role === 'admin';
+    const isAutoApproved = role === 'admin' || role === 'faculty';
     const tempId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined;
     const newJob: JobListing = {
       ...jobData,
       id: tempId || `job-${Date.now()}`,
       postedDate: new Date().toISOString().split('T')[0],
       applicantsCount: 0,
-      status: 'Pending Approval',
-      moderationStatus: 'Pending Approval',
+      status: isAutoApproved ? 'Active' : 'Pending Approval',
+      moderationStatus: isAutoApproved ? 'Approved' : 'Pending Approval',
       postedByRole: isPostByAdmin ? 'admin' : (jobData.postedByRole || 'alumni')
     };
     setJobsList(prev => [newJob, ...prev]);
 
-    addAuditLog('OPPORTUNITY_POSTED', isPostByAdmin ? 'Institutional Admin' : (jobData.postedByAlumniName || 'Publisher'), `Submitted opportunity "${jobData.title}" (Status: Pending Moderation Approval)`, newJob.id);
+    addAuditLog(
+      isAutoApproved ? 'OPPORTUNITY_PUBLISHED' : 'OPPORTUNITY_POSTED',
+      isPostByAdmin ? 'Institutional Admin' : (jobData.postedByAlumniName || 'Publisher'),
+      `${isAutoApproved ? 'Published' : 'Submitted'} opportunity "${jobData.title}" (Status: ${isAutoApproved ? 'Active & Published' : 'Pending Moderation Approval'})`,
+      newJob.id
+    );
 
     if (isSupabaseConfigured()) {
       jobsService.createJob({
