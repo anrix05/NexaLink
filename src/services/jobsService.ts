@@ -32,6 +32,7 @@ function mapRowToJob(j: any): JobListing {
     applicantsCount: j.applicants_count || 0,
     status: j.status || 'Active',
     moderationStatus: j.moderation_status || 'Approved',
+    lifecycleStatus: j.lifecycle_status || (j.status === 'Active' ? 'published' : 'draft'),
     rejectionReason: j.rejection_reason || undefined
   };
 }
@@ -62,6 +63,11 @@ export const jobsService = {
       ? jobData.id!
       : (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined);
 
+    const sessionUser = (await supabase.auth.getUser()).data.user;
+    const authorId = isValidUuid(jobData.postedByAlumniId)
+      ? jobData.postedByAlumniId
+      : sessionUser?.id;
+
     const payload: any = {
       title: jobData.title || 'Untitled Opportunity',
       company: jobData.company || 'Institutional Partner',
@@ -71,8 +77,8 @@ export const jobsService = {
       stipend_or_salary: jobData.stipendOrSalary || 'Competitive',
       department: normalizeDepartmentArray(jobData.department as any),
       skills_required: jobData.skillsRequired || [],
-      posted_by_alumni_id: jobData.postedByAlumniId,
-      posted_by_alumni_name: jobData.postedByAlumniName || 'Alumni Partner',
+      posted_by_alumni_id: authorId || null,
+      posted_by_alumni_name: jobData.postedByAlumniName || sessionUser?.user_metadata?.full_name || sessionUser?.user_metadata?.name || 'Alumni Partner',
       posted_by_role: jobData.postedByRole || 'alumni',
       posted_date: toPgTimestamp(jobData.postedDate),
       application_deadline: toPgTimestamp(jobData.applicationDeadline || new Date(Date.now() + 30 * 86400000)),
@@ -84,6 +90,10 @@ export const jobsService = {
       moderation_status: normalizeModerationStatus(jobData.moderationStatus),
       rejection_reason: jobData.rejectionReason || null
     };
+
+    if (jobData.lifecycleStatus) {
+      payload.lifecycle_status = jobData.lifecycleStatus;
+    }
 
     if (jobId) {
       payload.id = jobId;

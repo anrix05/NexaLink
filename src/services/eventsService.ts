@@ -29,7 +29,13 @@ function mapRowToEvent(e: any): EventItem {
     status: e.status || 'Upcoming',
     capacityLimit: e.capacity_limit || 50,
     waitlistUserIds: e.waitlist_user_ids || [],
-    feedbackEntries: e.feedback_entries || []
+    feedbackEntries: e.feedback_entries || [],
+    hostId: e.host_id || undefined,
+    hostRole: e.host_role || undefined,
+    hostName: e.host_name || undefined,
+    lifecycleStatus: e.lifecycle_status || undefined,
+    startsAt: e.starts_at || undefined,
+    endsAt: e.ends_at || undefined
   };
 }
 
@@ -80,6 +86,26 @@ export const eventsService = {
       feedback_entries: []
     };
 
+    const sessionUser = (await supabase.auth.getUser()).data.user;
+    const hostId = isValidUuid(eventData.hostId) ? eventData.hostId : sessionUser?.id;
+    if (hostId) {
+      payload.host_id = hostId;
+    }
+    if (eventData.hostName || sessionUser?.user_metadata?.full_name || sessionUser?.user_metadata?.name) {
+      payload.host_name = eventData.hostName || sessionUser?.user_metadata?.full_name || sessionUser?.user_metadata?.name;
+    }
+    if (eventData.hostRole) {
+      payload.host_role = eventData.hostRole;
+    }
+    if (eventData.lifecycleStatus) {
+      payload.lifecycle_status = eventData.lifecycleStatus;
+    }
+    if (eventData.startsAt) {
+      payload.starts_at = eventData.startsAt;
+    }
+    if (eventData.endsAt) {
+      payload.ends_at = eventData.endsAt;
+    }
 
     if (eventId) {
       payload.id = eventId;
