@@ -1136,8 +1136,8 @@ export const MessagingPage: React.FC = () => {
                       onClick={async () => {
                         if (benchmarkThreadMessages) {
                           setBenchmarkThreadMessages(null);
-                        } else {
-                          const { generate200MessageThread } = await import('../../data/mockData');
+                        } else if (import.meta.env.DEV) {
+                          const { generate200MessageThread } = await import('../../dev/mock');
                           setBenchmarkThreadMessages(generate200MessageThread(currentUserId, activeContact.id, activeContact.name));
                         }
                       }}

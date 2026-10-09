@@ -253,12 +253,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isMockSessionRef.current = true;
     
     if (import.meta.env.DEV) {
-      let mockData: any;
-      try {
-        mockData = await import('../dev/mock');
-      } catch {
-        mockData = await import('../data/mockData');
-      }
+      const mockData = await import('../dev/mock');
       let targetUser: any = mockData.DEMO_STUDENT;
       if (role === 'admin') {
         targetUser = mockData.DEMO_ADMIN;
@@ -439,51 +434,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true };
     }
 
-    // 5. Specific Demo accounts from mockData
-    const mockData = await import('../data/mockData');
-    let authenticatedUser: any = null;
-    let assignedRole: UserRole = 'student';
+    // 5. Specific Demo accounts from mockData (DEV only)
+    if (import.meta.env.DEV) {
+      const mockData = await import('../dev/mock');
+      let authenticatedUser: any = null;
+      let assignedRole: UserRole = 'student';
 
-    if (targetEmail === 'admin@vit.edu.in' || targetEmail === 'rajesh.kumar@vit.edu.in') {
-      assignedRole = 'admin';
-      authenticatedUser = targetEmail === 'rajesh.kumar@vit.edu.in' ? mockData.DEMO_ADMIN_2 : mockData.DEMO_ADMIN;
-    } else if (
-      targetEmail === 'rushabh.sanghavi@alumni.vit.edu.in' ||
-      targetEmail === 'rushabh.sanghavi@gmail.com' ||
-      targetEmail === 'rushil.dahisaria@alumni.vit.edu.in'
-    ) {
-      assignedRole = 'alumni';
-      authenticatedUser = mockData.DEMO_ALUMNI;
-    } else if (
-      targetEmail === 'ravindra.sangale@vit.edu.in' ||
-      targetEmail === 'ravindra.sangale@gmail.com' ||
-      targetEmail === 'vidya.chitre@vit.edu.in' ||
-      targetEmail === 'arun.chavan@vit.edu.in'
-    ) {
-      assignedRole = 'faculty';
-      authenticatedUser = mockData.DEMO_FACULTY;
-    } else if (
-      targetEmail === 'aanya.patel@student.vit.edu.in' ||
-      targetEmail === 'aanya.patel@gmail.com'
-    ) {
-      assignedRole = 'student';
-      authenticatedUser = mockData.DEMO_STUDENT;
-    } else if (explicitRole) {
-      assignedRole = explicitRole;
-      if (explicitRole === 'admin') authenticatedUser = mockData.DEMO_ADMIN;
-      else if (explicitRole === 'alumni') authenticatedUser = mockData.DEMO_ALUMNI;
-      else if (explicitRole === 'faculty') authenticatedUser = mockData.DEMO_FACULTY;
-      else authenticatedUser = mockData.DEMO_STUDENT;
-    }
+      if (targetEmail === 'admin@vit.edu.in' || targetEmail === 'rajesh.kumar@vit.edu.in') {
+        assignedRole = 'admin';
+        authenticatedUser = targetEmail === 'rajesh.kumar@vit.edu.in' ? mockData.DEMO_ADMIN_2 : mockData.DEMO_ADMIN;
+      } else if (
+        targetEmail === 'rushabh.sanghavi@alumni.vit.edu.in' ||
+        targetEmail === 'rushabh.sanghavi@gmail.com' ||
+        targetEmail === 'rushil.dahisaria@alumni.vit.edu.in'
+      ) {
+        assignedRole = 'alumni';
+        authenticatedUser = mockData.DEMO_ALUMNI;
+      } else if (
+        targetEmail === 'ravindra.sangale@vit.edu.in' ||
+        targetEmail === 'ravindra.sangale@gmail.com' ||
+        targetEmail === 'vidya.chitre@vit.edu.in' ||
+        targetEmail === 'arun.chavan@vit.edu.in'
+      ) {
+        assignedRole = 'faculty';
+        authenticatedUser = mockData.DEMO_FACULTY;
+      } else if (
+        targetEmail === 'aanya.patel@student.vit.edu.in' ||
+        targetEmail === 'aanya.patel@gmail.com'
+      ) {
+        assignedRole = 'student';
+        authenticatedUser = mockData.DEMO_STUDENT;
+      } else if (explicitRole) {
+        assignedRole = explicitRole;
+        if (explicitRole === 'admin') authenticatedUser = mockData.DEMO_ADMIN;
+        else if (explicitRole === 'alumni') authenticatedUser = mockData.DEMO_ALUMNI;
+        else if (explicitRole === 'faculty') authenticatedUser = mockData.DEMO_FACULTY;
+        else authenticatedUser = mockData.DEMO_STUDENT;
+      }
 
-    if (authenticatedUser) {
-      isMockSessionRef.current = true;
-      setCurrentRole(assignedRole);
-      setCurrentUser(authenticatedUser);
-      setIsAuthenticated(true);
-      wasAuthenticatedRef.current = true;
-      triggerWelcomeRevealIfVerified(authenticatedUser);
-      return { success: true };
+      if (authenticatedUser) {
+        isMockSessionRef.current = true;
+        setCurrentRole(assignedRole);
+        setCurrentUser(authenticatedUser);
+        setIsAuthenticated(true);
+        wasAuthenticatedRef.current = true;
+        triggerWelcomeRevealIfVerified(authenticatedUser);
+        return { success: true };
+      }
     }
 
     // If targetEmail is neither a valid Supabase user, nor registered locally, nor a demo account:

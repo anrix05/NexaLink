@@ -543,7 +543,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           if (import.meta.env.DEV) {
             console.log('[DataContext] Supabase returned empty users or error, populating initial demo users');
-            const mockData = await import('../data/mockData');
+            const mockData = await import('../dev/mock');
             setAdminList([mockData.DEMO_ADMIN, mockData.DEMO_ADMIN_2].filter(Boolean));
             setAdminInvites((mockData.INITIAL_ADMIN_INVITES || []).filter(Boolean));
             setAlumniList((mockData.INITIAL_ALUMNI || []).filter(Boolean));
@@ -564,24 +564,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (jobs && jobs.length > 0) {
               setJobsList(jobs);
             } else if (import.meta.env.DEV) {
-              const mockData = await import('../data/mockData');
-              setJobsList(mockData.INITIAL_JOBS);
-            } else if (!isLiveMode()) {
-              const mockData = await import('../data/mockData');
+              const mockData = await import('../dev/mock');
               setJobsList(mockData.INITIAL_JOBS);
             } else {
               setJobsList([]);
             }
           } catch (e) {
             console.error('Failed to load jobs from jobsService:', e);
-            if (import.meta.env.DEV || !isLiveMode()) {
-              const mockData = await import('../data/mockData');
+            if (import.meta.env.DEV) {
+              const mockData = await import('../dev/mock');
               setJobsList(mockData.INITIAL_JOBS);
+            } else {
+              setJobsList([]);
             }
           }
-        } else {
-          const mockData = await import('../data/mockData');
+        } else if (import.meta.env.DEV) {
+          const mockData = await import('../dev/mock');
           setJobsList(mockData.INITIAL_JOBS);
+        } else {
+          setJobsList([]);
         }
 
         // 2b. Fetch Job Applications
@@ -591,21 +592,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (apps && apps.length > 0) {
               setOpportunityApplications(apps);
             } else if (import.meta.env.DEV) {
-              const mockData = await import('../data/mockData');
-              setOpportunityApplications(mockData.INITIAL_APPLICATIONS || []);
-            } else if (!isLiveMode()) {
-              const mockData = await import('../data/mockData');
+              const mockData = await import('../dev/mock');
               setOpportunityApplications(mockData.INITIAL_APPLICATIONS || []);
             } else {
               setOpportunityApplications([]);
             }
           } catch (e) {
             console.error('Failed to load applications from jobsService:', e);
-            if (import.meta.env.DEV || !isLiveMode()) {
-              const mockData = await import('../data/mockData');
+            if (import.meta.env.DEV) {
+              const mockData = await import('../dev/mock');
               setOpportunityApplications(mockData.INITIAL_APPLICATIONS || []);
+            } else {
+              setOpportunityApplications([]);
             }
           }
+        } else if (import.meta.env.DEV) {
+          const mockData = await import('../dev/mock');
+          setOpportunityApplications(mockData.INITIAL_APPLICATIONS || []);
+        } else {
+          setOpportunityApplications([]);
         }
 
         // 3. Fetch Events
@@ -615,27 +620,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (evts && evts.length > 0) {
               setEventsList(evts);
             } else if (import.meta.env.DEV) {
-              const mockData = await import('../data/mockData');
+              const mockData = await import('../dev/mock');
               setEventsList(mockData.INITIAL_EVENTS);
               setEventRsvps(mockData.INITIAL_RSVPS || []);
-            } else if (!isLiveMode()) {
-              const mockData = await import('../data/mockData');
-              setEventsList(mockData.INITIAL_EVENTS);
             } else {
               setEventsList([]);
             }
           } catch (e) {
             console.error('Failed to load events from eventsService:', e);
-            if (import.meta.env.DEV || !isLiveMode()) {
-              const mockData = await import('../data/mockData');
+            if (import.meta.env.DEV) {
+              const mockData = await import('../dev/mock');
               setEventsList(mockData.INITIAL_EVENTS);
               setEventRsvps(mockData.INITIAL_RSVPS || []);
+            } else {
+              setEventsList([]);
             }
           }
-        } else {
-          const mockData = await import('../data/mockData');
+        } else if (import.meta.env.DEV) {
+          const mockData = await import('../dev/mock');
           setEventsList(mockData.INITIAL_EVENTS);
           setEventRsvps(mockData.INITIAL_RSVPS || []);
+        } else {
+          setEventsList([]);
         }
 
         // 4. Fetch Mentorship Requests
@@ -645,24 +651,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (mRequests && mRequests.length > 0) {
               setMentorshipRequests(applyMentorshipOverrides(mRequests));
             } else if (import.meta.env.DEV) {
-              const mockData = await import('../data/mockData');
-              setMentorshipRequests(applyMentorshipOverrides(mockData.INITIAL_MENTORSHIP_REQUESTS));
-            } else if (!isLiveMode()) {
-              const mockData = await import('../data/mockData');
+              const mockData = await import('../dev/mock');
               setMentorshipRequests(applyMentorshipOverrides(mockData.INITIAL_MENTORSHIP_REQUESTS));
             } else {
               setMentorshipRequests(applyMentorshipOverrides([]));
             }
           } catch (e) {
             console.error('Failed to load mentorship requests from mentorshipService:', e);
-            if (import.meta.env.DEV || !isLiveMode()) {
-              const mockData = await import('../data/mockData');
+            if (import.meta.env.DEV) {
+              const mockData = await import('../dev/mock');
               setMentorshipRequests(applyMentorshipOverrides(mockData.INITIAL_MENTORSHIP_REQUESTS));
+            } else {
+              setMentorshipRequests(applyMentorshipOverrides([]));
             }
           }
-        } else {
-          const mockData = await import('../data/mockData');
+        } else if (import.meta.env.DEV) {
+          const mockData = await import('../dev/mock');
           setMentorshipRequests(applyMentorshipOverrides(mockData.INITIAL_MENTORSHIP_REQUESTS));
+        } else {
+          setMentorshipRequests(applyMentorshipOverrides([]));
         }
 
         // 5. Fetch Announcements
@@ -675,38 +682,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setAnnouncements(filtered);
               try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(filtered)); } catch {}
             } else if (import.meta.env.DEV) {
-              const mockData = await import('../data/mockData');
+              const mockData = await import('../dev/mock');
               setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
               try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(mockData.INITIAL_ANNOUNCEMENTS)); } catch {}
               const { invalidateNoticesCache } = await import('../hooks/useNotices');
               invalidateNoticesCache();
-            } else if (!isLiveMode()) {
-              const mockData = await import('../data/mockData');
-              setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
             } else {
               setAnnouncements([]);
             }
           } catch (e) {
             console.error('Failed to load announcements from announcementsService:', e);
-            if (import.meta.env.DEV || !isLiveMode()) {
-              const mockData = await import('../data/mockData');
+            if (import.meta.env.DEV) {
+              const mockData = await import('../dev/mock');
               setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
               try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(mockData.INITIAL_ANNOUNCEMENTS)); } catch {}
               const { invalidateNoticesCache } = await import('../hooks/useNotices');
               invalidateNoticesCache();
             }
           }
-        } else {
-          const mockData = await import('../data/mockData');
+        } else if (import.meta.env.DEV) {
+          const mockData = await import('../dev/mock');
           setAnnouncements(mockData.INITIAL_ANNOUNCEMENTS);
           try { localStorage.setItem('nexalink_announcements_cache', JSON.stringify(mockData.INITIAL_ANNOUNCEMENTS)); } catch {}
+        } else {
+          setAnnouncements([]);
         }
 
         // 6. Chat Messages
-        if (!isLiveMode()) {
-          const mockData = await import('../data/mockData');
-          setMessages(mockData.INITIAL_MESSAGES);
-        } else if (currentUser?.id) {
+        if (currentUser?.id) {
           try {
             const userMessages = await messagingService.getMessages(currentUser.id);
             if (userMessages && userMessages.length > 0) {
@@ -722,7 +725,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
               setMessages(userMessages);
             } else if (import.meta.env.DEV) {
-              const mockData = await import('../data/mockData');
+              const mockData = await import('../dev/mock');
               setMessages(mockData.INITIAL_MESSAGES);
             } else {
               setMessages([]);
@@ -730,14 +733,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } catch (e) {
             console.error('Failed to load chat messages:', e);
             if (import.meta.env.DEV) {
-              const mockData = await import('../data/mockData');
+              const mockData = await import('../dev/mock');
               setMessages(mockData.INITIAL_MESSAGES);
             } else {
               setMessages([]);
             }
           }
         } else if (import.meta.env.DEV) {
-          const mockData = await import('../data/mockData');
+          const mockData = await import('../dev/mock');
           setMessages(mockData.INITIAL_MESSAGES);
         } else {
           setMessages([]);
@@ -767,10 +770,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // 7. Audit Logs (Phase 2: Decoupled startup fetch)
         if (import.meta.env.DEV) {
-          const mockData = await import('../data/mockData');
+          const mockData = await import('../dev/mock');
           setAuditLogs(mockData.INITIAL_AUDIT_LOGS);
-        } else if (!isLiveMode()) {
-          // In mock mode, keep the initialized mock log
         } else {
           setAuditLogs([]);
         }
@@ -815,7 +816,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (notifs && notifs.length > 0) {
               setNotifications(notifs);
             } else if (import.meta.env.DEV) {
-              const mockData = await import('../data/mockData');
+              const mockData = await import('../dev/mock');
               const userNotifs = (mockData.INITIAL_NOTIFICATIONS || []).filter((n: any) => n.user_id === currentUser.id);
               setNotifications(userNotifs);
             }
@@ -823,7 +824,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } catch (nErr) {
             console.error('Failed to load notifications or preferences:', nErr);
             if (import.meta.env.DEV) {
-              const mockData = await import('../data/mockData');
+              const mockData = await import('../dev/mock');
               const userNotifs = (mockData.INITIAL_NOTIFICATIONS || []).filter((n: any) => n.user_id === currentUser.id);
               setNotifications(userNotifs);
             }
@@ -838,7 +839,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (apps && apps.length > 0) {
               setOpportunityApplications(apps);
             } else if (import.meta.env.DEV) {
-              const mockData = await import('../data/mockData');
+              const mockData = await import('../dev/mock');
               const allMockApps = mockData.INITIAL_APPLICATIONS || [];
               setOpportunityApplications(
                 isHost ? allMockApps : allMockApps.filter((a: any) => a.applicantId === currentUser.id)
@@ -847,7 +848,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } catch (aErr) {
             console.error('Failed to load opportunity applications:', aErr);
             if (import.meta.env.DEV) {
-              const mockData = await import('../data/mockData');
+              const mockData = await import('../dev/mock');
               const allMockApps = mockData.INITIAL_APPLICATIONS || [];
               const isHost = currentUser.role === 'admin' || currentUser.role === 'alumni' || currentUser.role === 'faculty';
               setOpportunityApplications(
@@ -906,7 +907,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!isSupabaseConfigured()) {
         if (import.meta.env.DEV) {
           setIsDataLoading(true);
-          import('../data/mockData').then((mockData) => {
+          import('../dev/mock').then((mockData) => {
             setAdminList([mockData.DEMO_ADMIN, mockData.DEMO_ADMIN_2]);
             setAdminInvites(mockData.INITIAL_ADMIN_INVITES);
             setAlumniList(mockData.INITIAL_ALUMNI);
@@ -3448,13 +3449,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           bulkMetadata: l.bulk_metadata || undefined
         })));
       } else if (import.meta.env.DEV) {
-        const mockData = await import('../data/mockData');
+        const mockData = await import('../dev/mock');
         setAuditLogs(mockData.INITIAL_AUDIT_LOGS);
       }
     } catch (err) {
       console.error('[DataContext] Error loading audit logs:', err);
       if (import.meta.env.DEV) {
-        const mockData = await import('../data/mockData');
+        const mockData = await import('../dev/mock');
         setAuditLogs(mockData.INITIAL_AUDIT_LOGS);
       }
     }
