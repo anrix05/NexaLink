@@ -105,6 +105,15 @@ export const eventsService = {
     registeredUserIds: string[],
     waitlistUserIds: string[]
   ): Promise<EventItem> {
+    if (!isSupabaseConfigured() || !isValidUuid(eventId)) {
+      return {
+        id: eventId,
+        registeredUserIds,
+        waitlistUserIds,
+        rsvpsCount: registeredUserIds.length
+      } as any;
+    }
+
     const payload = {
       registered_user_ids: registeredUserIds,
       waitlist_user_ids: waitlistUserIds,
@@ -127,6 +136,10 @@ export const eventsService = {
    * Update general event fields
    */
   async updateEvent(eventId: string, patch: Partial<EventItem>): Promise<EventItem> {
+    if (!isSupabaseConfigured() || !isValidUuid(eventId)) {
+      return { id: eventId, ...patch } as any;
+    }
+
     const payload: any = {};
     if (patch.title !== undefined) payload.title = patch.title;
     if (patch.type !== undefined) payload.type = patch.type;
@@ -163,6 +176,13 @@ export const eventsService = {
    * Submit feedback to an event
    */
   async submitFeedback(eventId: string, updatedFeedbackEntries: EventFeedback[]): Promise<EventItem> {
+    if (!isSupabaseConfigured() || !isValidUuid(eventId)) {
+      return {
+        id: eventId,
+        feedbackEntries: updatedFeedbackEntries
+      } as any;
+    }
+
     const payload = {
       feedback_entries: updatedFeedbackEntries
     };

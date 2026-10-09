@@ -106,6 +106,9 @@ export const jobsService = {
    * Update an existing job opportunity
    */
   async updateJob(jobId: string, patch: Partial<JobListing>): Promise<JobListing> {
+    if (!isSupabaseConfigured() || !isValidUuid(jobId)) {
+      return { id: jobId, ...patch } as any;
+    }
     const payload: any = {};
     if (patch.title !== undefined) payload.title = patch.title;
     if (patch.company !== undefined) payload.company = patch.company;
@@ -235,7 +238,7 @@ export const jobsService = {
     resumeUrl?: string;
     coverNote?: string;
   }): Promise<OpportunityApplication> {
-    if (!isSupabaseConfigured()) {
+    if (!isSupabaseConfigured() || !isValidUuid(app.opportunityId) || !isValidUuid(app.applicantId)) {
       return {
         id: `mock-app-${Date.now()}`,
         opportunityId: app.opportunityId,
@@ -270,7 +273,7 @@ export const jobsService = {
    * Update application review status
    */
   async updateApplicationStatus(applicationId: string, status: OpportunityApplicationStatus, note?: string): Promise<OpportunityApplication | null> {
-    if (!isSupabaseConfigured()) return null;
+    if (!isSupabaseConfigured() || !isValidUuid(applicationId)) return null;
     const payload: any = {
       status,
       status_updated_at: new Date().toISOString()

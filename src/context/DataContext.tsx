@@ -343,7 +343,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(storageKey, JSON.stringify(next));
 
       // 2. Fire background Supabase write if configured
-      if (isSupabaseConfigured() && currentUser?.id) {
+      if (isSupabaseConfigured() && currentUser?.id && isValidUUID(currentUser.id)) {
         const { error } = await supabase
           .from('users')
           .update({
@@ -386,7 +386,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           supabase.from('student_profiles').select('*'),
           supabase.from('alumni_profiles').select('*'),
           supabase.from('faculty_profiles').select('*'),
-          currentUser ? supabase.from('notifications').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false }).limit(50) : Promise.resolve({ data: null, error: null })
+          (currentUser && isValidUUID(currentUser.id)) ? supabase.from('notifications').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false }).limit(50) : Promise.resolve({ data: null, error: null })
         ]);
 
           if (studentsRes.error || alumniRes.error || facultyRes.error) {
@@ -2103,7 +2103,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
     );
 
-    if (isSupabaseConfigured() && updatedEvent) {
+    if (isSupabaseConfigured() && updatedEvent && isValidUUID(eventId)) {
       eventsService
         .updateEventRsvp(eventId, updatedEvent.registeredUserIds, updatedEvent.waitlistUserIds || [])
         .catch(err => {
@@ -2913,7 +2913,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return msg;
     }));
 
-    if (isSupabaseConfigured() && updatedReactions) {
+    if (isSupabaseConfigured() && updatedReactions && isValidUUID(messageId)) {
       supabase
         .from('chat_messages')
         .update({ reactions: updatedReactions })
