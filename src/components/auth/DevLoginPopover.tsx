@@ -38,9 +38,18 @@ export const DevLoginPopover: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [isOpen]);
 
-  const handleSelectMain = (role: UserRole) => {
-    switchRole(role);
-    setIsOpen(false);
+  const handleSelectMain = async (p: any) => {
+    try {
+      if (p.targetUser) {
+        await login(p.email, p.role, undefined, p.targetUser);
+      } else {
+        await switchRole(p.role);
+      }
+    } catch (err) {
+      console.error('[DevLoginPopover] Failed to login as main persona:', err);
+    } finally {
+      setIsOpen(false);
+    }
   };
 
   const handleSelectExtra = async (extraId: string) => {
@@ -125,7 +134,7 @@ export const DevLoginPopover: React.FC = () => {
               <button
                 key={p.role}
                 type="button"
-                onClick={() => handleSelectMain(p.role)}
+                onClick={() => handleSelectMain(p)}
                 className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-[#FAFAFA] transition-colors flex flex-col focus:outline-none focus:bg-[#FAFAFA]"
               >
                 <div className="flex items-center justify-between">

@@ -858,7 +858,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // 12. Dev Mock Saved Opportunities synchronization
-        if (import.meta.env.DEV && currentUser?.id === 'user-student-1') {
+        if (import.meta.env.DEV && (!currentUser?.id || currentUser?.id === 'user-student-1')) {
           const aanyaSaved = ['job-rushabh-1', 'job-rushabh-2', 'job-sangale-1', 'job-closing-soon-1'];
           setSavedOpportunityIds(aanyaSaved);
           try {
@@ -870,9 +870,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (import.meta.env.DEV) {
           try {
             const devMock = await import('../dev/mock');
-            const effectiveSaved = currentUser?.id === 'user-student-1'
+            const isAanya = !currentUser?.id || currentUser?.id === 'user-student-1' || currentUser?.email === 'aanya.patel@student.vit.edu.in';
+            const effectiveSaved = isAanya
               ? ['job-rushabh-1', 'job-rushabh-2', 'job-sangale-1', 'job-closing-soon-1']
-              : ['job-1'];
+              : ['job-1', 'job-2', 'job-3', 'job-4'];
             devMock.runSeedSelfCheck(currentUser, {
               jobsList: devMock.INITIAL_JOBS,
               eventsList: devMock.INITIAL_EVENTS,

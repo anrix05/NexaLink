@@ -252,17 +252,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     wasAuthenticatedRef.current = true;
     isMockSessionRef.current = true;
     
-    const mockData = await import('../data/mockData');
-    let targetUser: any = mockData.DEMO_STUDENT;
-    if (role === 'admin') {
-      targetUser = mockData.DEMO_ADMIN;
-    } else if (role === 'alumni') {
-      targetUser = mockData.DEMO_ALUMNI;
-    } else if (role === 'faculty' || role === 'teacher') {
-      targetUser = mockData.DEMO_FACULTY;
+    if (import.meta.env.DEV) {
+      let mockData: any;
+      try {
+        mockData = await import('../dev/mock');
+      } catch {
+        mockData = await import('../data/mockData');
+      }
+      let targetUser: any = mockData.DEMO_STUDENT;
+      if (role === 'admin') {
+        targetUser = mockData.DEMO_ADMIN;
+      } else if (role === 'alumni') {
+        targetUser = mockData.DEMO_ALUMNI;
+      } else if (role === 'faculty' || role === 'teacher') {
+        targetUser = mockData.DEMO_FACULTY;
+      }
+      setCurrentUser(targetUser);
+      triggerWelcomeRevealIfVerified(targetUser);
     }
-    setCurrentUser(targetUser);
-    triggerWelcomeRevealIfVerified(targetUser);
   };
 
   const switchRole = mockLoginByRole;
