@@ -869,24 +869,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // 13. Dev Mock Self-Check
         if (import.meta.env.DEV) {
           try {
-            const mockData = await import('../data/mockData');
-            const { runSeedSelfCheck } = await import('../dev/mock/selfCheck');
+            const devMock = await import('../dev/mock');
             const effectiveSaved = currentUser?.id === 'user-student-1'
               ? ['job-rushabh-1', 'job-rushabh-2', 'job-sangale-1', 'job-closing-soon-1']
               : ['job-1'];
-            runSeedSelfCheck(currentUser, {
-              jobsList: mockData.INITIAL_JOBS,
-              eventsList: mockData.INITIAL_EVENTS,
-              mentorshipRequests: mockData.INITIAL_MENTORSHIP_REQUESTS,
-              announcements: mockData.INITIAL_ANNOUNCEMENTS,
-              messages: mockData.INITIAL_MESSAGES,
-              opportunityApplications: mockData.INITIAL_APPLICATIONS,
-              notifications: mockData.INITIAL_NOTIFICATIONS,
-              studentList: mockData.INITIAL_STUDENTS,
-              alumniList: mockData.INITIAL_ALUMNI,
-              facultyList: mockData.INITIAL_TEACHERS,
-              adminList: [mockData.DEMO_ADMIN, mockData.DEMO_ADMIN_2],
-              auditLogs: mockData.INITIAL_AUDIT_LOGS,
+            devMock.runSeedSelfCheck(currentUser, {
+              jobsList: devMock.INITIAL_JOBS,
+              eventsList: devMock.INITIAL_EVENTS,
+              mentorshipRequests: devMock.INITIAL_MENTORSHIP_REQUESTS,
+              announcements: devMock.INITIAL_ANNOUNCEMENTS,
+              messages: devMock.INITIAL_MESSAGES,
+              opportunityApplications: devMock.INITIAL_APPLICATIONS,
+              notifications: devMock.INITIAL_NOTIFICATIONS,
+              studentList: devMock.INITIAL_STUDENTS,
+              alumniList: devMock.INITIAL_ALUMNI,
+              facultyList: devMock.INITIAL_TEACHERS,
+              adminList: [devMock.DEMO_ADMIN, devMock.DEMO_ADMIN_2],
+              auditLogs: devMock.INITIAL_AUDIT_LOGS,
               savedOpportunityIds: effectiveSaved
             });
           } catch (scErr) {

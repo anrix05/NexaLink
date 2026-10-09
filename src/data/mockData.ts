@@ -6,7 +6,11 @@
 
 let devMock: any = {};
 if ((typeof import.meta !== 'undefined' && import.meta?.env?.DEV) || (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production')) {
-  devMock = await import('../dev/mock/index.ts');
+  try {
+    devMock = await import('../dev/mock');
+  } catch {
+    devMock = await import('../dev/mock/index.ts');
+  }
 }
 
 export const DEV_SEED_MARKER = devMock.DEV_SEED_MARKER;
