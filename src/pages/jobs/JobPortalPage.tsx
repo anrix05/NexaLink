@@ -226,6 +226,7 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
   const publishedJobs = useMemo(() => {
     return jobsList.filter(
       j => j.status !== 'Closed' &&
+        j.lifecycleStatus !== 'draft' &&
         (!j.moderationStatus || j.moderationStatus === 'Approved' || j.postedByRole === 'admin' || j.postedByRole === 'faculty' || currentRole === 'admin' || currentRole === 'faculty')
     );
   }, [jobsList, currentRole]);
@@ -408,9 +409,15 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
   };
 
   const hostJobs = useMemo(() => {
-    return jobsList.filter(
+    const raw = jobsList.filter(
       j => j.postedByAlumniId === currentUser?.id || currentRole === 'admin'
     );
+    const seen = new Set<string>();
+    return raw.filter(j => {
+      if (seen.has(j.id)) return false;
+      seen.add(j.id);
+      return true;
+    });
   }, [jobsList, currentUser?.id, currentRole]);
 
   if (currentView === 'composer') {
@@ -731,9 +738,9 @@ export const JobPortalPage: React.FC<JobPortalPageProps> = ({ setActiveTab }) =>
           ) : (
             <div className="bg-white border border-[#E5E7EB] rounded-2xl overflow-hidden shadow-none divide-y divide-[#E5E7EB]">
               {hostJobs.map(j => {
-                const isLive = j.status === 'Active' || j.postedByRole === 'faculty' || j.postedByRole === 'admin' || j.moderationStatus === 'Approved';
-                const isUnderReview = !isLive && (j.status === 'Pending Approval' || j.moderationStatus === 'Pending Approval');
                 const isDraft = j.lifecycleStatus === 'draft';
+                const isLive = !isDraft && (j.status === 'Active' || j.postedByRole === 'faculty' || j.postedByRole === 'admin' || j.moderationStatus === 'Approved');
+                const isUnderReview = !isDraft && !isLive && (j.status === 'Pending Approval' || j.moderationStatus === 'Pending Approval');
 
                 return (
                   <div key={j.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-neutral-50/50 transition-colors">

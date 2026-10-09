@@ -2151,7 +2151,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Host-Side Event Lifecycle Handlers
   const saveEventDraft = (eventData: Partial<EventItem>) => {
-    const eventId = eventData.id || `evt-${Date.now()}`;
+    let eventId = eventData.id;
+    if (!eventId) {
+      const existingDraft = eventsList.find(
+        e => e.lifecycleStatus === 'draft' &&
+          e.hostId === currentUser?.id &&
+          e.title === (eventData.title || '')
+      );
+      eventId = existingDraft?.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `evt-${Date.now()}`);
+    }
     const existing = eventsList.find(e => e.id === eventId);
     const draftEvent: EventItem = {
       ...(existing || {}),
@@ -2291,13 +2299,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     setEventsList(prev => {
-      const idx = prev.findIndex(e => e.id === eventId);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = submittedEvent;
-        return next;
-      }
-      return [submittedEvent, ...prev];
+      const cleanPrev = prev.filter(e => {
+        if (e.id === eventId) return false;
+        if (e.lifecycleStatus === 'draft' && e.hostId === currentUser?.id && e.title === submittedEvent.title) {
+          return false;
+        }
+        return true;
+      });
+      return [submittedEvent, ...cleanPrev];
     });
 
     addAuditLog(
@@ -2530,7 +2539,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Host-Side Opportunity Lifecycle Handlers
   const saveOpportunityDraft = (jobData: Partial<JobListing>) => {
-    const jobId = jobData.id || `job-${Date.now()}`;
+    let jobId = jobData.id;
+    if (!jobId) {
+      const existingDraft = jobsList.find(
+        j => j.lifecycleStatus === 'draft' &&
+          j.postedByAlumniId === currentUser?.id &&
+          j.title === (jobData.title || '')
+      );
+      jobId = existingDraft?.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `job-${Date.now()}`);
+    }
     const existing = jobsList.find(j => j.id === jobId);
     const draftJob: JobListing = {
       ...(existing || {}),
@@ -2576,7 +2593,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, job: null as any, isAutoPublished: false, message: 'Students cannot publish opportunities.' };
     }
 
-    const jobId = jobData.id || `job-${Date.now()}`;
+    const jobId = jobData.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `job-${Date.now()}`);
     const isAutoPublished = role === 'admin' || role === 'faculty';
     const lifecycleStatus: OpportunityLifecycleStatus = isAutoPublished ? 'published' : 'pending_review';
 
@@ -2606,13 +2623,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     setJobsList(prev => {
-      const idx = prev.findIndex(j => j.id === jobId);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = submittedJob;
-        return next;
-      }
-      return [submittedJob, ...prev];
+      // Remove any existing draft by this jobId or matching draft by the same user with the same title
+      const cleanPrev = prev.filter(j => {
+        if (j.id === jobId) return false;
+        if (j.lifecycleStatus === 'draft' && j.postedByAlumniId === currentUser?.id && j.title === submittedJob.title) {
+          return false;
+        }
+        return true;
+      });
+      return [submittedJob, ...cleanPrev];
     });
 
     addAuditLog(

@@ -67,10 +67,12 @@ export const OpportunityComposerPage: React.FC<OpportunityComposerPageProps> = (
     return () => setHideMobileChrome(false);
   }, [setHideMobileChrome]);
 
-  const isEditing = !!opportunityId;
+  const [activeJobId, setActiveJobId] = useState<string | null>(opportunityId || null);
+  const isEditing = !!(activeJobId || opportunityId);
   const existingJob = useMemo(() => {
-    return opportunityId ? jobsList.find(j => j.id === opportunityId) : null;
-  }, [jobsList, opportunityId]);
+    const id = activeJobId || opportunityId;
+    return id ? jobsList.find(j => j.id === id) : null;
+  }, [jobsList, activeJobId, opportunityId]);
 
   // Form State
   const [title, setTitle] = useState(existingJob?.title || '');
@@ -189,8 +191,10 @@ export const OpportunityComposerPage: React.FC<OpportunityComposerPageProps> = (
     const maxN = parseFloat(compMax) || undefined;
     const cgpaN = parseFloat(minCgpa) || undefined;
 
+    const currentId = activeJobId || opportunityId || undefined;
+
     const draftData: Partial<JobListing> = {
-      id: opportunityId || undefined,
+      id: currentId,
       title: title.trim() || 'Untitled Opportunity Draft',
       company: company.trim() || 'Pending Organization',
       companyLogo: companyLogo.trim() || undefined,
@@ -223,7 +227,10 @@ export const OpportunityComposerPage: React.FC<OpportunityComposerPageProps> = (
       postedByRole: currentRole as any
     };
 
-    saveOpportunityDraft(draftData);
+    const res = saveOpportunityDraft(draftData);
+    if (res?.job?.id && !activeJobId) {
+      setActiveJobId(res.job.id);
+    }
     setLastSavedTime(
       new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
     );
@@ -307,8 +314,10 @@ export const OpportunityComposerPage: React.FC<OpportunityComposerPageProps> = (
     const maxN = parseFloat(compMax) || undefined;
     const cgpaN = parseFloat(minCgpa) || undefined;
 
+    const currentId = activeJobId || opportunityId || undefined;
+
     const payload: Partial<JobListing> = {
-      id: opportunityId || undefined,
+      id: currentId,
       title: title.trim(),
       company: company.trim(),
       companyLogo: companyLogo.trim() || undefined,
