@@ -266,8 +266,13 @@ export const checkVenueConflict = (
     // Only compare events using the same venue
     if (evt.venueId !== venueId) continue;
 
-    // Ignore cancelled or rejected events
-    if (evt.lifecycleStatus === 'cancelled' || evt.lifecycleStatus === 'rejected' || evt.status === 'Cancelled') {
+    // Ignore cancelled, rejected, or draft events
+    if (
+      evt.lifecycleStatus === 'cancelled' ||
+      evt.lifecycleStatus === 'rejected' ||
+      evt.lifecycleStatus === 'draft' ||
+      evt.status === 'Cancelled'
+    ) {
       continue;
     }
 

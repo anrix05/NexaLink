@@ -296,6 +296,7 @@ export const EventComposerPage: React.FC<EventComposerPageProps> = ({
   const [autosaveStatus, setAutosaveStatus] = useState<string>('Saved just now');
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
   const [submitErrorMsg, setSubmitErrorMsg] = useState<string | null>(null);
+  const [activeEventId, setActiveEventId] = useState<string | null>(eventId || null);
 
   // Compute ISO timestamps
   const { startsAt, endsAt } = useMemo(() => {
@@ -305,8 +306,8 @@ export const EventComposerPage: React.FC<EventComposerPageProps> = ({
   // Venue Conflict Check
   const venueConflict = useMemo(() => {
     if (mode === 'online') return { hasConflict: false };
-    return checkVenueConflict(venueId, startsAt, endsAt, eventId || undefined, eventsList);
-  }, [mode, venueId, startsAt, endsAt, eventId, eventsList]);
+    return checkVenueConflict(venueId, startsAt, endsAt, activeEventId || undefined, eventsList);
+  }, [mode, venueId, startsAt, endsAt, activeEventId, eventsList]);
 
   // Lead Time Check
   const leadTimeCheck = useMemo(() => {
@@ -314,7 +315,7 @@ export const EventComposerPage: React.FC<EventComposerPageProps> = ({
   }, [startsAt, mode]);
 
   // Policy-based submission label & state
-  const isAutoApproved = currentRole === 'admin' || (currentRole === 'faculty' && organizingDept === currentUser?.department);
+  const isAutoApproved = currentRole === 'admin' || currentRole === 'faculty';
   const primaryButtonLabel = isAutoApproved ? 'Publish' : 'Submit for review';
 
   // Apply template preset
@@ -344,8 +345,8 @@ export const EventComposerPage: React.FC<EventComposerPageProps> = ({
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const performSaveDraft = () => {
     if (!title.trim()) return;
-    saveEventDraft({
-      id: eventId || undefined,
+    const res = saveEventDraft({
+      id: activeEventId || undefined,
       title: title.trim(),
       type: category,
       summary: summary.trim(),
@@ -371,6 +372,9 @@ export const EventComposerPage: React.FC<EventComposerPageProps> = ({
       questions,
       tags
     });
+    if (res?.event?.id && !activeEventId) {
+      setActiveEventId(res.event.id);
+    }
     const now = new Date();
     setAutosaveStatus(`Saved ${now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })}`);
   };
@@ -488,7 +492,7 @@ export const EventComposerPage: React.FC<EventComposerPageProps> = ({
     }
 
     const payload: Partial<EventItem> = {
-      id: eventId || undefined,
+      id: activeEventId || undefined,
       title: title.trim(),
       type: category,
       summary: summary.trim() || title.trim(),

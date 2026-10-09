@@ -2257,8 +2257,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // Publishing policy logic: Admin auto-publishes; Faculty auto-publishes if own department and no conflict; Alumni always pending review
-    const isAutoPublished = role === 'admin' || (role === 'faculty' && (!eventData.department || eventData.department === currentUser?.department));
+    // Publishing policy logic: Admin and Faculty auto-publish institutional events; Alumni require admin review
+    const isAutoPublished = role === 'admin' || role === 'faculty';
 
     const lifecycleStatus: EventLifecycleStatus = isAutoPublished ? 'published' : 'pending_review';
     const submittedEvent: EventItem = {
