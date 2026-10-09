@@ -97,8 +97,8 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-    -- Administrators and Faculty retain full direct publishing power
-    IF public.is_admin() OR public.current_user_role() IN ('faculty', 'teacher') THEN
+    -- Service role / SQL Editor / Administrators and Faculty retain full direct publishing power
+    IF auth.uid() IS NULL OR public.is_admin() OR public.current_user_role() IN ('faculty', 'teacher') THEN
         RETURN NEW;
     END IF;
 
@@ -162,6 +162,8 @@ WITH CHECK (
 -- 3. DATA RECONCILIATION: Heal faculty opportunities stuck in Pending Approval
 -- ----------------------------------------------------------------------------
 
+ALTER TABLE public.jobs DISABLE TRIGGER trg_protect_jobs_moderation;
+
 UPDATE public.jobs
 SET moderation_status = 'Approved', status = 'Active'
 WHERE (
@@ -169,5 +171,7 @@ WHERE (
   OR posted_by_alumni_id IN (SELECT id FROM public.users WHERE role IN ('faculty', 'teacher'))
 )
 AND moderation_status = 'Pending Approval';
+
+ALTER TABLE public.jobs ENABLE TRIGGER trg_protect_jobs_moderation;
 
 COMMIT;
