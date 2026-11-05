@@ -289,7 +289,7 @@ npm run preview
 Developed under **Smart India Hackathon Problem Statement SIH25017** (*Digital Platform for Centralized Alumni Data Management & Engagement*).
 
 - **Institution:** [Vidyalankar Institute of Technology (VIT)](https://vit.edu.in), Wadala, Mumbai
-- **Department:** Computer Engineering / Information Technology
+- **Department:** Electronics And Computer Engineering
 - **Copyright:** © 2026 NexaLink. All rights reserved.
 
 <p align="center">
